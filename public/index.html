@@ -398,14 +398,7 @@
                 <input type="text" id="usernameInput" placeholder="Tu nombre en el cosmos" maxlength="20">
                 <button id="connectButton">Conectar</button>
                 <div id="playersOnline"></div>
-
-                <div id="avatarColorPicker" style="display: none; margin-top: 15px;">
-                    <label for="colorInput" style="font-size: 14px; color: #aaf; display: block; margin-bottom: 5px;">
-                        Color de Avatar
-                    </label>
-                    <input type="color" id="colorInput" value="#4488ff" style="width: 100%; height: 40px; border-radius: 5px; border: 1px solid #557; cursor: pointer;">
-                </div>
-                </div>
+            </div>
         
             <div class="galaxy-settings">
                 <h4>Configuración de Galaxia</h4>
@@ -5823,7 +5816,7 @@
             console.log(`Intentando conectar a ws://localhost:8080 como ${username}`);
 
             // Conectamos al servidor local que creamos
-            socket = new WebSocket('wss://musicosmosonline-1.onrender.com'); 
+            socket = new WebSocket('wss://musicosmosonline.onrender.com');
 
             // ---- Definimos los "oyentes" del socket ----
 
@@ -5835,44 +5828,6 @@
 
                 // Empezamos a enviar nuestra posición 10 veces por segundo
                 setInterval(sendPosition, 50);
-
-                // ======== INICIO DEL BLOQUE NUEVO ========
-                
-                // 1. Mostrar el selector de color
-                const colorPicker = document.getElementById('avatarColorPicker');
-                colorPicker.style.display = 'block';
-                
-                // 2. Añadir listener para cuando el color cambia
-                const colorInput = document.getElementById('colorInput');
-                
-                // Usamos 'input' para que se actualice en tiempo real mientras arrastras
-                colorInput.addEventListener('input', (event) => {
-                    const newColor = event.target.value; // Ej: "#ff0000"
-                    
-                    // 3. Actualizar nuestro propio avatar localmente
-                    if (galaxies[username] && galaxies[username].avatarMesh) {
-                        // El avatar local usa un shader, así que no podemos
-                        // cambiar 'material.color' directamente.
-                        // En su lugar, modificamos el 'originalAvatarMaterial'
-                        // que guardamos en la clase PixelGalaxy.
-                        
-                        const localGalaxy = galaxies[username];
-                        
-                        // Actualiza el material simple (por si la galaxia no se ha formado)
-                        if (localGalaxy.avatarMesh.material.color) {
-                             localGalaxy.avatarMesh.material.color.set(newColor);
-                        }
-
-                        // Actualiza el material original que usan los shaders
-                        if (localGalaxy.pixelGalaxy && localGalaxy.pixelGalaxy.originalAvatarMaterial) {
-                            localGalaxy.pixelGalaxy.originalAvatarMaterial.color.set(newColor);
-                        }
-                    }
-                    
-                    // 4. Enviar el nuevo color a todos los demás
-                    sendColorChange(newColor);
-                });
-                // ======== FIN DEL BLOQUE NUEVO ========
             };
 
             // 2. Cuando recibimos un mensaje del servidor
@@ -5910,35 +5865,53 @@
                 if (!playerGalaxy) return;
 
                 switch (data.type) {
-                    case 'move':
-                        // Movemos el avatar del otro jugador
+                    case 'move': // <--- ¡MOVIDO AQUÍ DENTRO!
+                        // Mueve el avatar del otro jugador
                         playerGalaxy.targetPosition.set(data.x, data.y, data.z);
                         // Aquí también podrías actualizar la rotación si la envías
-                        break;
-                    case 'note_on':
-                        // Hacemos que la galaxia del otro jugador toque una nota
+                        break; // <--- ¡IMPORTANTE EL BREAK!
+                        case 'note_on':
+                        console.log(`%cNOTA RECIBIDA de ${data.id}`, 'color: #00ff00; font-weight: bold;');
+                        console.log(`   Nota: ${data.note}, Vel: ${data.velocity}`);
+
+                        const PLAYER_AUDIO_BUBBLE = 200; // Distancia de activación
+
+                        if (!playerGalaxy || !playerGalaxy.avatarMesh) {
+                             console.log(`   ERROR: No se encontró la galaxia o el avatar para ${data.id}`);
+                             break; // Salir si algo falta
+                        }
+
+                        // --- VERIFICACIÓN DE DISTANCIA ---
+                        const miPosicion = avatarObject.position;
+                        const otraPosicion = playerGalaxy.avatarMesh.position;
+                        const distancia = miPosicion.distanceTo(otraPosicion);
+                        console.log(`   Mi Pos: X=${miPosicion.x.toFixed(0)}, Z=${miPosicion.z.toFixed(0)}`);
+                        console.log(`   Pos de ${data.id}: X=${otraPosicion.x.toFixed(0)}, Z=${otraPosicion.z.toFixed(0)}`);
+                        console.log(`   Distancia calculada: ${distancia.toFixed(1)} unidades`);
+                        // --- FIN VERIFICACIÓN ---
+
+                        // Aplicar efecto visual siempre
                         playerGalaxy.addNote(data.note, data.velocity);
-                        playerGalaxy.playRemoteNote(data.note, data.velocity);
-                        break;
+
+                        // Comprobar si está dentro de la burbuja de audio
+                        if (distancia <= PLAYER_AUDIO_BUBBLE) {
+                            console.log(`   ✅ DENTRO de la burbuja (${PLAYER_AUDIO_BUBBLE}u). Reproduciendo audio 3D.`);
+                            playerGalaxy.playNote(data.note, data.velocity);
+                        } else {
+                            console.log(`   ❌ FUERA de la burbuja (${PLAYER_AUDIO_BUBBLE}u). NO se reproduce audio.`);
+                            // Opcional: Asegurarnos de detener cualquier nota que pudiera haber quedado sonando
+                            // playerGalaxy.stopNote(data.note); // Descomenta si sospechas que las notas no se detienen bien
+                        }
+                        break; // Fin del case 'note_on'
                     case 'note_off':
+                        // --- ¡AÑADE ESTAS LÍNEAS AQUÍ! ---
+                        console.log(`%c¡NOTA APAGADA!`, 'color: #ff0000; font-size: 12px;');
+                        console.log(`   Jugador: ${data.id}, Nota: ${data.note}`);
+                        // --- FIN DE LAS LÍNEAS ---
                         // Apagamos la nota en la galaxia del otro jugador
                         playerGalaxy.removeNote(data.note);
-                        playerGalaxy.stopRemoteNote(data.note);
+                        playerGalaxy.stopNote(data.note);
                         break;
-
-                    // ======== INICIO DEL BLOQUE NUEVO ========
-                    case 'color_change':
-                        // Un jugador remoto cambió su color
-                        if (playerGalaxy && playerGalaxy.avatarMesh) {
-                            // Los avatares remotos usan un material simple (MeshPhongMaterial)
-                            // por lo que podemos cambiar su color directamente.
-                            playerGalaxy.avatarMesh.material.color.set(data.color);
-                            // También ajustamos el 'emissive' para que brille un poco
-                            playerGalaxy.avatarMesh.material.emissive.set(data.color).multiplyScalar(0.4);
-                        }
-                        break;
-                    // ======== FIN DEL BLOQUE NUEVO ========
-
                     case 'disconnect':
                         // El jugador se fue, eliminamos su galaxia
                         console.log('Jugador desconectado:', data.id);
@@ -5996,18 +5969,6 @@
                     velocity: velocity
                 };
                // console.log("--> ENVIANDO (" + command + "):", JSON.stringify(data));
-                socket.send(JSON.stringify(data));
-            }
-        }
-
-        // Nueva función para ENVIAR nuestro cambio de color
-        function sendColorChange(colorHex) {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                const data = {
-                    type: 'color_change',
-                    id: username,
-                    color: colorHex // Ej: "#FF0000"
-                };
                 socket.send(JSON.stringify(data));
             }
         }
