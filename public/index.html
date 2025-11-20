@@ -5813,9 +5813,13 @@
             }
             // <--- FIN DEL BLOQUE NUEVO ---
 
+            console.log(`Intentando conectar a ws://localhost:8080 como ${username}`);
+
             // Conectamos al servidor local que creamos
             socket = new WebSocket('wss://musicosmoserver.onrender.com');
-            // -----------------------------
+
+            // ---- Definimos los "oyentes" del socket ----
+
 
             socket.onopen = () => {
                 console.log('¡Conectado al servidor de Musicosmos!');
