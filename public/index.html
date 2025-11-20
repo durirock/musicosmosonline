@@ -478,7 +478,62 @@
         
         <div id="tab-pulsares" class="tab-content">
             <h3>Forja de Pulsares</h3>
-            <p>Próximamente: La forja donde podrás dar a luz a nuevos soles musicales.</p>
+
+            <div class="forge-section placement-controls">
+                <h4>1. Ubicación de la Forja</h4>
+                <p>Elige dónde se materializará tu nuevo púlsar.</p>
+                <div class="forge-toggle-buttons">
+                    <input type="radio" name="placementMode" id="placeFront" value="front" checked>
+                    <label for="placeFront">Frente a mí</label>
+                    
+                    <input type="radio" name="placementMode" id="placeCoords" value="coords">
+                    <label for="placeCoords">Coordenadas</label>
+                </div>
+                
+                <div id="forge-coords-inputs" class="forge-coords-inputs">
+                    <div>X: <input type="number" id="forgeX" class="alien-coord-input" step="1"></div>
+                    <div>Y: <input type="number" id="forgeY" class="alien-coord-input" step="1"></div>
+                    <div>Z: <input type="number" id="forgeZ" class="alien-coord-input" step="1"></div>
+                </div>
+            </div>
+
+            <div class="forge-section">
+                <h4>2. Forjar Púlsar en Vivo (Línea/Mic)</h4>
+                <p>Visualiza una entrada de audio en vivo (micrófono o tarjeta de sonido) como un púlsar. <strong>No emite sonido</strong> para evitar feedback.</p>
+                
+                <label for="audioInputDevice">Selecciona la fuente de audio:</label>
+                <select id="audioInputDevice" class="alien-input">
+                    <option value="">Esperando dispositivos...</option>
+                </select>
+                
+                <div class="button-group">
+                    <button id="startLivePulsar" class="settings-button">Activar Púlsar en Vivo</button>
+                    <button id="stopLivePulsar" class="settings-button secondary" disabled>Detener</button>
+                </div>
+                <div id="livePulsarStatus" class="forge-status"></div>
+            </div>
+
+            <div class="forge-section">
+                <h4>3. Forjar Púlsar Personal (MP3)</h4>
+                <p>Sube un archivo de audio. El púlsar sonará en 3D en la ubicación seleccionada.</p>
+                
+                <label for="newPulsarName">Nombre del Púlsar:</label>
+                <input type="text" id="newPulsarName" placeholder="Ej: Mi Canción Favorita" class="alien-input">
+                
+                <label for="newPulsarFileInput">Archivo de Audio (MP3, WAV, etc.):</label>
+                <input type="file" id="newPulsarFileInput" accept="audio/*" class="alien-file-input">
+                
+                <button id="createPersonalPulsarButton" class="settings-button">Forjar Púlsar MP3</button>
+                <div id="forgePulsarStatus" class="forge-status"></div>
+            </div>
+
+            <div class="forge-section">
+                <h4>3. Establecer Radio Tagua Tagua</h4>
+                <p>Creará una nebulosa majestuosa de la Radio Tagua Tagua en la ubicación seleccionada.</p>
+                
+                <button id="createTaguaPulsarButton" class="settings-button">Forjar Radio Tagua Tagua</button>
+                <div id="forgeRadioStatus" class="forge-status"></div>
+            </div>
         </div>
           
           <!-- Estilos para el panel de configuración -->
@@ -844,6 +899,7 @@
             .volume-control {
                 margin-top: 10px;
             }
+
             /* --- ESTILOS PARA EL SEGUNDO JOYSTICK (ROTACIÓN) --- */
         #joystick-container-rotation {
             position: absolute;
@@ -889,6 +945,155 @@
             background-color: rgba(98, 215, 255, 0.7);
             box-shadow: 0 0 20px rgba(98, 215, 255, 1);
             transform: scale(1.1);
+        }
+
+        /* --- ESTILOS PARA LA FORJA DE PÚLSARES --- */
+        .forge-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: rgba(15, 15, 25, 0.7);
+            border: 1px solid #557;
+            border-radius: 5px;
+        }
+
+        .forge-section h4 {
+            color: #c7e5ff;
+            margin-top: 0;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #445;
+            padding-bottom: 5px;
+        }
+
+        .forge-section p {
+            font-size: 13px;
+            color: #aab;
+            margin-bottom: 15px;
+        }
+
+        .forge-section label {
+            font-size: 12px;
+            color: #aaf;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .alien-input {
+            width: 100%;
+            box-sizing: border-box; /* Para que el padding no rompa el ancho */
+            padding: 8px;
+            margin-bottom: 10px;
+            background-color: rgba(40,40,60,0.9);
+            color: white;
+            border: 1px solid #557;
+            border-radius: 5px;
+            font-family: 'Arial', sans-serif;
+        }
+
+        /* Estilo para el <select> de audio */
+        select.alien-input {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23AAAAFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-13%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2013l128%20128c3.6%203.6%207.8%205.4%2013%205.4s9.4-1.8%2013-5.4l128-128c3.6-3.6%205.4-7.8%205.4-13%200-4.8-1.8-9.2-5.4-12.8z%22%2F%3E%3C%2Fsvg%3E');
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 10px;
+        }
+
+        .alien-file-input {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+
+        .alien-file-input::file-selector-button {
+            background-color: #4466dd;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 6px 12px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .alien-file-input::file-selector-button:hover {
+            background-color: #5577ee;
+        }
+
+        .forge-status {
+            font-size: 13px;
+            margin-top: 10px;
+            color: #9f9;
+            text-align: center;
+        }
+
+        .forge-status.error {
+            color: #f99;
+        }
+
+        /* Controles de Ubicación */
+        .placement-controls {
+            background-color: rgba(30, 30, 50, 0.8);
+            border-color: #7799ff;
+        }
+
+        .forge-toggle-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .forge-toggle-buttons input[type="radio"] {
+            display: none;
+        }
+
+        .forge-toggle-buttons label {
+            padding: 8px 12px;
+            background-color: #334;
+            border: 1px solid #557;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #aab;
+            transition: all 0.2s;
+            display: block;
+            margin: 0;
+        }
+
+        .forge-toggle-buttons input[type="radio"]:checked + label {
+            background-color: #4466dd;
+            color: #fff;
+            border-color: #7799ff;
+            box-shadow: 0 0 8px rgba(68, 102, 221, 0.5);
+        }
+
+        .forge-coords-inputs {
+            display: none; /* Oculto por defecto */
+            flex-wrap: wrap;
+            gap: 10px;
+            padding: 10px;
+            background-color: rgba(10, 10, 20, 0.5);
+            border-radius: 5px;
+        }
+
+        #placeCoords:checked ~ #forge-coords-inputs {
+            display: flex;
+        }
+
+        .alien-coord-input {
+            width: 70px;
+            padding: 5px;
+            background-color: rgba(40,40,60,0.9);
+            color: white;
+            border: 1px solid #557;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+
+        /* Grupo de botones (para Live) */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
         }
           </style>
           
@@ -1181,6 +1386,14 @@
         let rotationJoystickInitialPos = { x: 0, y: 0 };
         let touchIdentifierRotationJoystick = null;
         let lastJoystickTapTime = 0; // Para detectar el doble toque
+
+        // --- Variables para Púlsar en Vivo (Micrófono/Línea) ---
+        let livePulsarInstance = null;
+        let livePulsarAnalyser = null;
+        let livePulsarStream = null;
+        let livePulsarSource = null;
+        let liveFrequencyData = null; // Array para datos de frecuencia
+        let liveTimeData = null;      // Array para datos de dominio de tiempo
 
 
 // ----------------------------------------------------
@@ -4018,6 +4231,335 @@
             };
         }
 
+        // --- Variables para Púlsar en Vivo (Micrófono/Línea) ---
+        
+
+        // --- INICIO DE LA LÓGICA DE FORJA DE PÚLSARES ---
+
+        /**
+         * Inicializa los listeners para los botones de la Forja de Púlsares.
+         * DEBES LLAMAR A ESTA FUNCIÓN DENTRO DE TU FUNCIÓN init()
+         */
+        function initForgeControls() {
+            // Botón Púlsar MP3
+            const pulsarButton = document.getElementById('createPersonalPulsarButton');
+            if (pulsarButton) {
+                pulsarButton.addEventListener('click', forjarPulsarPersonal);
+            }
+
+            // Botón Radio Tagua Tagua
+            const taguaButton = document.getElementById('createTaguaPulsarButton');
+            if (taguaButton) {
+                taguaButton.addEventListener('click', forjarRadioTaguaTagua);
+            }
+
+            // Botones Púlsar en Vivo (Mic/Línea)
+            const startLiveButton = document.getElementById('startLivePulsar');
+            const stopLiveButton = document.getElementById('stopLivePulsar');
+            if (startLiveButton) {
+                startLiveButton.addEventListener('click', startLivePulsar);
+            }
+            if (stopLiveButton) {
+                stopLiveButton.addEventListener('click', stopLivePulsar);
+            }
+
+            // Radio button para coordenadas
+            const placeCoordsRadio = document.getElementById('placeCoords');
+            if (placeCoordsRadio) {
+                placeCoordsRadio.addEventListener('change', () => {
+                    if (placeCoordsRadio.checked) {
+                        document.getElementById('forgeX').value = avatarObject.position.x.toFixed(0);
+                        document.getElementById('forgeY').value = avatarObject.position.y.toFixed(0);
+                        document.getElementById('forgeZ').value = avatarObject.position.z.toFixed(0);
+                    }
+                });
+            }
+        }
+
+        /**
+         * Obtiene la posición de forja deseada, ya sea frente al avatar o
+         * desde los campos de coordenadas.
+         * @returns {THREE.Vector3} La posición calculada para el nuevo púlsar.
+         */
+        function getForgePosition() {
+            const isFront = document.getElementById('placeFront').checked;
+            
+            if (isFront) {
+                const DISTANCIA_FRENTE = 50.0; // 50 unidades frente a ti
+                const position = avatarObject.position.clone();
+                
+                // Usamos la rotación de la cámara (yawAngle) para determinar la dirección
+                const direction = new THREE.Vector3(-Math.sin(yawAngle), 0, -Math.cos(yawAngle));
+                
+                position.add(direction.multiplyScalar(DISTANCIA_FRENTE));
+                return position;
+                
+            } else {
+                // Modo Coordenadas
+                const x = parseFloat(document.getElementById('forgeX').value);
+                const y = parseFloat(document.getElementById('forgeY').value);
+                const z = parseFloat(document.getElementById('forgeZ').value);
+                
+                if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                    // Fallback: crear en la posición del avatar
+                    console.warn("Coordenadas de forja inválidas. Creando en la ubicación del avatar.");
+                    return avatarObject.position.clone();
+                }
+                
+                return new THREE.Vector3(x, y, z);
+            }
+        }
+
+        /**
+         * Rellena el <select> con los dispositivos de entrada de audio (micrófonos, etc.)
+         * DEBES LLAMAR A ESTA FUNCIÓN DENTRO DE TU FUNCIÓN init()
+         */
+        async function populateAudioInputDevices() {
+            const selector = document.getElementById('audioInputDevice');
+            if (!selector) return;
+            
+            try {
+                // Pedir permiso genérico para poder listar dispositivos
+                // Asegurarse de que el contexto de audio esté activo
+                if (audioContext && audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const audioInputs = devices.filter(device => device.kind === 'audioinput');
+                
+                selector.innerHTML = ''; // Limpiar opciones
+                
+                if (audioInputs.length === 0) {
+                    selector.innerHTML = '<option value="">No se encontraron entradas de audio</option>';
+                    return;
+                }
+                
+                audioInputs.forEach(device => {
+                    const option = document.createElement('option');
+                    option.value = device.deviceId;
+                    option.textContent = device.label || `Dispositivo ${selector.options.length + 1}`;
+                    selector.appendChild(option);
+                });
+
+            } catch (err) {
+                console.error("Error al enumerar dispositivos de audio:", err);
+                selector.innerHTML = '<option value="">Error al obtener dispositivos</option>';
+                const statusEl = document.getElementById('livePulsarStatus');
+                if (statusEl) {
+                    statusEl.textContent = "Error: Se necesita permiso de micrófono.";
+                    statusEl.className = 'forge-status error';
+                }
+            }
+        }
+
+        /**
+         * Inicia el Púlsar en Vivo usando la entrada de audio seleccionada.
+         */
+        async function startLivePulsar() {
+            if (livePulsarInstance) {
+                console.log("Ya hay un púlsar en vivo activo.");
+                return;
+            }
+
+            const deviceId = document.getElementById('audioInputDevice').value;
+            const statusEl = document.getElementById('livePulsarStatus');
+            
+            if (!deviceId) {
+                statusEl.textContent = "Error: No hay dispositivo de audio seleccionado.";
+                statusEl.className = 'forge-status error';
+                return;
+            }
+
+            // 1. Asegurar AudioContext
+            if (audioContext && audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+
+            try {
+                // 2. Obtener el stream de audio
+                livePulsarStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        deviceId: { exact: deviceId },
+                        echoCancellation: true, // Opcional: útil para micrófonos
+                        noiseSuppression: true // Opcional: útil para micrófonos
+                    }
+                });
+                
+                // 3. Crear nodos de audio
+                livePulsarSource = audioContext.createMediaStreamSource(livePulsarStream);
+                livePulsarAnalyser = audioContext.createAnalyser();
+                livePulsarAnalyser.fftSize = 512;
+                livePulsarAnalyser.smoothingTimeConstant = 0.75;
+                
+                // Pre-alocar arrays de datos
+                liveFrequencyData = new Uint8Array(livePulsarAnalyser.frequencyBinCount);
+                liveTimeData = new Uint8Array(livePulsarAnalyser.fftSize);
+
+                // 4. Conectar la fuente al analizador (¡Y A NADA MÁS!)
+                // Esto es crucial para no crear un bucle de feedback (oírte a ti mismo).
+                livePulsarSource.connect(livePulsarAnalyser);
+
+                // 5. Obtener posición
+                const position = getForgePosition();
+
+                // 6. Crear la nebulosa visual
+                // Usamos GALAXY_PULSAR_CONFIG para un púlsar estándar
+                livePulsarInstance = new RadioNebula(scene, position, livePulsarAnalyser, GALAXY_PULSAR_CONFIG, 'live', false);
+                
+                // 7. Actualizar UI
+                statusEl.textContent = "Púlsar en Vivo ACTIVADO.";
+                statusEl.className = 'forge-status';
+                document.getElementById('startLivePulsar').disabled = true;
+                document.getElementById('stopLivePulsar').disabled = false;
+
+            } catch (err) {
+                console.error("Error al iniciar el Púlsar en Vivo:", err);
+                statusEl.textContent = "Error: No se pudo iniciar la fuente de audio.";
+                statusEl.className = 'forge-status error';
+                stopLivePulsar(); // Limpiar en caso de fallo parcial
+            }
+        }
+
+        /**
+         * Detiene el Púlsar en Vivo y libera los recursos.
+         */
+        function stopLivePulsar() {
+            const statusEl = document.getElementById('livePulsarStatus');
+
+            if (livePulsarInstance) {
+                livePulsarInstance.dispose();
+                livePulsarInstance = null;
+            }
+            if (livePulsarSource) {
+                livePulsarSource.disconnect();
+                livePulsarSource = null;
+            }
+            if (livePulsarStream) {
+                livePulsarStream.getTracks().forEach(track => track.stop());
+                livePulsarStream = null;
+            }
+            
+            livePulsarAnalyser = null;
+            liveFrequencyData = null;
+            liveTimeData = null;
+
+            if (statusEl) {
+                statusEl.textContent = "Púlsar en Vivo detenido.";
+                statusEl.className = 'forge-status';
+            }
+            const startBtn = document.getElementById('startLivePulsar');
+            const stopBtn = document.getElementById('stopLivePulsar');
+            if (startBtn) startBtn.disabled = false;
+            if (stopBtn) stopBtn.disabled = true;
+        }
+
+        /**
+         * Maneja el clic en "Forjar Púlsar Personal (MP3)".
+         */
+        function forjarPulsarPersonal() {
+            const fileInput = document.getElementById('newPulsarFileInput');
+            const nameInput = document.getElementById('newPulsarName');
+            const statusEl = document.getElementById('forgePulsarStatus');
+
+            if (!fileInput.files || fileInput.files.length === 0) {
+                statusEl.textContent = "Error: Debes seleccionar un archivo de audio.";
+                statusEl.className = 'forge-status error';
+                return;
+            }
+            
+            const nombre = nameInput.value.trim() || "Púlsar Personal";
+            const file = fileInput.files[0];
+            const url = URL.createObjectURL(file);
+            
+            const position = getForgePosition(); // ¡Obtenemos la posición!
+
+            crearNuevoPulsar(nombre, url, position, 'mp3', false);
+
+            statusEl.textContent = `¡Éxito! Púlsar "${nombre}" forjado en ${position.x.toFixed(0)}, ${position.y.toFixed(0)}, ${position.z.toFixed(0)}`;
+            statusEl.className = 'forge-status';
+            
+            nameInput.value = '';
+            fileInput.value = '';
+        }
+
+        /**
+         * Maneja el clic en "Forjar Radio Tagua Tagua".
+         */
+        function forjarRadioTaguaTagua() {
+            const statusEl = document.getElementById('forgeRadioStatus');
+            
+            const nombre = "Radio Tagua Tagua";
+            const url = TAGUA_TAGUA_STREAM_URL; // Variable global que ya tienes
+            const tipo = 'tagua_tagua'; // Para que obtenga los colores majestuosos
+            const esMajestuoso = true;
+            
+            if (!url) {
+                 statusEl.textContent = "Error: La variable TAGUA_TAGUA_STREAM_URL no está definida.";
+                statusEl.className = 'forge-status error';
+                return;
+            }
+
+            const position = getForgePosition(); // ¡Obtenemos la posición!
+
+            crearNuevoPulsar(nombre, url, position, tipo, esMajestuoso);
+
+            statusEl.textContent = `¡Éxito! Radio Tagua Tagua forjada en ${position.x.toFixed(0)}, ${position.y.toFixed(0)}, ${position.z.toFixed(0)}`;
+            statusEl.className = 'forge-status';
+        }
+
+        /**
+         * Función central que crea la nebulosa y la registra en el gestor de púlsares.
+         * (Esta función es para fuentes basadas en URL: MP3 o Stream)
+         */
+        function crearNuevoPulsar(nombre, url, position, tipo, esMajestuoso) {
+            
+            if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            const audioElement = new Audio();
+            audioElement.crossOrigin = "anonymous";
+            audioElement.loop = true;
+            
+            const analyserNode = audioContext.createAnalyser();
+            analyserNode.fftSize = 512;
+            analyserNode.smoothingTimeConstant = 0.75;
+            
+            const positionalAudio = new THREE.PositionalAudio(audioListener);
+            positionalAudio.setRefDistance(40);
+            positionalAudio.setRolloffFactor(1.0);
+            positionalAudio.setMaxDistance(3000); 
+
+            const config = esMajestuoso ? TAGUA_TAGUA_CONFIG : GALAXY_PULSAR_CONFIG;
+            const radioNebula = new RadioNebula(scene, position, analyserNode, config, tipo, esMajestuoso);
+            
+            radioNebula.particlesObject.add(positionalAudio);
+
+            const pulsarId = `user_${tipo}_${Date.now()}`;
+            
+            gestorDePulsares.activos[pulsarId] = {
+                id: pulsarId,
+                nebula: radioNebula,
+                audio: audioElement,      
+                analyser: analyserNode,   
+                positionalAudio: positionalAudio, 
+                url: url,                 
+                tiempoGuardado: 0,
+                mediaSource: null,      
+                isLoaded: false,        
+                isPlaying: false
+            };
+            
+            console.log(`Púlsar forjado con ID: ${pulsarId}`, gestorDePulsares.activos[pulsarId]);
+
+            // Añadir a la playlist 2D
+            addTrackToPlaylist(nombre, url);
+        }
+
+        // --- FIN DE LA LÓGICA DE FORJA DE PÚLSARES ---
+
         function init() {
             // Crear escena
             scene = new THREE.Scene();
@@ -4077,6 +4619,9 @@
             initPlaylist(); // <--- AÑADE ESTA LLAMADA
             //initAudioControls(); // <--- AÑADE ESTA LLAMADA
             initMIDI();
+            initForgeControls();         // <--- AÑADE ESTA LÍNEA
+            populateAudioInputDevices(); // <-- ¡AÑADE ESTA LÍNEA!
+
 
 // Todo bien hasta aquí
 
@@ -5494,6 +6039,7 @@
         function animate() {
             requestAnimationFrame(animate);
             const deltaTime = clock.getDelta();
+            const time = clock.elapsedTime; // <--- ¡AÑADE ESTA LÍNEA!
 
             // El cálculo de velocidad y dirección se queda como lo tienes
             const speed = 0.2;
@@ -5640,6 +6186,25 @@
             updateCoordinatesDisplay();
             gestionarAudioYAnimacionPulsares(deltaTime);
             handlePlaylistFade(); // <--- AÑADE ESTA LLAMADA
+            // --- ¡NUEVO BLOQUE PARA ACTUALIZAR EL PÚLSAR EN VIVO! ---
+            if (livePulsarInstance && livePulsarAnalyser) {
+                try {
+                    // Actualizamos la posición orbital del púlsar en vivo
+                    // (Necesitamos 'time' del inicio de animate)
+                    livePulsarInstance.updateOrbitalPosition(time); 
+
+                    // Obtenemos los datos del analizador en vivo
+                    livePulsarAnalyser.getByteFrequencyData(liveFrequencyData);
+                    livePulsarAnalyser.getByteTimeDomainData(liveTimeData);
+
+                    // Actualizamos la nebulosa con los datos del micrófono
+                    livePulsarInstance.update(liveFrequencyData, liveTimeData, deltaTime);
+                } catch (e) {
+                    console.error("Error al actualizar el Púlsar en Vivo:", e);
+                    stopLivePulsar(); // Detener si hay un error
+                }
+            }
+            // --- FIN DEL NUEVO BLOQUE ---
 
             updateNebulaRadar();
 
@@ -5819,11 +6384,6 @@
             socket = new WebSocket('wss://musicosmoserver.onrender.com');
 
             // ---- Definimos los "oyentes" del socket ----
-
-
-            socket.onopen = () => {
-                console.log('¡Conectado al servidor de Musicosmos!');
-                    // ---- Definimos los "oyentes" del socket ----
 
             // 1. Cuando la conexión se abre
             socket.onopen = () => {
