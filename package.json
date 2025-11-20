@@ -7,9 +7,10 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "ws": "^8.17.0"
+    "ws": "^8.14.2",
+    "geoip-lite": "^1.4.10"  <-- ¡TIENES QUE AÑADIR ESTA LÍNEA!
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=14.0.0"
   }
 }
