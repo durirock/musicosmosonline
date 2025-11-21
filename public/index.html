@@ -1150,50 +1150,36 @@
 
             // Modificar la función // Modificar la función applyGalaxySettings para aceptar un parámetro de notificación
             function applyGalaxySettings(showNotification = true) {
-                // Solo guardar en localStorage si se solicita explícitamente (botón)
-                if (showNotification) {
-                    localStorage.setItem('musicosmosGalaxySettings', JSON.stringify(galaxySettings));
-                }
-                
-                // Aplicar a configuración global que se usará para nuevas galaxias
-                if (GALAXY_PIXEL_CONFIG) {
-                    GALAXY_PIXEL_CONFIG.maxExpansion = galaxySettings.size;
-                }
-                
-                // Aplicar a galaxias existentes
-                for (const galaxyId in galaxies) {
-                    const galaxy = galaxies[galaxyId];
-                    if (galaxy && galaxy.pixelGalaxy) {
-                        // Crear objeto de configuración nueva
-                        const newConfig = {
-                            maxExpansion: galaxySettings.size,
-                            particleAffectedRatio: galaxySettings.particleCount / 100,
-                            colorMixFactor: galaxySettings.colorMixing / 100,
-                            expansionTime: galaxySettings.expansionTime,
-                            inactivityTime: galaxySettings.fadeoutTime
-                        };
-                        
-                        // Usar el nuevo método updateConfig si está disponible
-                        if (galaxy.pixelGalaxy.updateConfig) {
-                            galaxy.pixelGalaxy.updateConfig(newConfig);
-                        } 
-                        // Compatibilidad con la implementación anterior
-                        else if (galaxy.pixelGalaxy.config) {
-                            // Actualizar configuración
-                            galaxy.pixelGalaxy.config.maxExpansion = galaxySettings.size;
-                            galaxy.pixelGalaxy.config.particleAffectedRatio = galaxySettings.particleCount / 100;
-                            galaxy.pixelGalaxy.config.colorMixFactor = galaxySettings.colorMixing / 100;
-                            galaxy.pixelGalaxy.config.expansionTime = galaxySettings.expansionTime;
-                            galaxy.pixelGalaxy.config.inactivityTime = galaxySettings.fadeoutTime;
-                        }
-                    }
-                }
-                
-                // Notificar solo si se solicita (al usar el botón guardar)
-                if (showNotification) {
-                    showNotification('Configuración guardada', 2000);
-                }
-            }
+    // 1. Guardar en localStorage
+    if (showNotification) {
+        localStorage.setItem('musicosmosGalaxySettings', JSON.stringify(galaxySettings));
+    }
+
+    // 2. Crear objeto de configuración nueva
+    const newConfig = {
+        maxExpansion: galaxySettings.size,
+        particleAffectedRatio: galaxySettings.particleCount / 100,
+        colorMixFactor: galaxySettings.colorMixing / 100,
+        expansionTime: galaxySettings.expansionTime,
+        inactivityTime: galaxySettings.fadeoutTime
+    };
+
+    // 3. Aplicar SOLO a la galaxia LOCAL (la tuya)
+    if (galaxies[username] && galaxies[username].pixelGalaxy) {
+        if (galaxies[username].pixelGalaxy.updateConfig) {
+            galaxies[username].pixelGalaxy.updateConfig(newConfig);
+        }
+    }
+
+    // 4. IMPORTANTE: Forzar el envío de estos datos a la red inmediatamente
+    // para que los demás vean tu cambio.
+    sendPosition(); 
+
+    // 5. Notificar
+    if (showNotification) {
+        showNotification('Configuración de TU galaxia guardada', 2000);
+    }
+}
           
           // Función para restaurar valores predeterminados
           function resetGalaxySettings() {
@@ -4281,28 +4267,36 @@
          * desde los campos de coordenadas.
          * @returns {THREE.Vector3} La posición calculada para el nuevo púlsar.
          */
-        function getForgePosition() {
+         function getForgePosition() {
             const isFront = document.getElementById('placeFront').checked;
             
             if (isFront) {
-                const DISTANCIA_FRENTE = 50.0; // 50 unidades frente a ti
-                const position = avatarObject.position.clone();
+                // --- CORRECCIÓN: Usar vector de dirección real del avatar ---
+                const DISTANCIA_FRENTE = 50.0; 
                 
-                // Usamos la rotación de la cámara (yawAngle) para determinar la dirección
-                const direction = new THREE.Vector3(-Math.sin(yawAngle), 0, -Math.cos(yawAngle));
+                // Obtenemos la dirección exacta hacia donde mira la esfera/avatar
+                const direction = new THREE.Vector3();
+                avatarObject.getWorldDirection(direction);
                 
-                position.add(direction.multiplyScalar(DISTANCIA_FRENTE));
+                // Multiplicamos por la distancia y sumamos a la posición actual
+                const position = avatarObject.position.clone().add(direction.multiplyScalar(DISTANCIA_FRENTE));
+                
                 return position;
                 
             } else {
-                // Modo Coordenadas
-                const x = parseFloat(document.getElementById('forgeX').value);
-                const y = parseFloat(document.getElementById('forgeY').value);
-                const z = parseFloat(document.getElementById('forgeZ').value);
+                // --- CORRECCIÓN: Leer inputs manualmente ---
+                const xVal = document.getElementById('forgeX').value;
+                const yVal = document.getElementById('forgeY').value;
+                const zVal = document.getElementById('forgeZ').value;
+
+                // Convertir a float
+                const x = parseFloat(xVal);
+                const y = parseFloat(yVal);
+                const z = parseFloat(zVal);
                 
+                // Validar que sean números reales
                 if (isNaN(x) || isNaN(y) || isNaN(z)) {
-                    // Fallback: crear en la posición del avatar
-                    console.warn("Coordenadas de forja inválidas. Creando en la ubicación del avatar.");
+                    console.warn("Coordenadas inválidas, usando posición del avatar.");
                     return avatarObject.position.clone();
                 }
                 
@@ -5658,10 +5652,10 @@
                     // MODO FIJO: El ratón controla la rotación de la CÁMARA
                     yawAngle -= deltaX * mouseSensitivity;
                     pitchAngle -= deltaY * mouseSensitivity * 0.5;
-                    pitchAngle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchAngle));
-                    // Nota: Aquí NO se actualiza avatarObject.rotation.y, ya que el avatar
-                    // se mantiene mirando al centro del púlsar en este modo, y la cámara
-                    // rota independientemente.
+                    const LIMIT = 1.56; 
+                    pitchAngle = Math.max(-LIMIT, Math.min(LIMIT, pitchAngle));
+                    
+                    avatarObject.rotation.y = yawAngle;
             } else { // currentOrbitType === 'comet'
                 // MODO COMETA: El ratón controla directamente el ÁNGULO de la ÓRBITA
                 const orbitMouseSensitivity = 0.005;
@@ -5809,7 +5803,7 @@
                     avatarObject.visible = true;
                     cameraOffset.set(0, 30, 5);
                     // Ajustar pitchAngle para vista de pájaro (mira hacia abajo)
-                    pitchAngle = -Math.PI/3; // Aproximadamente -60 grados
+                    pitchAngle = -1.4; // Menos que -1.57 (90 grados)
             break;
     }
     
@@ -6381,7 +6375,7 @@
             console.log(`Intentando conectar a ws://localhost:8080 como ${username}`);
 
             // Conectamos al servidor local que creamos
-            socket = new WebSocket('wss://musicosmoserver.onrender.com');
+            socket = new WebSocket('wss://musicosmosonline.com');
 
             // ---- Definimos los "oyentes" del socket ----
 
@@ -6430,11 +6424,25 @@
                 if (!playerGalaxy) return;
 
                 switch (data.type) {
-                    case 'move': // <--- ¡MOVIDO AQUÍ DENTRO!
-                        // Mueve el avatar del otro jugador
+                    case 'move': 
                         playerGalaxy.targetPosition.set(data.x, data.y, data.z);
-                        // Aquí también podrías actualizar la rotación si la envías
-                        break; // <--- ¡IMPORTANTE EL BREAK!
+                        
+                        // --- NUEVO BLOQUE: Sincronizar apariencia del remoto ---
+                        if (data.visuals && playerGalaxy.pixelGalaxy) {
+                            // Solo actualizamos si los valores son diferentes para ahorrar recursos
+                            const currentConfig = playerGalaxy.pixelGalaxy.config;
+                            // Comprobamos si el tamaño cambió drásticamente (por ejemplo)
+                            if (Math.abs(currentConfig.maxExpansion - data.visuals.size) > 1) {
+                                playerGalaxy.pixelGalaxy.updateConfig({
+                                    maxExpansion: data.visuals.size,
+                                    particleAffectedRatio: data.visuals.pCount / 100,
+                                    colorMixFactor: data.visuals.mix / 100,
+                                    expansionTime: data.visuals.expTime
+                                });
+                            }
+                        }
+                        // -------------------------------------------------------
+                        break;
                         case 'note_on':
                         console.log(`%cNOTA RECIBIDA de ${data.id}`, 'color: #00ff00; font-weight: bold;');
                         console.log(`   Nota: ${data.note}, Vel: ${data.velocity}`);
@@ -6508,6 +6516,14 @@
         // Nueva función para ENVIAR nuestra posición
         function sendPosition() {
             if (socket && socket.readyState === WebSocket.OPEN && avatarObject) {
+                // Preparamos los datos visuales actuales de tu galaxia
+                const myVisuals = {
+                    size: galaxySettings.size,
+                    pCount: galaxySettings.particleCount,
+                    mix: galaxySettings.colorMixing,
+                    expTime: galaxySettings.expansionTime
+                };
+
                 const data = {
                     type: 'move',
                     id: username,
@@ -6515,11 +6531,9 @@
                     y: avatarObject.position.y,
                     z: avatarObject.position.z,
                     yaw: yawAngle,
-                    pitch: pitchAngle
+                    pitch: pitchAngle,
+                    visuals: myVisuals // <--- Enviamos tu configuración visual
                 };
-                // --- AÑADE ESTA LÍNEA ---
-               // console.log("--> ENVIANDO (move):", JSON.stringify(data)); 
-                // --- FIN LÍNEA AÑADIDA ---
                 socket.send(JSON.stringify(data));
             }
         }
