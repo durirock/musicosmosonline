@@ -499,16 +499,20 @@
 
             <div class="forge-section">
                 <h4>2. Forjar Púlsar en Vivo (Línea/Mic)</h4>
-                <p>Visualiza una entrada de audio en vivo (micrófono o tarjeta de sonido) como un púlsar. <strong>No emite sonido</strong> para evitar feedback.</p>
+                <p>Visualiza una entrada de audio. Puedes crear múltiples púlsares.</p>
                 
-                <label for="audioInputDevice">Selecciona la fuente de audio:</label>
+                <div style="margin-bottom: 10px;">
+                    <button id="scanAudioDevicesBtn" class="settings-button secondary" style="width:100%">🔍 Escanear Dispositivos de Audio</button>
+                </div>
+
+                <label for="audioInputDevice">Fuente de audio:</label>
                 <select id="audioInputDevice" class="alien-input">
-                    <option value="">Esperando dispositivos...</option>
+                    <option value="">Primero escanea dispositivos...</option>
                 </select>
                 
                 <div class="button-group">
-                    <button id="startLivePulsar" class="settings-button">Activar Púlsar en Vivo</button>
-                    <button id="stopLivePulsar" class="settings-button secondary" disabled>Detener</button>
+                    <button id="startLivePulsar" class="settings-button">Crear Púlsar</button>
+                    <button id="clearLivePulsars" class="settings-button secondary">Eliminar Todos los Vivos</button>
                 </div>
                 <div id="livePulsarStatus" class="forge-status"></div>
             </div>
@@ -539,80 +543,102 @@
           <!-- Estilos para el panel de configuración -->
           <style>
             /* Controles Táctiles */
+            /* --- NUEVOS ESTILOS TÁCTILES MEJORADOS --- */
             .touch-controls-container {
-                position: absolute;
-                bottom: 0;
-                left: 0;
-                width: 100%;
-                height: 100%; /* Ocupa toda la pantalla para capturar gestos de cámara */
-                pointer-events: none; /* Por defecto no intercepta, solo los hijos con 'auto' */
-                display: none; /* Oculto por defecto, se muestra con JS */
-                z-index: 50; /* Asegúrate de que esté por encima del canvas pero debajo de menús modales si los tienes */
+                position: fixed; /* Fixed evita que se muevan al rotar la pantalla */
+                top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%; height: 100%;
+                pointer-events: none;
+                z-index: 999;
+                display: none;
             }
 
+            /* Joystick Izquierdo (Movimiento) */
             #joystick-container {
-                position: absolute;
-                bottom: 30px;
-                left: 30px;
-                width: 150px;
-                height: 150px;
-                background-color: rgba(50, 50, 80, 0.3);
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                width: 100px;
+                height: 100px;
+                background-color: rgba(255, 255, 255, 0.05); /* Muy transparente */
+                border: 1px solid rgba(255, 255, 255, 0.3);
                 border-radius: 50%;
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                pointer-events: auto; /* Permite interacción con el joystick */
-                border: 2px solid rgba(120, 120, 150, 0.5);
-                user-select: none; /* Evitar selección de texto */
-                -webkit-user-select: none; /* Safari */
-                -ms-user-select: none; /* IE 10+ */
+                pointer-events: auto;
+                backdrop-filter: blur(2px);
+                user-select: none;
+                -webkit-user-select: none;
             }
 
             #joystick-knob {
-                width: 70px;
-                height: 70px;
-                background-color: rgba(100, 100, 150, 0.7);
+                width: 40px;
+                height: 40px;
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.6);
                 border-radius: 50%;
-                border: 2px solid rgba(180, 180, 220, 0.8);
-                position: absolute; /* Se moverá dentro del contenedor del joystick */
-                cursor: pointer;
-                user-select: none;
-                -webkit-user-select: none;
-                -ms-user-select: none;
-            }
-
-            #action-buttons-container {
                 position: absolute;
-                bottom: 40px;
-                right: 30px;
-                display: flex;
-                flex-direction: column;
-                gap: 20px;
-                pointer-events: auto; /* Permite interacción con los botones */
-                user-select: none;
-                -webkit-user-select: none;
-                -ms-user-select: none;
+                cursor: pointer;
+                box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
             }
 
-            .action-button {
-                width: 70px;
-                height: 70px;
-                background-color: rgba(100, 100, 150, 0.6);
+            /* Joystick Derecho (Rotación) - Reemplaza los estilos anteriores */
+            #joystick-container-rotation {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 100px;
+                height: 100px;
+                background-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.3);
                 border-radius: 50%;
-                border: 2px solid rgba(180, 180, 220, 0.7);
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                font-size: 24px;
-                font-weight: bold;
-                color: white;
-                cursor: pointer;
+                pointer-events: auto;
+                backdrop-filter: blur(2px);
                 user-select: none;
                 -webkit-user-select: none;
-                -ms-user-select: none;
             }
-            .action-button:active {
-                background-color: rgba(120, 120, 180, 0.8);
+
+            #joystick-knob-rotation {
+                width: 40px;
+                height: 40px;
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.6);
+                border-radius: 50%;
+                position: absolute;
+                cursor: pointer;
+            }
+
+            /* Botón Hipersalto */
+            #button-hyperspace {
+                position: fixed;
+                bottom: 140px; 
+                right: 45px;
+                width: 50px;
+                height: 50px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.4);
+                border-radius: 50%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                font-size: 20px;
+                color: white;
+                pointer-events: auto;
+                backdrop-filter: blur(2px);
+                transition: all 0.2s;
+                user-select: none;
+                -webkit-user-select: none;
+            }
+
+            #button-hyperspace.active {
+                background-color: rgba(98, 215, 255, 0.4);
+                border-color: #fff;
+                box-shadow: 0 0 15px rgba(98, 215, 255, 0.6);
+                transform: scale(1.1);
             }
 
             /* Asegurar que el body no haga scroll en táctil */
@@ -1365,7 +1391,7 @@
         let isTouchDevice = false;
         let joystickActive = false;
         let joystickInitialPos = { x: 0, y: 0 };
-        const joystickMaxDistance = 40; // Radio máximo de movimiento del knob (ajústalo si es necesario)
+        const joystickMaxDistance = 25; // Radio máximo de movimiento del knob (ajústalo si es necesario)
 
           // --> AÑADIDO: Variables para el segundo joystick y doble toque
         let rotationJoystickActive = false;
@@ -4226,30 +4252,45 @@
          * Inicializa los listeners para los botones de la Forja de Púlsares.
          * DEBES LLAMAR A ESTA FUNCIÓN DENTRO DE TU FUNCIÓN init()
          */
-        function initForgeControls() {
+         function initForgeControls() {
             // Botón Púlsar MP3
             const pulsarButton = document.getElementById('createPersonalPulsarButton');
-            if (pulsarButton) {
-                pulsarButton.addEventListener('click', forjarPulsarPersonal);
-            }
+            if (pulsarButton) pulsarButton.addEventListener('click', forjarPulsarPersonal);
 
             // Botón Radio Tagua Tagua
             const taguaButton = document.getElementById('createTaguaPulsarButton');
-            if (taguaButton) {
-                taguaButton.addEventListener('click', forjarRadioTaguaTagua);
-            }
+            if (taguaButton) taguaButton.addEventListener('click', forjarRadioTaguaTagua);
 
-            // Botones Púlsar en Vivo (Mic/Línea)
+            // --- NUEVO: Botón Escanear ---
+            const scanButton = document.getElementById('scanAudioDevicesBtn');
+            if (scanButton) scanButton.addEventListener('click', populateAudioInputDevices);
+
+            // Botones Púlsar en Vivo
             const startLiveButton = document.getElementById('startLivePulsar');
-            const stopLiveButton = document.getElementById('stopLivePulsar');
-            if (startLiveButton) {
-                startLiveButton.addEventListener('click', startLivePulsar);
-            }
-            if (stopLiveButton) {
-                stopLiveButton.addEventListener('click', stopLivePulsar);
+            const clearLiveButton = document.getElementById('clearLivePulsars');
+            
+            if (startLiveButton) startLiveButton.addEventListener('click', startLivePulsar);
+            
+            // Botón limpiar
+            if (clearLiveButton) {
+                clearLiveButton.addEventListener('click', () => {
+                    let count = 0;
+                    for (const id in gestorDePulsares.activos) {
+                        if (gestorDePulsares.activos[id].type === 'live') {
+                            if(gestorDePulsares.activos[id].nebula) gestorDePulsares.activos[id].nebula.dispose();
+                            if (gestorDePulsares.activos[id].mediaStream) {
+                                gestorDePulsares.activos[id].mediaStream.getTracks().forEach(t => t.stop());
+                            }
+                            delete gestorDePulsares.activos[id];
+                            count++;
+                        }
+                    }
+                    const statusEl = document.getElementById('livePulsarStatus');
+                    if(statusEl) statusEl.textContent = `${count} púlsares en vivo eliminados.`;
+                });
             }
 
-            // Radio button para coordenadas
+            // Radio button coordenadas
             const placeCoordsRadio = document.getElementById('placeCoords');
             if (placeCoordsRadio) {
                 placeCoordsRadio.addEventListener('change', () => {
@@ -4351,68 +4392,65 @@
         /**
          * Inicia el Púlsar en Vivo usando la entrada de audio seleccionada.
          */
-        async function startLivePulsar() {
-            if (livePulsarInstance) {
-                console.log("Ya hay un púlsar en vivo activo.");
-                return;
-            }
-
+         async function startLivePulsar() {
             const deviceId = document.getElementById('audioInputDevice').value;
             const statusEl = document.getElementById('livePulsarStatus');
             
             if (!deviceId) {
-                statusEl.textContent = "Error: No hay dispositivo de audio seleccionado.";
+                statusEl.textContent = "Error: Selecciona un dispositivo primero.";
                 statusEl.className = 'forge-status error';
                 return;
             }
 
-            // 1. Asegurar AudioContext
             if (audioContext && audioContext.state === 'suspended') {
                 await audioContext.resume();
             }
 
             try {
-                // 2. Obtener el stream de audio
-                livePulsarStream = await navigator.mediaDevices.getUserMedia({
+                // Obtenemos un stream NUEVO para esta instancia
+                const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         deviceId: { exact: deviceId },
-                        echoCancellation: true, // Opcional: útil para micrófonos
-                        noiseSuppression: true // Opcional: útil para micrófonos
+                        echoCancellation: true,
+                        noiseSuppression: true
                     }
                 });
                 
-                // 3. Crear nodos de audio
-                livePulsarSource = audioContext.createMediaStreamSource(livePulsarStream);
-                livePulsarAnalyser = audioContext.createAnalyser();
-                livePulsarAnalyser.fftSize = 512;
-                livePulsarAnalyser.smoothingTimeConstant = 0.75;
+                // Crear nodos de audio locales para esta instancia
+                const source = audioContext.createMediaStreamSource(stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0.75;
                 
-                // Pre-alocar arrays de datos
-                liveFrequencyData = new Uint8Array(livePulsarAnalyser.frequencyBinCount);
-                liveTimeData = new Uint8Array(livePulsarAnalyser.fftSize);
+                source.connect(analyser);
 
-                // 4. Conectar la fuente al analizador (¡Y A NADA MÁS!)
-                // Esto es crucial para no crear un bucle de feedback (oírte a ti mismo).
-                livePulsarSource.connect(livePulsarAnalyser);
-
-                // 5. Obtener posición
                 const position = getForgePosition();
 
-                // 6. Crear la nebulosa visual
-                // Usamos GALAXY_PULSAR_CONFIG para un púlsar estándar
-                livePulsarInstance = new RadioNebula(scene, position, livePulsarAnalyser, GALAXY_PULSAR_CONFIG, 'live', false);
+                // Crear la nebulosa
+                const nebula = new RadioNebula(scene, position, analyser, GALAXY_PULSAR_CONFIG, 'live', false);
                 
-                // 7. Actualizar UI
-                statusEl.textContent = "Púlsar en Vivo ACTIVADO.";
+                // ID único
+                const pulsarId = `live_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+
+                // Guardar en el gestor global
+                gestorDePulsares.activos[pulsarId] = {
+                    id: pulsarId,
+                    type: 'live',
+                    nebula: nebula,
+                    analyser: analyser,
+                    mediaStream: stream,
+                    audioSource: source,
+                    isLoaded: true,
+                    isPlaying: true
+                };
+
+                statusEl.textContent = `Púlsar creado en X:${position.x.toFixed(0)} Z:${position.z.toFixed(0)}`;
                 statusEl.className = 'forge-status';
-                document.getElementById('startLivePulsar').disabled = true;
-                document.getElementById('stopLivePulsar').disabled = false;
 
             } catch (err) {
-                console.error("Error al iniciar el Púlsar en Vivo:", err);
-                statusEl.textContent = "Error: No se pudo iniciar la fuente de audio.";
+                console.error("Error al iniciar púlsar:", err);
+                statusEl.textContent = "Error: Permiso denegado o dispositivo ocupado.";
                 statusEl.className = 'forge-status error';
-                stopLivePulsar(); // Limpiar en caso de fallo parcial
             }
         }
 
@@ -4614,7 +4652,6 @@
             //initAudioControls(); // <--- AÑADE ESTA LLAMADA
             initMIDI();
             initForgeControls();         // <--- AÑADE ESTA LÍNEA
-            populateAudioInputDevices(); // <-- ¡AÑADE ESTA LÍNEA!
 
 
 // Todo bien hasta aquí
@@ -7048,7 +7085,7 @@
             // Generar el teclado en el DOM basado en la escala actual
             generateKeyboard() {
                 if (!this.synthKeyboardContainer) return;
-                this.synthKeyboardContainer.innerHTML = ''; // Limpiar teclado anterior
+                this.synthKeyboardContainer.innerHTML = '';
 
                 const rows = [
                     ['t', 'y', 'u', 'i', 'o', 'p', '´', '+'],
@@ -7078,24 +7115,27 @@
                             keyElement.dataset.code = eventCode;
                         }
                         
-                        // --- ESTA ES LA LÍNEA CORREGIDA Y LIMPIA ---
                         keyElement.innerHTML = `${this.getNoteNameFromValue(noteValue)}<span class="key-binding">${keyChar.toUpperCase()}</span>`;
 
-                        keyElement.addEventListener('mousedown', () => {
-                            // --- ¡AÑADE ESTE BLOQUE AL INICIO! ---
+                        // --- LÓGICA TÁCTIL Y DE MOUSE UNIFICADA ---
+                        
+                        const startNote = (e) => {
+                            if (e.cancelable) e.preventDefault(); // Prevenir scroll/zoom
+                            
                             if (this.audioContext && this.audioContext.state === 'suspended') {
                                 this.audioContext.resume();
-                                console.log('AudioContext REANUDADO por el clic en AlienSynth.');
                             }
-                            // --- FIN DEL BLOQUE AÑADIDO ---
-                            if (!this.isRebinding) {
+
+                            if (!this.isRebinding && !keyElement.classList.contains('active')) {
                                 const adjustedNote = this.getAdjustedNote(noteValue);
                                 this.playNote(adjustedNote);
                                 keyElement.classList.add('active');
                             }
-                        });
+                        };
 
-                        const stopHandler = () => {
+                        const stopNote = (e) => {
+                            if (e.cancelable) e.preventDefault();
+
                             if (!this.isRebinding) {
                                 const adjustedNote = this.getAdjustedNote(noteValue);
                                 this.stopNote(adjustedNote);
@@ -7103,10 +7143,17 @@
                             }
                         };
                         
-                        keyElement.addEventListener('mouseup', stopHandler);
+                        // Listeners Mouse
+                        keyElement.addEventListener('mousedown', startNote);
+                        keyElement.addEventListener('mouseup', stopNote);
                         keyElement.addEventListener('mouseleave', (e) => {
-                            if (e.buttons === 1) stopHandler();
+                            if (keyElement.classList.contains('active')) stopNote(e);
                         });
+
+                        // Listeners Táctiles (passive: false permite e.preventDefault)
+                        keyElement.addEventListener('touchstart', startNote, { passive: false });
+                        keyElement.addEventListener('touchend', stopNote, { passive: false });
+                        keyElement.addEventListener('touchcancel', stopNote, { passive: false });
 
                         rowElement.appendChild(keyElement);
                         noteCounter++;
