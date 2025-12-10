@@ -1368,7 +1368,7 @@
         let radioTaguaTaguaNebula = null;
         let analyserNodeTaguaTagua;
         const TAGUA_TAGUA_STREAM_URL = 'https://stream-165.zeno.fm/d5rixk44lfyvv';
-        const TAGUA_TAGUA_NEBULA_POS = new THREE.Vector3(0, 400, 0); // Posición: 400 unidades por encima del origen.
+        const TAGUA_TAGUA_NEBULA_POS = new THREE.Vector3(0, 250, 400); // Posición: 400 unidades por encima del origen.
 
        // REEMPLAZA las variables de la playlist con estas:
          // --- Variables de la Playlist (Versión Simplificada) ---
@@ -1406,6 +1406,9 @@
         let livePulsarSource = null;
         let liveFrequencyData = null; // Array para datos de frecuencia
         let liveTimeData = null;      // Array para datos de dominio de tiempo
+
+        let selectedPulsarId = null; // Guardará el ID del púlsar seleccionado para borrar
+        let selectionHalo = null;    // Objeto visual para indicar selección
 
 
 // ----------------------------------------------------
@@ -4391,7 +4394,7 @@
 
         /**
          * Inicia el Púlsar en Vivo usando la entrada de audio seleccionada.
-         */
+        
          async function startLivePulsar() {
             const deviceId = document.getElementById('audioInputDevice').value;
             const statusEl = document.getElementById('livePulsarStatus');
@@ -4424,6 +4427,11 @@
                 
                 source.connect(analyser);
 
+                // --- CORRECCIÓN IMPORTANTE: Inicializar los arrays de datos ---
+                liveFrequencyData = new Uint8Array(analyser.frequencyBinCount);
+                liveTimeData = new Uint8Array(analyser.fftSize);
+                // -----------------------------------------------------------
+
                 const position = getForgePosition();
 
                 // Crear la nebulosa
@@ -4431,6 +4439,15 @@
                 
                 // ID único
                 const pulsarId = `live_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+
+                // Asignamos el ID a la nebulosa para poder borrarla luego
+                nebula.pulsarWrapperId = pulsarId; 
+
+                // Guardar una referencia global para la animación específica de 'live'
+                livePulsarInstance = nebula;
+                livePulsarAnalyser = analyser;
+                livePulsarStream = stream;
+                livePulsarSource = source;
 
                 // Guardar en el gestor global
                 gestorDePulsares.activos[pulsarId] = {
@@ -5901,24 +5918,23 @@
         function gestionarAudioYAnimacionPulsares(deltaTime) {
             const RANGO_DE_VISIBILIDAD = 4000;
             const FADE_DURATION = 1500;
-            const time = Date.now() * 0.001; // ¡NUEVO! Variable de tiempo para la animación
+            const time = Date.now() * 0.001; 
 
             let pulsarMasCercanoAudible = null;
             let distanciaMinima = Infinity;
 
-            // --- PRIMERA PASADA: GESTIONAR ESTADOS Y ENCONTRAR CANDIDATO ---
+            // --- PRIMERA PASADA: GESTIONAR ESTADOS ---
             for (const pulsarId in gestorDePulsares.activos) {
                 const pulsar = gestorDePulsares.activos[pulsarId];
                 if (!pulsar || !pulsar.nebula) continue;
 
-                // ¡NUEVO! Actualizamos la posición orbital del púlsar en cada fotograma
                 pulsar.nebula.updateOrbitalPosition(time);
 
-                // ¡CAMBIO! La distancia ahora se calcula a la posición dinámica actual
                 const distancia = avatarObject.position.distanceTo(pulsar.nebula.particlesObject.position);
 
+                // Gestión de visibilidad y descarga
                 if (distancia > gestorDePulsares.zonaDeCarga) {
-                    if (pulsar.isLoaded) {
+                    if (pulsar.isLoaded && pulsar.type !== 'live') { // NO descargar si es live (mic)
                         pulsar.tiempoGuardado = pulsar.audio.currentTime;
                         pulsar.audio.pause();
                         pulsar.audio.src = '';
@@ -5931,42 +5947,39 @@
                 
                 pulsar.nebula.particlesObject.visible = true;
 
-                if (!pulsar.isLoaded) {
+                // Carga de audio (Solo para MP3/Radio, no para Live)
+                if (!pulsar.isLoaded && pulsar.type !== 'live') {
                     pulsar.audio.src = pulsar.url;
-
                     try {
-                        if (!pulsar.positionalAudio) {
-                            pulsar.positionalAudio = new THREE.PositionalAudio(audioListener);
-                        }
+                        // ... Configuración de nodos de audio estándar ...
+                        if (!pulsar.positionalAudio) pulsar.positionalAudio = new THREE.PositionalAudio(audioListener);
                         pulsar.positionalAudio.setRefDistance(40);
-                        pulsar.positionalAudio.setRolloffFactor(1.0);
                         pulsar.positionalAudio.setMaxDistance(3000);
 
                         const preAmpGain = audioListener.context.createGain();
                         preAmpGain.gain.setValueAtTime(pulsarVolumeMultiplier, audioListener.context.currentTime);
-                        pulsar.preAmpGain = preAmpGain; // <-- AÑADE ESTA LÍNEA
+                        pulsar.preAmpGain = preAmpGain;
 
-                        if (!pulsar.mediaSource) {
-                            pulsar.mediaSource = audioListener.context.createMediaElementSource(pulsar.audio);
-                        }
+                        if (!pulsar.mediaSource) pulsar.mediaSource = audioListener.context.createMediaElementSource(pulsar.audio);
                         
                         pulsar.mediaSource.disconnect();
                         pulsar.mediaSource.connect(preAmpGain);
                         preAmpGain.connect(pulsar.analyser);
                         pulsar.positionalAudio.setNodeSource(pulsar.analyser);
-
-                    } catch (e) {
-                        console.error("Error al configurar la cadena de audio:", e);
-                    }
-                    
+                    } catch (e) { console.error("Error audio:", e); }
                     pulsar.isLoaded = true;
                 }
                 
+                // Actualización visual (común para todos)
                 let freqData = new Uint8Array(pulsar.analyser.frequencyBinCount);
-                if (pulsar.isLoaded) pulsar.analyser.getByteFrequencyData(freqData);
+                // Para 'live', el analyser siempre está activo si el stream está activo
+                if (pulsar.isLoaded || pulsar.type === 'live') {
+                    pulsar.analyser.getByteFrequencyData(freqData);
+                }
                 pulsar.nebula.update(freqData, new Uint8Array(pulsar.analyser.fftSize), deltaTime);
 
-                if (distancia <= gestorDePulsares.zonaAudible) {
+                // Candidato a sonar (Solo MP3/Radio, el Live no compite por .play())
+                if (distancia <= gestorDePulsares.zonaAudible && pulsar.type !== 'live') {
                     if (distancia < distanciaMinima) {
                         distanciaMinima = distancia;
                         pulsarMasCercanoAudible = pulsar;
@@ -5974,22 +5987,27 @@
                 }
             }
 
-            // --- SEGUNDA PASADA: APLICAR REGLA DEL "ÚNICO SONIDO" CON FADES ---
+            // --- SEGUNDA PASADA: REPRODUCCIÓN (SOLO MP3/RADIO) ---
             if (gestorDePulsares.pulsarAudible !== pulsarMasCercanoAudible) {
-                if (gestorDePulsares.pulsarAudible) {
+                // Fade out anterior
+                if (gestorDePulsares.pulsarAudible && gestorDePulsares.pulsarAudible.type !== 'live') {
                     const pulsarAnterior = gestorDePulsares.pulsarAudible;
                     pulsarAnterior.tiempoGuardado = pulsarAnterior.audio.currentTime;
                     fadeOutAudio(pulsarAnterior.audio, FADE_DURATION);
                     pulsarAnterior.isPlaying = false;
                 }
 
-                if (pulsarMasCercanoAudible) {
+                // Fade in nuevo
+                if (pulsarMasCercanoAudible && pulsarMasCercanoAudible.type !== 'live') {
                     if (pulsarMasCercanoAudible.tiempoGuardado > 0) {
                         pulsarMasCercanoAudible.audio.currentTime = pulsarMasCercanoAudible.tiempoGuardado;
                     }
-                    pulsarMasCercanoAudible.audio.play().catch(e => console.error("Error al reproducir:", e));
-                    fadeInAudio(pulsarMasCercanoAudible.audio, FADE_DURATION, 1.0);
-                    pulsarMasCercanoAudible.isPlaying = true;
+                    // PROTECCIÓN CONTRA EL ERROR DE PLAY
+                    if (pulsarMasCercanoAudible.audio && typeof pulsarMasCercanoAudible.audio.play === 'function') {
+                        pulsarMasCercanoAudible.audio.play().catch(e => console.error("Error play:", e));
+                        fadeInAudio(pulsarMasCercanoAudible.audio, FADE_DURATION, 1.0);
+                        pulsarMasCercanoAudible.isPlaying = true;
+                    }
                 }
                 
                 gestorDePulsares.pulsarAudible = pulsarMasCercanoAudible;
