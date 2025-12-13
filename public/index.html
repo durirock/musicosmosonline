@@ -4392,58 +4392,77 @@
             }
         }
 
-        /**
-         * Inicia el Púlsar en Vivo usando la entrada de audio seleccionada.
-        
-         async function startLivePulsar() {
-            const deviceId = document.getElementById('audioInputDevice').value;
-            const statusEl = document.getElementById('livePulsarStatus');
+        async function startLivePulsar() {
+            console.log("--- Intento de iniciar Púlsar en Vivo ---");
             
-            if (!deviceId) {
-                statusEl.textContent = "Error: Selecciona un dispositivo primero.";
-                statusEl.className = 'forge-status error';
+            // 1. Verificar contexto de audio
+            if (!window.AudioContext && !window.webkitAudioContext) {
+                alert("Tu navegador no soporta Web Audio API.");
                 return;
             }
 
+            const deviceId = document.getElementById('audioInputDevice').value;
+            const statusEl = document.getElementById('livePulsarStatus');
+            
+            // 2. Diagnóstico de selección de dispositivo
+            if (!deviceId) {
+                console.warn("Detenido: No hay dispositivo de audio seleccionado.");
+                alert("⚠️ Por favor, presiona 'Escanear Dispositivos' y selecciona tu micrófono antes de crear el púlsar.");
+                
+                if (statusEl) {
+                    statusEl.textContent = "Error: Selecciona un dispositivo primero.";
+                    statusEl.className = 'forge-status error';
+                }
+                return;
+            }
+
+            // 3. Reanudar AudioContext si está suspendido (requisito de navegadores)
             if (audioContext && audioContext.state === 'suspended') {
-                await audioContext.resume();
+                console.log("Reanudando AudioContext suspendido...");
+                try {
+                    await audioContext.resume();
+                } catch (e) {
+                    console.error("No se pudo reanudar el AudioContext:", e);
+                }
             }
 
             try {
+                console.log("Solicitando acceso al micrófono/línea...");
+                
                 // Obtenemos un stream NUEVO para esta instancia
                 const stream = await navigator.mediaDevices.getUserMedia({
                     audio: {
                         deviceId: { exact: deviceId },
-                        echoCancellation: true,
-                        noiseSuppression: true
+                        echoCancellation: false, // A veces false mejora la calidad musical
+                        autoGainControl: false,
+                        noiseSuppression: false
                     }
                 });
                 
+                console.log("¡Acceso concedido! Stream activo:", stream.active);
+
                 // Crear nodos de audio locales para esta instancia
                 const source = audioContext.createMediaStreamSource(stream);
                 const analyser = audioContext.createAnalyser();
                 analyser.fftSize = 512;
-                analyser.smoothingTimeConstant = 0.75;
+                analyser.smoothingTimeConstant = 0.8; // Suavizado para mejor visual
                 
                 source.connect(analyser);
 
-                // --- CORRECCIÓN IMPORTANTE: Inicializar los arrays de datos ---
+                // Inicializar los arrays de datos si no existen
                 liveFrequencyData = new Uint8Array(analyser.frequencyBinCount);
                 liveTimeData = new Uint8Array(analyser.fftSize);
-                // -----------------------------------------------------------
 
-                const position = getForgePosition();
+                const position = getForgePosition(); // Tu función existente
 
-                // Crear la nebulosa
+                // Crear la nebulosa visual
                 const nebula = new RadioNebula(scene, position, analyser, GALAXY_PULSAR_CONFIG, 'live', false);
                 
                 // ID único
-                const pulsarId = `live_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-
-                // Asignamos el ID a la nebulosa para poder borrarla luego
+                const pulsarId = `live_${Date.now()}`;
                 nebula.pulsarWrapperId = pulsarId; 
 
-                // Guardar una referencia global para la animación específica de 'live'
+                // Referencias globales
                 livePulsarInstance = nebula;
                 livePulsarAnalyser = analyser;
                 livePulsarStream = stream;
@@ -4461,13 +4480,20 @@
                     isPlaying: true
                 };
 
-                statusEl.textContent = `Púlsar creado en X:${position.x.toFixed(0)} Z:${position.z.toFixed(0)}`;
-                statusEl.className = 'forge-status';
+                if (statusEl) {
+                    statusEl.textContent = `¡Púlsar Vivo Activo! (X:${position.x.toFixed(0)})`;
+                    statusEl.className = 'forge-status';
+                }
+                console.log("Púlsar creado exitosamente.");
 
             } catch (err) {
-                console.error("Error al iniciar púlsar:", err);
-                statusEl.textContent = "Error: Permiso denegado o dispositivo ocupado.";
-                statusEl.className = 'forge-status error';
+                console.error("CRASH al iniciar púlsar:", err);
+                alert("Error al acceder al micrófono: " + err.message);
+                
+                if (statusEl) {
+                    statusEl.textContent = "Error: " + err.message;
+                    statusEl.className = 'forge-status error';
+                }
             }
         }
 
@@ -8357,3 +8383,4 @@
 </body>
 
 </html>
+
