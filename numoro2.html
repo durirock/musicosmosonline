@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aureum Nebulae - Sacred Geometry</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000000;
+            font-family: 'Segoe UI', sans-serif;
+            color: #00f2ff;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            z-index: 100;
+            text-shadow: 0 0 10px #00f2ff, 0 0 20px #00f2ff;
+        }
+        canvas { display: block; }
+        #loading {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 2s ease;
+            letter-spacing: 5px;
+            font-size: 0.8rem;
+            color: #fff;
+            text-shadow: 0 0 10px #fff;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loading">
+    <div style="margin-bottom: 20px;">SINTETIZANDO LUZ FRACTAL...</div>
+</div>
+
+<div id="ui">
+    <h1 style="margin:0; font-size: 1rem; font-weight: 800; letter-spacing: 4px;">AUREUM NEBULAE</h1>
+    <div id="stats" style="font-size: 0.7rem; margin-top: 5px; opacity: 0.9; font-weight: bold;">
+        SECTOR: <span id="pos-info">0, 0, 0</span><br>
+        PARTÍCULAS: <span id="part-count">0</span>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+    /**
+     * AUREUM NEBULAE: High Intensity
+     * Partículas con núcleo sólido, alta saturación y brillo neón extremo.
+     */
+
+    const GOLDEN_ANGLE = (3 - Math.sqrt(5)) * Math.PI;
+    const SECTOR_SIZE = 700;
+    const PARTICLES_PER_SYSTEM = 12000;
+    
+    let scene, camera, renderer, clock, circleTexture;
+    let sectors = new Map();
+    const keys = {};
+    let rotation = { x: 0, y: 0, z: 0 };
+
+    // Textura redonda pero con núcleo duro y brillante
+    function createCircleTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        
+        // Gradiente ajustado: Núcleo sólido hasta el 40%, caída rápida después
+        const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');     // Centro blanco puro
+        gradient.addColorStop(0.4, 'rgba(255, 255, 255, 1)');   // Núcleo sólido extendido
+        gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.5)'); // Halo medio
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');     // Borde transparente
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 64, 64);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        return texture;
+    }
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000);
+        // Niebla reducida ligeramente para que los objetos lejanos brillen más
+        scene.fog = new THREE.FogExp2(0x000000, 0.0010);
+
+        circleTexture = createCircleTexture();
+
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 10000);
+        camera.position.set(0, 0, 150);
+
+        renderer = new THREE.WebGLRenderer({ 
+            antialias: true, 
+            powerPreference: "high-performance" 
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        // Habilitar output encoding sRGB puede ayudar a veces, pero para neon manual, controlamos los colores directamente
+        document.body.appendChild(renderer.domElement);
+
+        clock = new THREE.Clock();
+
+        // Eventos
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('resize', onResize);
+        renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
+
+        document.getElementById('loading').style.opacity = '0';
+        setTimeout(() => document.getElementById('loading').remove(), 2000);
+
+        animate();
+    }
+
+    class GoldenNebula {
+        constructor(ix, iy, iz) {
+            this.id = `${ix},${iy},${iz}`;
+            
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(PARTICLES_PER_SYSTEM * 3);
+            const colors = new Float32Array(PARTICLES_PER_SYSTEM * 3);
+            const sizes = new Float32Array(PARTICLES_PER_SYSTEM);
+
+            const seed = Math.abs(Math.sin(ix * 12.98 + iy * 78.23 + iz * 45.16) * 43758.54);
+            this.seed = seed;
+            this.hueBase = (seed * 0.7) % 1;
+            this.breathSpeed = 0.5 + (seed % 0.8); // Respiración un poco más rápida
+            this.breathPhase = seed * Math.PI;
+
+            const complexity = 2 + Math.floor(seed * 6);
+            const tightness = 0.8 + (seed % 0.4);
+            const baseRadius = 180 * (0.5 + (seed % 1.5));
+
+            for (let i = 0; i < PARTICLES_PER_SYSTEM; i++) {
+                const t = i / PARTICLES_PER_SYSTEM;
+                
+                const phi = Math.acos(1 - 2 * t * tightness);
+                const theta = i * GOLDEN_ANGLE;
+                
+                const petalFreq = complexity;
+                const petalAmp = 0.2 + (seed % 0.5);
+                const petalMod = 1 + petalAmp * Math.sin(theta * petalFreq + seed);
+                
+                const r = baseRadius * Math.sqrt(t) * petalMod;
+                
+                const x = r * Math.sin(phi) * Math.cos(theta);
+                const y = r * Math.sin(phi) * Math.sin(theta);
+                const z = r * Math.cos(phi) + Math.sin(i * 0.05 + seed) * 15;
+
+                positions[i*3] = x;
+                positions[i*3+1] = y;
+                positions[i*3+2] = z;
+
+                // COLORES: Saturación al 100% (1.0) y Luminosidad alta (0.7-0.8)
+                const color = new THREE.Color().setHSL(
+                    (this.hueBase + t * 0.15) % 1, 
+                    1.0, 
+                    0.75 
+                );
+                colors[i*3] = color.r;
+                colors[i*3+1] = color.g;
+                colors[i*3+2] = color.b;
+
+                // Tamaños ligeramente más grandes para compensar la textura redonda
+                sizes[i] = (Math.random() * 5 + 2) * (1 - t * 0.4);
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            const material = new THREE.PointsMaterial({
+                size: 4, // Tamaño base aumentado
+                map: circleTexture,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.95, // Casi opaco para brillo máximo
+                blending: THREE.AdditiveBlending, // Suma de luz
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+
+            this.points = new THREE.Points(geometry, material);
+            this.points.position.set(ix * SECTOR_SIZE, iy * SECTOR_SIZE, iz * SECTOR_SIZE);
+            this.points.rotation.set(seed, seed, seed);
+            
+            scene.add(this.points);
+        }
+
+        update(time) {
+            // Respiración más notable
+            const pulse = 1 + Math.sin(time * this.breathSpeed + this.breathPhase) * 0.15;
+            this.points.scale.set(pulse, pulse, pulse);
+            
+            this.points.rotation.y += 0.0005;
+            this.points.rotation.z += 0.0002;
+
+            // La opacidad pulsa pero nunca baja demasiado para mantener el brillo
+            this.points.material.opacity = 0.8 + Math.sin(time * this.breathSpeed * 2) * 0.2;
+        }
+
+        dispose() {
+            this.points.geometry.dispose();
+            this.points.material.dispose();
+            scene.remove(this.points);
+        }
+    }
+
+    function updateSectors() {
+        const cx = Math.round(camera.position.x / SECTOR_SIZE);
+        const cy = Math.round(camera.position.y / SECTOR_SIZE);
+        const cz = Math.round(camera.position.z / SECTOR_SIZE);
+
+        const range = 1;
+        const activeIds = new Set();
+
+        for (let x = cx - range; x <= cx + range; x++) {
+            for (let y = cy - range; y <= cy + range; y++) {
+                for (let z = cz - range; z <= cz + range; z++) {
+                    const id = `${x},${y},${z}`;
+                    activeIds.add(id);
+                    if (!sectors.has(id)) {
+                        sectors.set(id, new GoldenNebula(x, y, z));
+                    }
+                }
+            }
+        }
+
+        for (const [id, sector] of sectors) {
+            if (!activeIds.has(id)) {
+                sector.dispose();
+                sectors.delete(id);
+            }
+        }
+
+        document.getElementById('pos-info').innerText = `${cx}, ${cy}, ${cz}`;
+        document.getElementById('part-count').innerText = (sectors.size * PARTICLES_PER_SYSTEM).toLocaleString();
+    }
+
+    function onMouseMove(e) {
+        if (document.pointerLockElement === renderer.domElement) {
+            rotation.y -= e.movementX * 0.0012;
+            rotation.x -= e.movementY * 0.0012;
+            rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, rotation.x));
+        }
+    }
+
+    function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function handleInput(dt) {
+        const speed = keys['Space'] ? 600 * dt : 120 * dt;
+        
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+
+        if (keys['KeyW']) camera.position.addScaledVector(forward, speed);
+        if (keys['KeyS']) camera.position.addScaledVector(forward, -speed);
+        if (keys['KeyA']) camera.position.addScaledVector(right, -speed);
+        if (keys['KeyD']) camera.position.addScaledVector(right, speed);
+        if (keys['KeyZ']) camera.position.addScaledVector(up, speed);
+        if (keys['KeyX']) camera.position.addScaledVector(up, -speed);
+
+        if (keys['KeyQ']) rotation.z += 0.01;
+        if (keys['KeyE']) rotation.z -= 0.01;
+
+        camera.rotation.order = 'YXZ';
+        camera.rotation.set(rotation.x, rotation.y, rotation.z);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = clock.getDelta();
+        const time = clock.getElapsedTime();
+
+        handleInput(dt);
+        updateSectors();
+
+        sectors.forEach(s => s.update(time));
+
+        renderer.render(scene, camera);
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
