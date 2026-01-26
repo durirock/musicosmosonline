@@ -1,6 +1,3 @@
-Mycelium mind · HTML
-Copiar
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -83,7 +80,6 @@ Copiar
             transition: opacity 0.5s ease;
             max-width: 90%;
         }
-
         #instructions.hidden { opacity: 0; pointer-events: none; }
 
         #instructions kbd {
@@ -170,16 +166,20 @@ Copiar
         }
 
         .idea-node:hover { box-shadow: 0 0 35px rgba(77, 219, 255, 0.6); }
+
         .idea-node.selected {
             border-color: var(--accent-warm);
             box-shadow: 0 0 40px rgba(255, 107, 77, 0.6);
         }
+
         .idea-node.editing {
             border-color: var(--accent-green);
             box-shadow: 0 0 50px rgba(77, 255, 136, 0.7);
             cursor: text;
         }
+
         .idea-node.dragging { cursor: grabbing; }
+
         .idea-node.ghost { 
             opacity: 0.4; 
             border-style: dashed; 
@@ -224,7 +224,6 @@ Copiar
             z-index: 500;
             pointer-events: none;
         }
-
         #node-input-modal.visible { display: block; pointer-events: auto; }
 
         #node-input-modal .input-wrapper {
@@ -233,7 +232,7 @@ Copiar
             border: 2px solid var(--accent-green);
             border-radius: 8px;
             padding: 8px 12px;
-            min-width: 60px;
+            min-width: 40px; 
             max-width: 400px;
             box-shadow: 0 0 40px rgba(77, 255, 136, 0.5);
             display: inline-block;
@@ -249,7 +248,7 @@ Copiar
             resize: none;
             outline: none;
             width: auto;
-            min-width: 50px;
+            min-width: 20px;
             max-width: 350px;
             overflow: hidden;
         }
@@ -269,7 +268,6 @@ Copiar
             opacity: 0;
             transition: opacity 0.3s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
         }
-
         #connection-mode-indicator.visible { opacity: 1; }
         
         #connection-mode-indicator.disconnect {
@@ -278,7 +276,6 @@ Copiar
             color: var(--accent-purple);
         }
 
-        /* Indicador de modo edición */
         #edit-mode-indicator {
             position: fixed;
             top: 20px;
@@ -295,8 +292,59 @@ Copiar
             transition: opacity 0.3s ease;
             pointer-events: none;
         }
-
         #edit-mode-indicator.visible { opacity: 1; }
+
+        /* ============ JOYPADS ============ */
+        .joypad {
+            position: fixed;
+            bottom: 30px;
+            width: 100px;
+            height: 100px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(77, 219, 255, 0.3);
+            border-radius: 50%;
+            z-index: 200;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            touch-action: none;
+        }
+        .joypad.visible {
+            opacity: 1;
+        }
+        .joypad.left {
+            left: 30px;
+        }
+        .joypad.right {
+            right: 30px;
+        }
+        .joypad-inner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 40px;
+            height: 40px;
+            background: var(--primary-glow);
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(77, 219, 255, 0.5);
+            transition: transform 0.1s ease;
+        }
+        .joypad-labels {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .joypad-labels span {
+            position: absolute;
+        }
+        .joypad-labels .top { top: 8px; left: 50%; transform: translateX(-50%); }
+        .joypad-labels .bottom { bottom: 8px; left: 50%; transform: translateX(-50%); }
+        .joypad-labels .left { left: 8px; top: 50%; transform: translateY(-50%); }
+        .joypad-labels .right { right: 8px; top: 50%; transform: translateY(-50%); }
 
         #help-tooltip {
             position: fixed;
@@ -313,17 +361,19 @@ Copiar
             pointer-events: none;
             transition: opacity 0.3s ease;
         }
-
         #help-tooltip.visible { opacity: 1; pointer-events: auto; }
+
         #help-tooltip h2 {
             font-family: 'Cinzel', serif;
             color: var(--primary-glow);
             margin-bottom: 20px;
             text-align: center;
         }
+
         #help-tooltip .help-section { margin: 15px 0; }
         #help-tooltip .help-section h4 { color: var(--accent-green); margin-bottom: 8px; }
         #help-tooltip .help-section p { color: rgba(255, 255, 255, 0.7); font-size: 0.85em; line-height: 1.6; }
+
         #help-tooltip .close-help {
             position: absolute;
             top: 15px; right: 15px;
@@ -332,6 +382,10 @@ Copiar
             color: var(--primary-glow);
             font-size: 1.5em;
             cursor: pointer;
+        }
+
+        @media (min-width: 769px) {
+            .joypad { display: none !important; }
         }
     </style>
 </head>
@@ -346,8 +400,8 @@ Copiar
     </div>
 
     <div id="instructions">
-        <kbd>Doble click</kbd> crear idea • <kbd>Arrastrar sobre otra</kbd> conectar/desconectar<br>
-        <kbd>W A S D</kbd> moverse • <kbd>Q E</kbd> rotar • <kbd>Z X</kbd> subir/bajar • <kbd>Mouse</kbd> girar cámara
+        <kbd>Doble click</kbd> crear idea • <kbd>Arrastrar sobre otro</kbd> conectar • <kbd>Arrastrar al vacío</kbd> mover<br>
+        <kbd>W A S D</kbd> moverse • <kbd>Q E</kbd> rotar • <kbd>Z X</kbd> subir/bajar
     </div>
 
     <div id="stats-panel">
@@ -375,7 +429,27 @@ Copiar
     </div>
 
     <div id="edit-mode-indicator">
-        ✏️ Modo edición - Escape para salir
+        ✏️ Modo edición - Toca fuera para salir
+    </div>
+
+    <!-- JOYPADS -->
+    <div class="joypad left" id="joypad-left">
+        <div class="joypad-inner" id="joypad-left-inner"></div>
+        <div class="joypad-labels">
+            <span class="top">▲</span>
+            <span class="bottom">▼</span>
+            <span class="left">◄</span>
+            <span class="right">►</span>
+        </div>
+    </div>
+    <div class="joypad right" id="joypad-right">
+        <div class="joypad-inner" id="joypad-right-inner"></div>
+        <div class="joypad-labels">
+            <span class="top">↑</span>
+            <span class="bottom">↓</span>
+            <span class="left">⟲</span>
+            <span class="right">⟳</span>
+        </div>
     </div>
 
     <div id="help-tooltip">
@@ -383,23 +457,27 @@ Copiar
         <h2>Mycelium Mind</h2>
         <div class="help-section">
             <h4>🌱 Crear Ideas</h4>
-            <p>Doble click donde quieras crear una nota. El nodo aparece exactamente ahí.</p>
+            <p>Doble tap donde quieras crear una nota.</p>
         </div>
         <div class="help-section">
             <h4>🔗 Conectar / Desconectar</h4>
-            <p>Arrastra un nodo sobre otro:<br>
+            <p>Arrastra un nodo sobre otro para conectar.<br>
             <strong style="color:#4DFF88">Verde</strong> = crear conexión<br>
-            <strong style="color:#9D4DFF">Morado</strong> = eliminar conexión existente</p>
+            <strong style="color:#9D4DFF">Morado</strong> = eliminar conexión</p>
         </div>
         <div class="help-section">
-            <h4>🎮 Navegación</h4>
-            <p><strong>WASD:</strong> Moverse • <strong>QE:</strong> Rotar • <strong>ZX:</strong> Subir/Bajar<br>
-            <strong>Mouse:</strong> Girar cámara • <strong>Scroll:</strong> Zoom<br>
-            <strong>Con nodo seleccionado:</strong> Orbita alrededor del nodo</p>
+            <h4>✥ Mover Nodos</h4>
+            <p>Arrastra un nodo y suéltalo en un espacio vacío para cambiarlo de lugar.</p>
+        </div>
+        <div class="help-section">
+            <h4>🎮 Controles Táctiles</h4>
+            <p><strong>Joypad izquierdo:</strong> Adelante/Atrás/Lados<br>
+            <strong>Joypad derecho:</strong> Arriba/Abajo + Rotar<br>
+            <strong>Con nodo seleccionado:</strong> Orbita alrededor</p>
         </div>
         <div class="help-section">
             <h4>✏️ Editar</h4>
-            <p>Doble click en nodo para editar (zoom automático). <strong>Delete:</strong> Eliminar.</p>
+            <p>Doble tap en nodo para editar.</p>
         </div>
     </div>
 
@@ -409,14 +487,17 @@ Copiar
             connectionSegments: 20,
             connectionAmplitude: 0.2,
             cameraSpeed: 0.2,
-            rotationSpeed: 0.012,
+            rotationSpeed: 0.015,
             mouseSensitivity: 0.002,
             zoomSpeed: 0.015,
             minZoom: 3,
             maxZoom: 100,
             connectionThreshold: 2.5,
             editZoomDistance: 6,
-            transitionSpeed: 0.08
+            transitionSpeed: 0.08,
+            joypadHideDelay: 5000,
+            cameraSmoothing: 0.1,
+            creationDistance: 5
         };
 
         let scene, camera, webglRenderer, cssRenderer, clock;
@@ -425,13 +506,21 @@ Copiar
         let connections = [];
         let selectedNode = null;
         let draggedNode = null;
-        let ghostCSSObject = null; // Objeto fantasma CSS3D
+        let ghostCSSObject = null;
         let potentialTarget = null;
         let targetAction = null;
+        
+        // Nuevo: Plano para arrastrar nodos manteniendo su profundidad
+        let dragPlane = new THREE.Plane();
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         let moveUp = false, moveDown = false;
         let rotateLeft = false, rotateRight = false;
+
+        // Joypad values (-1 to 1)
+        let joypadLeftX = 0, joypadLeftY = 0;
+        let joypadRightX = 0, joypadRightY = 0;
+        let joypadHideTimer = null;
 
         let yawAngle = 0, pitchAngle = 0;
         let zoomDistance = 15;
@@ -439,22 +528,28 @@ Copiar
         let previousMousePosition = { x: 0, y: 0 };
 
         let isCreatingNode = false;
-        let pendingNodeScreenPosition = null; // Guardar posición de PANTALLA
+        let pendingNodeScreenPosition = null;
 
-        // MODO EDICIÓN
         let isEditingNode = false;
         let editingNode = null;
 
-        // TRANSICIÓN DE CÁMARA
         let isTransitioning = false;
         let transitionTarget = null;
         let transitionCallback = null;
 
-        // ÓRBITA alrededor de nodo seleccionado
+        // Órbita
         let orbitCenter = null;
         let orbitDistance = 15;
         let orbitYaw = 0;
         let orbitPitch = 0;
+
+        // Smooth Camera Vectors
+        let currentLookAt = new THREE.Vector3();
+        
+        // Touch
+        let lastTapTime = 0;
+        let touchStartPos = null;
+        let activeTouches = {};
 
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
@@ -465,6 +560,7 @@ Copiar
         function init() {
             scene = new THREE.Scene();
             scene.fog = new THREE.Fog(0x02040a, 50, 200);
+
             clock = new THREE.Clock();
 
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -474,6 +570,9 @@ Copiar
             avatarObject = new THREE.Mesh(avatarGeometry, avatarMaterial);
             avatarObject.position.set(0, 0, 0);
             scene.add(avatarObject);
+            
+            // Inicializar currentLookAt
+            currentLookAt.copy(avatarObject.position);
 
             webglRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             webglRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -489,14 +588,43 @@ Copiar
             scene.add(ambientLight);
 
             createSporeField();
+            createStarField(); // Nuevo campo de estrellas
             createReferenceGrid();
             initEventListeners();
+            initJoypads();
 
             setTimeout(() => {
                 document.getElementById('instructions').classList.add('hidden');
             }, 8000);
 
             updateStats();
+        }
+
+        function createStarField() {
+            // Estrellas más lejanas y pequeñas para dar referencia
+            const starCount = 3000;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(starCount * 3);
+
+            for (let i = 0; i < starCount; i++) {
+                const r = 300 + Math.random() * 200; // Radio lejano
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                positions[i*3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i*3+2] = r * Math.cos(phi);
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.6,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            scene.add(new THREE.Points(geometry, material));
         }
 
         function createSporeField() {
@@ -538,6 +666,88 @@ Copiar
             scene.add(gridHelper);
         }
 
+        // ============ JOYPADS ============
+        function initJoypads() {
+            const joypadLeft = document.getElementById('joypad-left');
+            const joypadRight = document.getElementById('joypad-right');
+            const innerLeft = document.getElementById('joypad-left-inner');
+            const innerRight = document.getElementById('joypad-right-inner');
+
+            setupJoypad(joypadLeft, innerLeft, (x, y) => {
+                joypadLeftX = x;
+                joypadLeftY = y;
+            });
+
+            setupJoypad(joypadRight, innerRight, (x, y) => {
+                joypadRightX = x;
+                joypadRightY = y;
+            });
+        }
+
+        function setupJoypad(container, inner, callback) {
+            let isActive = false;
+            let startX, startY;
+            const maxDistance = 30;
+
+            container.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isActive = true;
+                const touch = e.touches[0];
+                const rect = container.getBoundingClientRect();
+                startX = rect.left + rect.width / 2;
+                startY = rect.top + rect.height / 2;
+                showJoypads();
+            }, { passive: false });
+
+            container.addEventListener('touchmove', (e) => {
+                if (!isActive) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const touch = e.touches[0];
+
+                let dx = touch.clientX - startX;
+                let dy = touch.clientY - startY;
+                
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > maxDistance) {
+                    dx = (dx / distance) * maxDistance;
+                    dy = (dy / distance) * maxDistance;
+                }
+
+                inner.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+                
+                callback(dx / maxDistance, -dy / maxDistance);
+                showJoypads();
+            }, { passive: false });
+
+            container.addEventListener('touchend', (e) => {
+                isActive = false;
+                inner.style.transform = 'translate(-50%, -50%)';
+                callback(0, 0);
+                scheduleHideJoypads();
+            });
+        }
+
+        function showJoypads() {
+            document.getElementById('joypad-left').classList.add('visible');
+            document.getElementById('joypad-right').classList.add('visible');
+            
+            if (joypadHideTimer) {
+                clearTimeout(joypadHideTimer);
+            }
+        }
+
+        function scheduleHideJoypads() {
+            if (joypadHideTimer) {
+                clearTimeout(joypadHideTimer);
+            }
+            joypadHideTimer = setTimeout(() => {
+                document.getElementById('joypad-left').classList.remove('visible');
+                document.getElementById('joypad-right').classList.remove('visible');
+            }, CONFIG.joypadHideDelay);
+        }
+
         function initEventListeners() {
             window.addEventListener('resize', onWindowResize);
             document.addEventListener('keydown', onKeyDown);
@@ -550,6 +760,11 @@ Copiar
             document.addEventListener('contextmenu', e => e.preventDefault());
             document.addEventListener('click', onDocumentClick);
 
+            // Touch events
+            document.addEventListener('touchstart', onTouchStart, { passive: false });
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd, { passive: false });
+
             document.getElementById('btn-help').addEventListener('click', toggleHelp);
             document.getElementById('btn-center').addEventListener('click', centerView);
             document.getElementById('btn-save').addEventListener('click', saveMap);
@@ -561,6 +776,82 @@ Copiar
             nodeInput.addEventListener('keydown', onNodeInputKeyDown);
             nodeInput.addEventListener('input', autoResizeInput);
             nodeInput.addEventListener('blur', onNodeInputBlur);
+        }
+
+        // ============ TOUCH EVENTS ============
+        function onTouchStart(event) {
+            if (event.target.closest('.action-btn, #help-tooltip, #stats-panel, #node-input-modal, #coordinates, .joypad')) return;
+            if (isEditingNode) return;
+
+            const touch = event.touches[0];
+            touchStartPos = { x: touch.clientX, y: touch.clientY };
+            
+            updateMouseFromTouch(touch);
+
+            // Detectar doble tap
+            const now = Date.now();
+            if (now - lastTapTime < 300) {
+                onDoubleTap(touch);
+                lastTapTime = 0;
+                return;
+            }
+            lastTapTime = now;
+
+            // Verificar si tocó un nodo
+            const hit = raycastNodes();
+            if (hit) {
+                selectNode(hit.node);
+                startDraggingNode(hit.node);
+            } else {
+                // Iniciar arrastre de cámara
+                isCameraDragging = true;
+            }
+            event.preventDefault();
+        }
+
+        function onTouchMove(event) {
+            if (event.target.closest('.joypad')) return;
+            
+            const touch = event.touches[0];
+            updateMouseFromTouch(touch);
+
+            if (draggedNode) {
+                updateGhostPosition({ clientX: touch.clientX, clientY: touch.clientY });
+                checkConnectionTarget();
+            } else if (isCameraDragging && touchStartPos) {
+                const deltaX = touch.clientX - touchStartPos.x;
+                const deltaY = touch.clientY - touchStartPos.y;
+
+                // SIEMPRE usar modo libre (Shooter)
+                yawAngle -= deltaX * CONFIG.mouseSensitivity * 0.5;
+                pitchAngle -= deltaY * CONFIG.mouseSensitivity * 0.5;
+                pitchAngle = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitchAngle));
+
+                touchStartPos = { x: touch.clientX, y: touch.clientY };
+            }
+            event.preventDefault();
+        }
+
+        function onTouchEnd(event) {
+            if (draggedNode) finishDraggingNode();
+            isCameraDragging = false;
+            touchStartPos = null;
+        }
+
+        function onDoubleTap(touch) {
+            updateMouseFromTouch(touch);
+            const hit = raycastNodes();
+            if (hit) {
+                enterEditMode(hit.node);
+                return;
+            }
+            pendingNodeScreenPosition = { x: touch.clientX, y: touch.clientY };
+            showNodeInput(touch.clientX, touch.clientY);
+        }
+
+        function updateMouseFromTouch(touch) {
+            mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
         }
 
         function onDocumentClick(event) {
@@ -580,16 +871,15 @@ Copiar
         }
 
         function onKeyDown(event) {
-            // Si está editando, bloquear teclas de movimiento
             if (isEditingNode) {
                 if (event.key === 'Escape') {
                     exitEditMode();
                 }
-                return; // Bloquear WASD, QE, ZX
+                return;
             }
             
             if (isCreatingNode) return;
-            
+
             switch (event.code) {
                 case 'KeyW': moveForward = true; break;
                 case 'KeyS': moveBackward = true; break;
@@ -667,17 +957,10 @@ Copiar
                 const deltaX = event.clientX - previousMousePosition.x;
                 const deltaY = event.clientY - previousMousePosition.y;
                 
-                if (selectedNode && orbitCenter) {
-                    // ORBITAR alrededor del nodo seleccionado
-                    orbitYaw -= deltaX * CONFIG.mouseSensitivity;
-                    orbitPitch -= deltaY * CONFIG.mouseSensitivity;
-                    orbitPitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, orbitPitch));
-                } else {
-                    // Movimiento normal
-                    yawAngle -= deltaX * CONFIG.mouseSensitivity;
-                    pitchAngle -= deltaY * CONFIG.mouseSensitivity;
-                    pitchAngle = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitchAngle));
-                }
+                // SIEMPRE usar modo libre (Shooter)
+                yawAngle -= deltaX * CONFIG.mouseSensitivity;
+                pitchAngle -= deltaY * CONFIG.mouseSensitivity;
+                pitchAngle = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitchAngle));
             }
             
             previousMousePosition = { x: event.clientX, y: event.clientY };
@@ -701,12 +984,10 @@ Copiar
             
             const hit = raycastNodes();
             if (hit) {
-                // Editar nodo existente con zoom
                 enterEditMode(hit.node);
                 return;
             }
             
-            // Crear nuevo nodo - guardar posición de PANTALLA
             pendingNodeScreenPosition = { x: event.clientX, y: event.clientY };
             showNodeInput(event.clientX, event.clientY);
         }
@@ -730,15 +1011,13 @@ Copiar
             return null;
         }
 
-        // Convertir posición de pantalla a mundo 3D
         function screenToWorld(screenX, screenY) {
             const ndcX = (screenX / window.innerWidth) * 2 - 1;
             const ndcY = -(screenY / window.innerHeight) * 2 + 1;
             
             raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
             
-            // Plano a distancia fija frente a la cámara
-            const distance = 8;
+            const distance = CONFIG.creationDistance; 
             const point = raycaster.ray.at(distance, new THREE.Vector3());
             
             return point;
@@ -797,14 +1076,10 @@ Copiar
             selectedNode = node;
             node.element.classList.add('selected');
             
-            // Configurar órbita alrededor de este nodo
-            orbitCenter = node.position.clone();
-            orbitDistance = camera.position.distanceTo(node.position);
-            
-            // Calcular ángulos actuales
-            const dir = new THREE.Vector3().subVectors(camera.position, node.position).normalize();
-            orbitYaw = Math.atan2(dir.x, dir.z);
-            orbitPitch = Math.asin(dir.y);
+            // MODIFICACIÓN:
+            // Eliminamos TODA la lógica que establecía el centro de órbita y forzaba el enfoque.
+            // Ahora la selección es puramente visual.
+            orbitCenter = null; 
         }
 
         function deselectNode() {
@@ -840,7 +1115,6 @@ Copiar
             updateStats();
         }
 
-        // ============ MODO EDICIÓN ============
         function enterEditMode(node) {
             isEditingNode = true;
             editingNode = node;
@@ -850,11 +1124,10 @@ Copiar
             
             document.getElementById('edit-mode-indicator').classList.add('visible');
             
-            // Calcular distancia al nodo
             const distanceToNode = camera.position.distanceTo(node.position);
             
-            if (distanceToNode > CONFIG.editZoomDistance * 2) {
-                // Hacer zoom transicional
+            // Lógica de Zoom inmediato (Doble click)
+            if (distanceToNode > CONFIG.editZoomDistance + 2) {
                 transitionToNode(node, () => {
                     startEditing(node);
                 });
@@ -870,6 +1143,21 @@ Copiar
                 distance: CONFIG.editZoomDistance
             };
             transitionCallback = callback;
+        }
+
+        function syncAvatarWithCamera() {
+            avatarObject.position.copy(camera.position);
+            
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            
+            yawAngle = Math.atan2(-direction.x, -direction.z);
+            pitchAngle = Math.asin(direction.y);
+            
+            const standardDist = 10;
+            const forward = direction.clone().multiplyScalar(standardDist);
+            avatarObject.position.add(forward);
+            zoomDistance = standardDist;
         }
 
         function startEditing(node) {
@@ -888,7 +1176,6 @@ Copiar
         }
 
         function onEditBlur(event) {
-            // Pequeño delay para verificar si el foco se movió a otro elemento válido
             setTimeout(() => {
                 if (isEditingNode && editingNode) {
                     exitEditMode();
@@ -904,7 +1191,6 @@ Copiar
             if (event.key === 'Escape') {
                 exitEditMode();
             }
-            // Permitir todas las demás teclas para escribir
             event.stopPropagation();
         }
 
@@ -936,18 +1222,23 @@ Copiar
             node.proxyObject.geometry = new THREE.PlaneGeometry(proxyWidth, proxyHeight);
         }
 
-        // ============ ARRASTRE Y CONEXIONES ============
         function startDraggingNode(node) {
             draggedNode = node;
             node.element.classList.add('dragging');
             
-            // Crear fantasma CSS3D
+            // Creamos un plano en la posición del nodo, mirando hacia la cámara
+            // Esto asegura que al arrastrar, el movimiento sea paralelo al plano de visión
+            // y mantenga la distancia relativa original.
+            const normal = new THREE.Vector3();
+            camera.getWorldDirection(normal);
+            dragPlane.setFromNormalAndCoplanarPoint(normal, node.position);
+            
             createGhostNode(node);
             
             const indicator = document.getElementById('connection-mode-indicator');
             indicator.classList.add('visible');
             indicator.classList.remove('disconnect');
-            document.getElementById('indicator-text').textContent = '🔗 Arrastra sobre otro nodo';
+            document.getElementById('indicator-text').textContent = '🔗 Arrastra sobre otro / ✥ Suelta para mover';
         }
 
         function createGhostNode(node) {
@@ -965,9 +1256,15 @@ Copiar
         function updateGhostPosition(event) {
             if (!ghostCSSObject || !draggedNode) return;
             
-            // Mover el fantasma siguiendo el cursor
-            const worldPos = screenToWorld(event.clientX, event.clientY);
-            ghostCSSObject.position.copy(worldPos);
+            const ndcX = (event.clientX / window.innerWidth) * 2 - 1;
+            const ndcY = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+
+            // Intersectamos el rayo del mouse con el plano definido al inicio del arrastre
+            const intersection = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(dragPlane, intersection)) {
+                ghostCSSObject.position.copy(intersection);
+            }
         }
 
         function checkConnectionTarget() {
@@ -981,29 +1278,30 @@ Copiar
             
             const indicator = document.getElementById('connection-mode-indicator');
             indicator.classList.remove('disconnect');
-            document.getElementById('indicator-text').textContent = '🔗 Arrastra sobre otro nodo';
             
             const hit = raycastNodes();
-            if (!hit || hit.node === draggedNode) return;
-            
-            const targetNode = hit.node;
-            
-            const existingConnection = connections.find(
-                c => (c.nodeA === draggedNode && c.nodeB === targetNode) ||
-                     (c.nodeA === targetNode && c.nodeB === draggedNode)
-            );
-            
-            potentialTarget = targetNode;
-            
-            if (existingConnection) {
-                targetAction = 'disconnect';
-                targetNode.element.classList.add('disconnect-target');
-                indicator.classList.add('disconnect');
-                document.getElementById('indicator-text').textContent = '✂️ Suelta para DESCONECTAR';
+            if (hit && hit.node !== draggedNode) {
+                const targetNode = hit.node;
+                
+                const existingConnection = connections.find(
+                    c => (c.nodeA === draggedNode && c.nodeB === targetNode) ||
+                         (c.nodeA === targetNode && c.nodeB === draggedNode)
+                );
+                
+                potentialTarget = targetNode;
+                
+                if (existingConnection) {
+                    targetAction = 'disconnect';
+                    targetNode.element.classList.add('disconnect-target');
+                    indicator.classList.add('disconnect');
+                    document.getElementById('indicator-text').textContent = '✂️ Suelta para DESCONECTAR';
+                } else {
+                    targetAction = 'connect';
+                    targetNode.element.classList.add('connection-target');
+                    document.getElementById('indicator-text').textContent = '🔗 Suelta para CONECTAR';
+                }
             } else {
-                targetAction = 'connect';
-                targetNode.element.classList.add('connection-target');
-                document.getElementById('indicator-text').textContent = '🔗 Suelta para CONECTAR';
+                document.getElementById('indicator-text').textContent = '✥ Suelta para MOVER';
             }
         }
 
@@ -1012,12 +1310,6 @@ Copiar
             
             draggedNode.element.classList.remove('dragging');
             
-            // Remover fantasma
-            if (ghostCSSObject) {
-                scene.remove(ghostCSSObject);
-                ghostCSSObject = null;
-            }
-            
             if (potentialTarget && targetAction) {
                 if (targetAction === 'connect') {
                     createConnection(draggedNode, potentialTarget);
@@ -1025,6 +1317,24 @@ Copiar
                     removeConnection(draggedNode, potentialTarget);
                 }
                 potentialTarget.element.classList.remove('connection-target', 'disconnect-target');
+            } 
+            else if (ghostCSSObject) {
+                const newPos = ghostCSSObject.position.clone();
+                draggedNode.position.copy(newPos);
+                draggedNode.cssObject.position.copy(newPos);
+                draggedNode.proxyObject.position.copy(newPos);
+                
+                // Si el nodo seleccionado era este, actualizar centro de órbita si estuviera activo (ahora está desactivado por defecto)
+                if (selectedNode === draggedNode && orbitCenter) {
+                    orbitCenter.copy(newPos);
+                }
+
+                updateNodeConnections(draggedNode);
+            }
+            
+            if (ghostCSSObject) {
+                scene.remove(ghostCSSObject);
+                ghostCSSObject = null;
             }
             
             potentialTarget = null;
@@ -1093,6 +1403,22 @@ Copiar
             updateStats();
         }
 
+        function updateNodeConnections(node) {
+            node.connections.forEach(conn => {
+                scene.remove(conn.line);
+                conn.line.geometry.dispose();
+
+                conn.curve = new THREE.CatmullRomCurve3(
+                    generateCurvePoints(conn.nodeA.position, conn.nodeB.position)
+                );
+                
+                const newGeometry = new THREE.TubeGeometry(conn.curve, CONFIG.connectionSegments, 0.02, 6, false);
+                conn.line.geometry = newGeometry;
+                
+                scene.add(conn.line);
+            });
+        }
+
         function generateCurvePoints(start, end) {
             const points = [];
             const perpendicular = new THREE.Vector3()
@@ -1130,7 +1456,6 @@ Copiar
             });
         }
 
-        // ============ INPUT DE NUEVO NODO ============
         function showNodeInput(screenX, screenY) {
             isCreatingNode = true;
             
@@ -1142,7 +1467,7 @@ Copiar
             modal.classList.add('visible');
             
             input.value = '';
-            input.style.width = '50px';
+            input.style.width = '20px';
             input.style.height = 'auto';
             
             setTimeout(() => input.focus(), 10);
@@ -1154,7 +1479,7 @@ Copiar
             input.style.height = 'auto';
             input.style.width = 'auto';
             
-            const textWidth = Math.max(50, Math.min(350, input.scrollWidth + 5));
+            const textWidth = Math.max(20, Math.min(350, input.scrollWidth + 5));
             input.style.width = textWidth + 'px';
             input.style.height = input.scrollHeight + 'px';
         }
@@ -1184,7 +1509,6 @@ Copiar
             const text = input.value.trim();
             
             if (text && pendingNodeScreenPosition) {
-                // Convertir posición de PANTALLA a MUNDO
                 const worldPos = screenToWorld(pendingNodeScreenPosition.x, pendingNodeScreenPosition.y);
                 createNode(text, worldPos);
             }
@@ -1327,7 +1651,6 @@ Copiar
             const delta = clock.getDelta();
             const time = clock.getElapsedTime();
             
-            // Transición de cámara
             if (isTransitioning && transitionTarget) {
                 const targetPos = transitionTarget.position.clone();
                 const dir = new THREE.Vector3().subVectors(camera.position, targetPos).normalize();
@@ -1335,8 +1658,14 @@ Copiar
                 
                 camera.position.lerp(targetCamPos, CONFIG.transitionSpeed);
                 
+                const targetLookAt = transitionTarget.position.clone();
+                currentLookAt.lerp(targetLookAt, CONFIG.transitionSpeed);
+                camera.lookAt(currentLookAt);
+                
                 if (camera.position.distanceTo(targetCamPos) < 0.1) {
                     isTransitioning = false;
+                    syncAvatarWithCamera();
+                    
                     if (transitionCallback) {
                         transitionCallback();
                         transitionCallback = null;
@@ -1344,7 +1673,7 @@ Copiar
                 }
             } else if (!isEditingNode) {
                 updateMovement(delta);
-                updateCamera();
+                updateCamera(); 
             }
             
             updateCoordinates();
@@ -1367,22 +1696,23 @@ Copiar
         function updateMovement(delta) {
             const speed = CONFIG.cameraSpeed;
             
-            if (rotateLeft) {
-                if (orbitCenter) {
-                    orbitYaw += CONFIG.rotationSpeed;
-                } else {
-                    yawAngle += CONFIG.rotationSpeed;
-                }
-            }
-            if (rotateRight) {
-                if (orbitCenter) {
-                    orbitYaw -= CONFIG.rotationSpeed;
-                } else {
-                    yawAngle -= CONFIG.rotationSpeed;
-                }
-            }
+            const inputForward = (moveForward ? 1 : 0) - (moveBackward ? 1 : 0) + joypadLeftY;
+            const inputStrafe = (moveRight ? 1 : 0) - (moveLeft ? 1 : 0) + joypadLeftX;
+            const inputUp = (moveUp ? 1 : 0) - (moveDown ? 1 : 0) + joypadRightY;
+            const inputRotate = (rotateRight ? 1 : 0) - (rotateLeft ? 1 : 0) - joypadRightX;
             
-            if (!orbitCenter) {
+            if (selectedNode && orbitCenter) {
+                // Si en algún futuro se vuelve a activar la órbita automática, este bloque se usará.
+                // Actualmente orbitCenter no se setea al seleccionar, por lo que siempre va al ELSE.
+                orbitYaw += inputRotate * CONFIG.rotationSpeed;
+                
+                orbitDistance -= inputUp * speed * 0.5;
+                orbitDistance = Math.max(CONFIG.minZoom, Math.min(CONFIG.maxZoom, orbitDistance));
+            } else {
+                // MODO NORMAL (SHOOTER) - Rotar sobre sí mismo
+                // Negativo para que Q=Izq, E=Der
+                yawAngle -= inputRotate * CONFIG.rotationSpeed; 
+                
                 const direction = new THREE.Vector3(
                     -Math.sin(yawAngle),
                     0,
@@ -1395,33 +1725,39 @@ Copiar
                     -Math.cos(yawAngle - Math.PI / 2)
                 );
                 
-                if (moveForward) avatarObject.position.addScaledVector(direction, speed);
-                if (moveBackward) avatarObject.position.addScaledVector(direction, -speed);
-                if (moveLeft) avatarObject.position.addScaledVector(right, -speed);
-                if (moveRight) avatarObject.position.addScaledVector(right, speed);
-                if (moveUp) avatarObject.position.y += speed;
-                if (moveDown) avatarObject.position.y -= speed;
+                if (Math.abs(inputForward) > 0.1) {
+                    avatarObject.position.addScaledVector(direction, inputForward * speed);
+                }
+                if (Math.abs(inputStrafe) > 0.1) {
+                    avatarObject.position.addScaledVector(right, inputStrafe * speed);
+                }
+                if (Math.abs(inputUp) > 0.1) {
+                    avatarObject.position.y += inputUp * speed;
+                }
             }
         }
 
         function updateCamera() {
+            let targetPosition = new THREE.Vector3();
+            let targetLookAt = new THREE.Vector3();
+
             if (orbitCenter && selectedNode) {
-                // Modo órbita alrededor del nodo seleccionado
+                // MODO ÓRBITA (Desactivado por ahora para selección simple)
                 const x = Math.sin(orbitYaw) * Math.cos(orbitPitch) * orbitDistance;
                 const y = Math.sin(orbitPitch) * orbitDistance;
                 const z = Math.cos(orbitYaw) * Math.cos(orbitPitch) * orbitDistance;
                 
-                camera.position.set(
+                targetPosition.set(
                     orbitCenter.x + x,
                     orbitCenter.y + y,
                     orbitCenter.z + z
                 );
-                camera.lookAt(orbitCenter);
                 
-                // Actualizar posición del avatar
-                avatarObject.position.copy(orbitCenter);
+                targetLookAt.copy(orbitCenter);
+                avatarObject.position.lerp(orbitCenter, CONFIG.cameraSmoothing);
+                
             } else {
-                // Modo normal
+                // MODO LIBRE (Shooter) - Este será el comportamiento por defecto siempre
                 const quaternion = new THREE.Quaternion().setFromEuler(
                     new THREE.Euler(pitchAngle, yawAngle, 0, 'YXZ')
                 );
@@ -1429,9 +1765,13 @@ Copiar
                 const offset = new THREE.Vector3(0, 0, zoomDistance);
                 offset.applyQuaternion(quaternion);
                 
-                camera.position.copy(avatarObject.position).add(offset);
-                camera.lookAt(avatarObject.position);
+                targetPosition.copy(avatarObject.position).add(offset);
+                targetLookAt.copy(avatarObject.position);
             }
+
+            camera.position.lerp(targetPosition, CONFIG.cameraSmoothing);
+            currentLookAt.lerp(targetLookAt, CONFIG.cameraSmoothing);
+            camera.lookAt(currentLookAt);
         }
     </script>
 </body>
