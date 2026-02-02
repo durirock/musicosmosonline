@@ -96,7 +96,7 @@
     
     // Configuración Estereoscópica
     let isStereoMode = false;
-    let eyeSeparation = 1.2; // Intensidad del efecto 3D
+    let eyeSeparation = 1.2; // Intensidad inicial del efecto 3D
 
     // Gestión Táctil e Inactividad
     let isTouchDevice = false;
@@ -140,14 +140,36 @@
         animate();
     }
 
+    function updateStereoStatus() {
+        const statusElement = document.getElementById('stereo-status');
+        if (isStereoMode) {
+            statusElement.innerText = `MODO ESTÉREO ACTIVO (CROSS-EYE) | PROFUNDIDAD: ${eyeSeparation.toFixed(1)}`;
+        } else {
+            statusElement.innerText = "";
+        }
+    }
+
     function onKeyDown(e) {
         keys[e.code] = true;
         lastUserActionTime = Date.now();
+        
         // Tecla 3 para activar/desactivar Estereoscopía
         if (e.code === 'Digit3' || e.code === 'Numpad3') {
             isStereoMode = !isStereoMode;
-            document.getElementById('stereo-status').innerText = isStereoMode ? "MODO ESTÉREO ACTIVO (CROSS-EYE)" : "";
+            updateStereoStatus();
             onResize(); 
+        }
+
+        // Teclas 9 y 0 para ajustar la separación de ojos (Solo en modo estéreo)
+        if (isStereoMode) {
+            if (e.code === 'Digit9' || e.code === 'Numpad9') {
+                eyeSeparation += 0.1;
+                updateStereoStatus();
+            }
+            if (e.code === 'Digit0' || e.code === 'Numpad0') {
+                eyeSeparation = Math.max(0.1, eyeSeparation - 0.1);
+                updateStereoStatus();
+            }
         }
     }
 
