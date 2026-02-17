@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ctenophora Divina — Sinfonía Abisal</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', serif;
+            user-select: none;
+        }
+        canvas { display: block; }
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding-bottom: 40px;
+        }
+        #info {
+            text-align: center;
+            color: rgba(77, 219, 255, 0.7);
+            letter-spacing: 4px;
+            font-size: 0.8rem;
+            text-shadow: 0 0 15px rgba(77, 219, 255, 0.4);
+            margin-bottom: 10px;
+        }
+        #controls-hint {
+            font-size: 0.7rem;
+            color: rgba(77, 219, 255, 0.4);
+            margin-top: 5px;
+            letter-spacing: 2px;
+        }
+        #start-btn {
+            pointer-events: auto;
+            background: rgba(0, 20, 40, 0.6);
+            border: 1px solid rgba(77, 219, 255, 0.3);
+            color: #b8e6ff;
+            padding: 12px 24px;
+            font-family: 'Segoe UI', serif;
+            letter-spacing: 2px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.5s ease;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            backdrop-filter: blur(4px);
+        }
+        #start-btn:hover {
+            background: rgba(77, 219, 255, 0.15);
+            border-color: rgba(77, 219, 255, 0.8);
+            box-shadow: 0 0 20px rgba(77, 219, 255, 0.2);
+        }
+        .hidden { opacity: 0; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div id="ui-layer">
+    <div id="info">CTENOPHORA DIVINA · ECOSISTEMA SONORO</div>
+    <div id="controls-hint" class="hidden">WASD: Mover · QE: Rotar · ZX: Altura · CLICK: Mirar</div>
+    <button id="start-btn">INICIAR INMERSIÓN SONORA</button>
+</div>
+
+<!-- Importamos Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTES MATEMÁTICAS SAGRADAS
+// ═══════════════════════════════════════════════════════════════
+const PHI          = (1 + Math.sqrt(5)) / 2;           // 1.618...
+const PHI_INV      = 1 / PHI;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));      // ~137.5°
+
+// ═══════════════════════════════════════════════════════════════
+// SISTEMA DE AUDIO GENERATIVO (Harmonía Digital)
+// ═══════════════════════════════════════════════════════════════
+let audioCtx;
+let audioEnabled = false;
+let masterGain;
+
+// Definición de escalas musicales hermosas (Frecuencias en Hz)
+const SCALES = {
+    lydian: [261.63, 293.66, 329.63, 369.99, 392.00, 440.00, 493.88, 523.25], 
+    hirajoshi: [220.00, 246.94, 261.63, 329.63, 349.23, 440.00, 493.88],
+    pentatonic: [174.61, 196.00, 220.00, 261.63, 293.66, 349.23, 392.00] 
+};
+
+function initAudio() {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContext();
+    
+    // Master Compressor para evitar saturación
+    const compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-24, audioCtx.currentTime);
+    compressor.knee.setValueAtTime(30, audioCtx.currentTime);
+    compressor.ratio.setValueAtTime(12, audioCtx.currentTime);
+    compressor.attack.setValueAtTime(0.003, audioCtx.currentTime);
+    compressor.release.setValueAtTime(0.25, audioCtx.currentTime);
+    
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.6;
+    
+    masterGain.connect(compressor);
+    compressor.connect(audioCtx.destination);
+    
+    audioEnabled = true;
+}
+
+function playOrganismNote(frequency, distance, volumeMod) {
+    if (!audioEnabled || !audioCtx) return;
+
+    // Volumen basado en distancia (Audio Espacial Simulado)
+    const maxDist = 350;
+    let distFactor = 1 - Math.min(distance, maxDist) / maxDist;
+    distFactor = Math.pow(distFactor, 2); // Caída cuadrática para realismo
+    
+    if (distFactor < 0.01) return; // Si está muy lejos, no suena
+
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    // Timbre: Mezcla de Seno y Triángulo para un sonido "acuático/cristalino"
+    osc.type = 'sine'; 
+    osc.frequency.setValueAtTime(frequency, t);
+    osc.frequency.linearRampToValueAtTime(frequency + Math.random() * 2 - 1, t + 2);
+
+    // Envolvente (Envelope)
+    gainNode.gain.setValueAtTime(0, t);
+    gainNode.gain.linearRampToValueAtTime(distFactor * volumeMod * 0.2, t + 0.1 + Math.random() * 0.1);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, t + 2.5 + Math.random());
+
+    osc.connect(gainNode);
+    gainNode.connect(masterGain);
+    
+    osc.start(t);
+    osc.stop(t + 3.0);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURACIÓN BÁSICA ESCENA Y CONTROLES
+// ═══════════════════════════════════════════════════════════════
+let scene, camera, renderer, clock;
+let organisms = [];
+let softGlowTexture;
+
+// Variables de Control de Movimiento
+const keys = {};
+let rotation = { x: 0, y: 0, z: 0 };
+
+// ═══════════════════════════════════════════════════════════════
+// UTILIDADES (Random Determinista y Paletas)
+// ═══════════════════════════════════════════════════════════════
+function seededRandom(seed) {
+    const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+}
+
+const PALETTES = {
+    regalis:   { h: 0.55, s: 0.9, l: 0.6 }, // Cyan Real
+    elongata:  { h: 0.75, s: 0.8, l: 0.65 }, // Violeta Etéreo
+    rotunda:   { h: 0.08, s: 0.9, l: 0.6 }  // Ámbar Cálido
+};
+
+function createTextures() {
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 64;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(32,32,0, 32,32,32);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.2, 'rgba(255,255,255,0.8)');
+    g.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,64,64);
+    softGlowTexture = new THREE.CanvasTexture(c);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLASE BASE ORGANISMO
+// ═══════════════════════════════════════════════════════════════
+class Organism {
+    constructor(worldPos, seed) {
+        this.worldPos = worldPos.clone();
+        this.seed = seed;
+        this.group = new THREE.Group();
+        this.group.position.copy(worldPos);
+        
+        this.revealProgress = 0; 
+        this.glowIntensity = 0;
+        
+        // Propiedades de Audio
+        this.nextNoteTime = 0;
+        this.tempo = 1.0; 
+    }
+    
+    update(time, dt) {
+        this.revealProgress = Math.min(1, this.revealProgress + dt * 0.5);
+        const breathe = 0.5 + 0.5 * Math.sin(time + this.seed);
+        this.glowIntensity = 0.5 + breathe * 0.5;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CTENOPHORA DIVINA
+// ═══════════════════════════════════════════════════════════════
+class CtenophoraDivina extends Organism {
+    constructor(worldPos, seed) {
+        super(worldPos, seed);
+        
+        // ANÁLISIS DE ADN DIGITAL
+        const dnaSelector = seededRandom(seed * 13.37);
+        
+        if (dnaSelector < 0.35) {
+            this.subspecies = 'ELONGATA'; 
+            this.scale = SCALES.hirajoshi;
+            this.palette = PALETTES.elongata;
+            this.tempo = 0.8; 
+            this.volumeMod = 0.9;
+        } else if (dnaSelector < 0.7) {
+            this.subspecies = 'ROTUNDA'; 
+            this.scale = SCALES.pentatonic;
+            this.palette = PALETTES.rotunda;
+            this.tempo = 1.4; 
+            this.volumeMod = 0.7;
+        } else {
+            this.subspecies = 'REGALIS'; 
+            this.scale = SCALES.lydian;
+            this.palette = PALETTES.regalis;
+            this.tempo = 1.0;
+            this.volumeMod = 1.0;
+        }
+
+        this.build();
+        scene.add(this.group);
+    }
+
+    build() {
+        this.particleCount = 3500;
+        const bodyCount = 1500;
+        const ciliaCount = this.particleCount - bodyCount;
+        
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(this.particleCount * 3);
+        const col = new Float32Array(this.particleCount * 3);
+        
+        const baseR = 30 + seededRandom(this.seed * 9.1) * 15;
+        
+        let bodyR, bodyH, ciliaRows;
+        
+        if (this.subspecies === 'ELONGATA') {
+            bodyR = baseR * 0.7;
+            bodyH = bodyR * PHI * 2.2; 
+            ciliaRows = 5; 
+        } else if (this.subspecies === 'ROTUNDA') {
+            bodyR = baseR * 1.2;
+            bodyH = bodyR * 1.1; 
+            ciliaRows = 13; 
+        } else { 
+            bodyR = baseR;
+            bodyH = bodyR * PHI; 
+            ciliaRows = 8; 
+        }
+
+        // 1. CUERPO
+        for (let i = 0; i < bodyCount; i++) {
+            const t = i / bodyCount;
+            const theta = i * GOLDEN_ANGLE;
+            const phi = Math.acos(1 - 2 * t);
+            
+            let shapeMod = 1;
+            if (this.subspecies === 'ELONGATA') shapeMod = 0.8 + 0.2 * Math.sin(phi * 4);
+            
+            const rx = bodyR * shapeMod * Math.sin(phi) * Math.cos(theta);
+            const ry = bodyH * Math.cos(phi);
+            const rz = bodyR * shapeMod * Math.sin(phi) * Math.sin(theta);
+
+            pos[i*3] = rx; pos[i*3+1] = ry; pos[i*3+2] = rz;
+
+            const c = new THREE.Color().setHSL(this.palette.h, this.palette.s * 0.4, 0.15);
+            col[i*3] = c.r; col[i*3+1] = c.g; col[i*3+2] = c.b;
+        }
+
+        // 2. CILIOS
+        const perRow = Math.floor(ciliaCount / ciliaRows);
+        
+        for (let row = 0; row < ciliaRows; row++) {
+            const rowAngle = row * (Math.PI * 2 / ciliaRows); 
+            
+            for (let p = 0; p < perRow; p++) {
+                const idx = bodyCount + row * perRow + p;
+                if (idx >= this.particleCount) break;
+
+                const t = p / perRow;
+                const phi = Math.PI * 0.1 + t * Math.PI * 0.8;
+                const offAngle = rowAngle + (seededRandom(idx) - 0.5) * 0.05;
+
+                const r = bodyR * 1.15 + seededRandom(idx) * 2;
+                
+                pos[idx*3]   = r * Math.sin(phi) * Math.cos(offAngle);
+                pos[idx*3+1] = bodyH * Math.cos(phi);
+                pos[idx*3+2] = r * Math.sin(phi) * Math.sin(offAngle);
+
+                col[idx*3] = 1; col[idx*3+1] = 1; col[idx*3+2] = 1;
+            }
+        }
+
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+
+        this.mat = new THREE.PointsMaterial({
+            size: 3, 
+            map: softGlowTexture, 
+            vertexColors: true,
+            transparent: true, 
+            opacity: 0,
+            blending: THREE.AdditiveBlending, 
+            depthWrite: false,
+            sizeAttenuation: true
+        });
+        
+        this.points = new THREE.Points(geo, this.mat);
+        this.bodyCount = bodyCount;
+        this.ciliaRows = ciliaRows;
+        this.perRow = perRow;
+        this.colors = col;
+        
+        this.group.add(this.points);
+        
+        this.group.rotation.z = (seededRandom(this.seed) - 0.5) * 0.5;
+        this.group.rotation.x = (seededRandom(this.seed + 1) - 0.5) * 0.5;
+    }
+
+    update(time, dt) {
+        super.update(time, dt);
+        const reveal = this.revealProgress;
+        
+        // AUDIO
+        if (audioEnabled && time > this.nextNoteTime) {
+            if (Math.random() < 0.4) {
+                const noteIdx = Math.floor(seededRandom(time + this.seed) * this.scale.length);
+                const freq = this.scale[noteIdx];
+                const dist = this.group.position.distanceTo(camera.position);
+                playOrganismNote(freq, dist, this.volumeMod);
+            }
+            const delay = (2 + Math.random() * 2) / this.tempo;
+            this.nextNoteTime = time + delay;
+        }
+
+        // VISUAL
+        const col = this.colors;
+        
+        for (let row = 0; row < this.ciliaRows; row++) {
+            for (let p = 0; p < this.perRow; p++) {
+                const idx = this.bodyCount + row * this.perRow + p;
+                if (idx >= this.particleCount) break;
+                
+                const t = p / this.perRow;
+                const waveSpeed = 0.8 * this.tempo;
+                const wavePhase = time * waveSpeed - t * 4 + row * PHI_INV * 2;
+                
+                const hue = (wavePhase * 0.15) % 1;
+                const brightness = 0.5 + Math.sin(wavePhase * Math.PI * 2) * 0.5;
+                
+                const baseHue = this.palette.h;
+                const c = new THREE.Color().setHSL(
+                    (baseHue + hue * 0.2) % 1, 
+                    this.palette.s, 
+                    brightness * reveal
+                );
+                
+                col[idx*3] = c.r; col[idx*3+1] = c.g; col[idx*3+2] = c.b;
+            }
+        }
+        this.points.geometry.attributes.color.needsUpdate = true;
+
+        this.mat.opacity = 0.8 * reveal;
+        
+        let rotSpeed = 0.002;
+        if (this.subspecies === 'ROTUNDA') rotSpeed = 0.004; 
+        if (this.subspecies === 'ELONGATA') rotSpeed = 0.001; 
+        
+        this.group.rotation.y += rotSpeed;
+        this.group.position.y += Math.sin(time * 0.5 * this.tempo + this.seed) * 0.15;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NIEVE MARINA (Ambiente)
+// ═══════════════════════════════════════════════════════════════
+function createMarineSnow() {
+    const count = 2000;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
+    const vel = [];
+    
+    for(let i=0; i<count; i++) {
+        pos[i*3] = (Math.random() - 0.5) * 800;
+        pos[i*3+1] = (Math.random() - 0.5) * 800;
+        pos[i*3+2] = (Math.random() - 0.5) * 800;
+        vel.push({
+            x: (Math.random() - 0.5) * 0.05,
+            y: -Math.random() * 0.1 - 0.02,
+            z: (Math.random() - 0.5) * 0.05
+        });
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const mat = new THREE.PointsMaterial({
+        color: 0x446688, size: 1.5, transparent: true, opacity: 0.4,
+        map: softGlowTexture, blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const points = new THREE.Points(geo, mat);
+    points.userData = { vel: vel };
+    scene.add(points);
+    return points;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INICIALIZACIÓN
+// ═══════════════════════════════════════════════════════════════
+function init() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020409);
+    scene.fog = new THREE.FogExp2(0x020409, 0.002);
+
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 1, 2000);
+    camera.position.set(0, 0, 280); 
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    createTextures();
+    clock = new THREE.Clock();
+
+    const count = 7;
+    for(let i=0; i<count; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const r = 80 + Math.random() * 150;
+        const y = (Math.random() - 0.5) * 150;
+        const pos = new THREE.Vector3(
+            r * Math.cos(theta),
+            y,
+            r * Math.sin(theta)
+        );
+        organisms.push(new CtenophoraDivina(pos, i * 42.17));
+    }
+
+    window.marineSnow = createMarineSnow();
+
+    // LISTENERS DE INPUT RESTAURADOS
+    window.addEventListener('resize', onWindowResize, false);
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+    
+    // MOUSE LOOK (Si está PointerLocked)
+    renderer.domElement.addEventListener('click', () => {
+        renderer.domElement.requestPointerLock();
+    });
+    document.addEventListener('mousemove', e => {
+        if (document.pointerLockElement === renderer.domElement) {
+            rotation.y -= e.movementX * 0.002;
+            rotation.x -= e.movementY * 0.002;
+            // Limitar mirar arriba/abajo
+            rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotation.x));
+        }
+    });
+    
+    // UI Handler para Audio
+    const btn = document.getElementById('start-btn');
+    btn.addEventListener('click', () => {
+        initAudio();
+        btn.classList.add('hidden');
+        document.getElementById('info').innerText = "AUDIO ACTIVO · CONTROLES HABILITADOS";
+        document.getElementById('controls-hint').classList.remove('hidden');
+    });
+
+    animate();
+}
+
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    const dt = clock.getDelta();
+    const time = clock.getElapsedTime();
+
+    // ═══════════════════════════════════════════════════════════════
+    // LÓGICA DE MOVIMIENTO RESTAURADA (VUELO LIBRE)
+    // ═══════════════════════════════════════════════════════════════
+    const speed = 150 * dt; // Velocidad de movimiento
+    const rotSpeed = 1.5 * dt; // Velocidad de rotación con teclas
+
+    // 1. Calcular vectores de dirección actuales de la cámara
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+
+    // 2. Movimiento (WASD + ZX)
+    // Forward/Back
+    if (keys['KeyW']) camera.position.addScaledVector(fwd, speed);
+    if (keys['KeyS']) camera.position.addScaledVector(fwd, -speed);
+    // Left/Right
+    if (keys['KeyD']) camera.position.addScaledVector(right, speed);
+    if (keys['KeyA']) camera.position.addScaledVector(right, -speed);
+    // Up/Down
+    if (keys['KeyZ']) camera.position.addScaledVector(up, speed);
+    if (keys['KeyX']) camera.position.addScaledVector(up, -speed);
+
+    // 3. Rotación con Teclas (Q/E) si no se usa el Mouse
+    if (keys['KeyE']) rotation.y -= rotSpeed;
+    if (keys['KeyQ']) rotation.y += rotSpeed;
+
+    // Aplicar rotación acumulada
+    camera.rotation.set(rotation.x, rotation.y, rotation.z);
+    
+    // ═══════════════════════════════════════════════════════════════
+
+    organisms.forEach(org => org.update(time, dt));
+
+    const snowPositions = window.marineSnow.geometry.attributes.position.array;
+    const vels = window.marineSnow.userData.vel;
+    for(let i=0; i < vels.length; i++) {
+        snowPositions[i*3] += vels[i].x;
+        snowPositions[i*3+1] += vels[i].y;
+        snowPositions[i*3+2] += vels[i].z;
+        if(snowPositions[i*3+1] < -400) snowPositions[i*3+1] = 400;
+    }
+    window.marineSnow.geometry.attributes.position.needsUpdate = true;
+
+    renderer.render(scene, camera);
+}
+
+init();
+</script>
+</body>
+</html>
