@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aureum Nebulae — Ecosistema Resonante</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@100;300&display=swap');
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; overflow: hidden; background: #000;
+            font-family: 'Josefin Sans', sans-serif;
+            color: #00f2ff; user-select: none; touch-action: none;
+        }
+        canvas { display: block; }
+
+        #ui {
+            position: fixed; top: 24px; left: 28px;
+            pointer-events: none; z-index: 100;
+        }
+        #title {
+            font-weight: 100; letter-spacing: 11px; font-size: .78rem;
+            text-transform: uppercase; color: rgba(100,210,255,.55); margin: 0 0 8px;
+        }
+        .r { font-size: .6rem; color: rgba(90,190,240,.38); letter-spacing: 3px; line-height: 1.9; font-weight: 300; }
+        .r span { color: rgba(150,230,255,.65); }
+
+        #hint {
+            position: fixed; bottom: 28px; left: 28px; pointer-events: none; z-index: 100;
+            font-size: .55rem; color: rgba(80,170,220,.28); letter-spacing: 3px; line-height: 1.8;
+            border-left: 1px solid rgba(80,170,220,.1); padding-left: 10px;
+        }
+
+        #dna {
+            position: fixed; top: 28px; right: 28px; text-align: right;
+            pointer-events: none; z-index: 100;
+            font-size: .6rem; color: rgba(140,230,255,.45); letter-spacing: 3px;
+            line-height: 1.9; font-weight: 100; transition: opacity .4s;
+        }
+
+        #banner {
+            position: fixed; bottom: 18%; width: 100%; text-align: center;
+            font-size: .7rem; letter-spacing: 9px; color: rgba(200,255,240,0);
+            transition: color .7s, text-shadow .7s; font-weight: 100;
+            text-transform: uppercase; pointer-events: none;
+        }
+        #banner.on { color: rgba(200,255,240,.8); text-shadow: 0 0 35px rgba(100,255,200,.4); }
+
+        #stereo-label {
+            position: fixed; bottom: 28px; right: 28px;
+            font-size: .55rem; color: rgba(255,200,80,.4); letter-spacing: 3px;
+            pointer-events: none; z-index: 100;
+        }
+
+        #perf {
+            position: fixed; bottom: 48px; right: 28px;
+            font-size: .48rem; color: rgba(100,210,255,.22); letter-spacing: 2px;
+            pointer-events: none; z-index: 100; text-align: right;
+        }
+
+        #symphony-ui {
+            position: fixed; top: 28px; left: 50%; transform: translateX(-50%);
+            pointer-events: none; z-index: 100; text-align: center;
+            font-size: .52rem; color: rgba(200,240,255,0);
+            letter-spacing: 5px; font-weight: 100; text-transform: uppercase;
+            transition: color 1.2s, text-shadow 1.2s;
+        }
+        #symphony-ui.on {
+            color: rgba(200,240,255,.5);
+            text-shadow: 0 0 30px rgba(100,220,255,.3);
+        }
+
+        #overlay {
+            position: fixed; inset: 0; z-index: 999;
+            background: radial-gradient(ellipse at 50% 50%, #000510 0%, #000 70%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 1.4s;
+        }
+        #overlay h2 {
+            font-weight: 100; letter-spacing: 14px; font-size: 1.1rem;
+            text-transform: uppercase; color: rgba(140,220,255,.75); margin: 0 0 6px;
+            text-shadow: 0 0 40px rgba(50,170,255,.35);
+        }
+        #overlay p { font-size: .62rem; color: rgba(90,170,210,.38); letter-spacing: 5px; margin: 0 0 44px; }
+        #btn {
+            background: transparent; border: 1px solid rgba(90,190,255,.22);
+            color: rgba(140,220,255,.7); padding: 13px 38px;
+            font-family: 'Josefin Sans', sans-serif; font-weight: 100;
+            letter-spacing: 6px; font-size: .68rem; text-transform: uppercase;
+            cursor: pointer; transition: all .35s;
+        }
+        #btn:hover {
+            background: rgba(50,160,255,.07); border-color: rgba(90,190,255,.55);
+            box-shadow: 0 0 28px rgba(50,160,255,.12); color: rgba(200,240,255,.95);
+        }
+
+        .touch-zone {
+            position: fixed; bottom: 40px; width: 100px; height: 100px;
+            background: rgba(0,242,255,.03); border: 1px solid rgba(0,242,255,.12);
+            border-radius: 50%; z-index: 1000; opacity: 0;
+            transition: opacity 1s; pointer-events: auto;
+        }
+        #joy-left { left: 30px; } #joy-right { right: 30px; }
+        .knob {
+            position: absolute; top: 50%; left: 50%;
+            width: 32px; height: 32px; margin: -16px;
+            background: rgba(0,242,255,.18); border: 1px solid rgba(0,242,255,.4);
+            border-radius: 50%; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="overlay">
+    <h2>Aureum Nebulae</h2>
+    <p>Ecosistema Resonante · Geometría Sagrada · Bioluminiscencia</p>
+    <button id="btn">DESPERTAR EL COSMOS</button>
+</div>
+
+<div id="ui">
+    <h1 id="title">AUREUM NEBULAE</h1>
+    <div class="r">
+        SECTOR &nbsp;<span id="coords">0,0,0</span><br>
+        ORGANISMOS &nbsp;<span id="count">0</span><br>
+        ESPECIE &nbsp;<span id="spec">—</span>
+    </div>
+</div>
+
+<div id="hint">
+    WASD — NAVEGAR &nbsp;|&nbsp; QE — GIRAR<br>
+    ZX — ASCENDER/DESCENDER &nbsp;|&nbsp; ESPACIO — IMPULSO<br>
+    3 — MODO ESTÉREO
+</div>
+<div id="dna">···</div>
+<div id="banner"></div>
+<div id="stereo-label"></div>
+<div id="perf"></div>
+<div id="symphony-ui"></div>
+
+<div id="joy-left"  class="touch-zone"><div class="knob" id="knob-left"></div></div>
+<div id="joy-right" class="touch-zone"><div class="knob" id="knob-right"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+
+// ═══════════════════════════════════════════════════════
+// CONSTANTES MATEMÁTICAS SAGRADAS
+// ═══════════════════════════════════════════════════════
+const TAU          = Math.PI * 2;
+const PHI          = (1 + Math.sqrt(5)) / 2;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+// ═══════════════════════════════════════════════════════
+// ESCALAS MUSICALES (Hz) — 8 escalas para toda la fauna
+// ═══════════════════════════════════════════════════════
+const SCALES = {
+    lydian:   [196, 220, 246.94, 293.66, 329.63, 369.99, 392, 440],
+    hira:     [164.81, 196, 220, 261.63, 293.66, 329.63, 392],
+    penta:    [174.61, 196, 220, 261.63, 293.66, 349.23, 392],
+    blues:    [146.83, 174.61, 196, 207.65, 220, 261.63, 293.66],
+    atlantis: [130.81, 146.83, 164.81, 196, 220, 246.94, 293.66],
+    deep:     [110, 130.81, 146.83, 164.81, 196, 220, 246.94],
+    sufi:     [138.59, 155.56, 185.00, 207.65, 233.08, 277.18, 311.13],
+    hangdrum: [196, 220, 261.63, 293.66, 329.63, 349.23, 392, 440],
+};
+
+// ═══════════════════════════════════════════════════════
+// ESPECIES ÁUREAS — GoldenOrganism (v4 intacto)
+// ═══════════════════════════════════════════════════════
+const SPECIES = {
+    SOLARIS: { h: .12, s: 1.0,  l: .28, scale: 'atlantis', morph: 'radial',   desc: 'SOLARIS PRIME',    rot: [.0007, .0003, .0002] },
+    LUMINA:  { h: .57, s: 1.0,  l: .26, scale: 'lydian',   morph: 'spiral',   desc: 'LUMINA RADIANTIS', rot: [.0004, .0009, .0001] },
+    IGNIS:   { h: .02, s: 1.0,  l: .28, scale: 'penta',    morph: 'toroidal', desc: 'IGNIS AETERNUM',   rot: [.0003, .0006, .0008] },
+    VERDIS:  { h: .32, s: .95,  l: .24, scale: 'blues',    morph: 'helical',  desc: 'VERDIS FLORA',     rot: [.0010, .0002, .0005] },
+    AETHER:  { h: .77, s: .90,  l: .26, scale: 'hira',     morph: 'nebula',   desc: 'AETHER CELESTIAL', rot: [.0002, .0007, .0004] },
+    CAERUL:  { h: .62, s: .85,  l: .22, scale: 'sufi',     morph: 'petals',   desc: 'CAERUL PROFUNDIS', rot: [.0006, .0001, .0009] },
+    AURUM:   { h: .10, s: 1.0,  l: .30, scale: 'hangdrum', morph: 'radial',   desc: 'AURUM CELESTIUM',  rot: [.0005, .0005, .0003] },
+};
+const SPECIES_KEYS = Object.keys(SPECIES);
+
+// ═══════════════════════════════════════════════════════
+// PALETAS BIOLUMINISCENTES — Ctenóforos (de Abyssum)
+// ═══════════════════════════════════════════════════════
+const CTENO_PAL = {
+    regalis:  { h: .55, s: 1.0, l: .22 },   // cian profundo
+    elongata: { h: .74, s: .90, l: .20 },   // violeta índigo
+    rotunda:  { h: .08, s: 1.0, l: .24 },   // ámbar bioluminiscente
+};
+
+// Escalas asignadas a cada subtipo de Ctenóforo
+const CTENO_SCALES = {
+    ELONGATA: ['atlantis', 'deep'],
+    REGALIS:  ['hira', 'sufi'],
+    ROTUNDA:  ['penta', 'lydian'],
+};
+
+// ═══════════════════════════════════════════════════════
+// UMBRALES LOD — idénticos a v4
+// ═══════════════════════════════════════════════════════
+const LOD = {
+    FELMER_FULL_DIST:   500,
+    FELMER_HALF_DIST:   1200,
+    FELMER_OFF_DIST:    2500,
+    FRAME_BUDGET_MS:    8,
+};
+
+// ═══════════════════════════════════════════════════════
+// GLOBALS
+// ═══════════════════════════════════════════════════════
+let scene, camera, renderer, clock;
+let circleTexture;   // glow suave — GoldenOrganism
+let glowSharp;       // glow nítido — Ctenóforos (cilios)
+let sectors         = new Map();
+let allOrganisms    = [];    // GoldenOrganism[]
+let allCtenophores  = [];    // Cteno[]
+let total           = 0;
+let frameCount      = 0;
+
+const keys        = {};
+const camRot      = { x: 0, y: 0 };
+let nearDist      = Infinity;
+let nearData      = null;
+let isTouchDevice = false;
+let isStereoMode  = false;
+let eyeSeparation = 1.2;
+let lastAction    = Date.now();
+
+const joyLeft  = { active: false, x: 0, y: 0 };
+const joyRight = { active: false, x: 0, y: 0 };
+
+// Vectores pre-allocados — sin new en hot path
+const _fwdVec     = new THREE.Vector3();
+const _rgtVec     = new THREE.Vector3();
+const _upVec      = new THREE.Vector3(0, 1, 0);
+const _frustum    = new THREE.Frustum();
+const _projScreen = new THREE.Matrix4();
+const _bSphere    = new THREE.Sphere();
+
+let _perfEwma = 0;
+
+// ═══════════════════════════════════════════════════════
+// HSL → RGB INLINE — sin new THREE.Color() en hot loops
+// ═══════════════════════════════════════════════════════
+function hue2rgb(p, q, t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 0.1667) return p + (q - p) * 6 * t;
+    if (t < 0.5)    return q;
+    if (t < 0.6667) return p + (q - p) * (0.6667 - t) * 6;
+    return p;
+}
+
+function hslToArrayInline(h, s, l, arr, offset) {
+    if (s === 0) { arr[offset] = arr[offset + 1] = arr[offset + 2] = l; return; }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    arr[offset]     = hue2rgb(p, q, h + 0.3333);
+    arr[offset + 1] = hue2rgb(p, q, h);
+    arr[offset + 2] = hue2rgb(p, q, h - 0.3333);
+}
+
+// ═══════════════════════════════════════════════════════
+// AUDIO — sistema base (idéntico a v4)
+// ═══════════════════════════════════════════════════════
+let actx, masterGain, audioReady = false;
+
+function initAudio() {
+    if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    actx = new AC();
+
+    const comp = actx.createDynamicsCompressor();
+    comp.threshold.value = -22; comp.knee.value = 28;
+    comp.ratio.value = 12; comp.attack.value = .003; comp.release.value = .25;
+
+    masterGain = actx.createGain();
+    masterGain.gain.value = .52;
+
+    const sr  = actx.sampleRate;
+    const len = sr * 5;
+    const buf = actx.createBuffer(2, len, sr);
+    for (let c = 0; c < 2; c++) {
+        const d = buf.getChannelData(c);
+        for (let i = 0; i < len; i++) {
+            d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.4);
+        }
+    }
+    const rev  = actx.createConvolver(); rev.buffer = buf;
+    const revG = actx.createGain(); revG.gain.value = .5;
+
+    masterGain.connect(comp);
+    masterGain.connect(rev); rev.connect(revG); revG.connect(comp);
+    comp.connect(actx.destination);
+    audioReady = true;
+}
+
+// ── Nota individual de un GoldenOrganism (v4 intacto) ─────────────
+function playNote(scaleName, dist, seed, isSolo, volumeBoost) {
+    if (!audioReady || !actx) return;
+    const sc = SCALES[scaleName]; if (!sc) return;
+    const maxD = isSolo ? 800 : 600;
+    let vol = Math.pow(Math.max(0, 1 - dist / maxD), 2) * .12;
+    if (volumeBoost) vol *= volumeBoost;
+    if (vol < .001) return;
+
+    const idx  = Math.floor(Math.abs(Math.sin(actx.currentTime * .17 + seed) * 43758.5)) % sc.length;
+    const freq = sc[idx] || sc[0];
+    const t    = actx.currentTime;
+    const osc  = actx.createOscillator();
+    const gain = actx.createGain();
+    const pan  = actx.createStereoPanner();
+    osc.type = isSolo ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.linearRampToValueAtTime(freq * (1 + (Math.random() - .5) * .013), t + 5);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vol, t + (isSolo ? .35 : .55));
+    gain.gain.exponentialRampToValueAtTime(.0001, t + 5.5);
+    pan.pan.value = (Math.random() - .5) * .65;
+    osc.connect(gain); gain.connect(pan); pan.connect(masterGain);
+    osc.start(t); osc.stop(t + 6);
+}
+
+// ── Nota bioluminiscente de un Ctenóforo ─────────────────────────
+// Timbre más suave y etéreo que el de los GoldenOrganisms
+function playBioNote(scaleName, dist, seed, size, isSolo) {
+    if (!audioReady || !actx) return;
+    const sc = SCALES[scaleName]; if (!sc) return;
+    const maxD = isSolo ? 700 : 550;
+    let vol = Math.pow(Math.max(0, 1 - dist / maxD), 2) * .14;
+    if (vol < .001) return;
+
+    const idx = Math.floor(Math.abs(Math.sin(actx.currentTime * .13 + seed) * 43758.5) % sc.length);
+    let freq = sc[idx] || sc[0];
+    if (size > 5)  freq *= .5;
+    if (size > 10) freq *= .5;
+    if (size < 1)  freq *= 2;
+
+    const t    = actx.currentTime;
+    const osc  = actx.createOscillator();
+    const gain = actx.createGain();
+    const pan  = actx.createStereoPanner();
+    osc.type = isSolo ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+    osc.frequency.linearRampToValueAtTime(freq * (1 + (Math.random() - .5) * .012), t + 4);
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(vol, t + (isSolo ? .3 : .5));
+    gain.gain.exponentialRampToValueAtTime(.0001, t + 4.5);
+    pan.pan.value = (Math.random() - .5) * .6;
+    osc.connect(gain); gain.connect(pan); pan.connect(masterGain);
+    osc.start(t); osc.stop(t + 5);
+}
+
+// ── Nota harmónica inter-organismo (v4 intacto) ───────────────────
+function playHarmonicNote(scale1, scale2, dist, seed) {
+    if (!audioReady || !actx) return;
+    const sc1 = SCALES[scale1];
+    const sc2 = SCALES[scale2];
+    if (!sc1 || !sc2) return;
+    const vol = Math.pow(Math.max(0, 1 - dist / 500), 2.5) * .08;
+    if (vol < .001) return;
+
+    const t   = actx.currentTime;
+    const idx = Math.floor(Math.abs(Math.sin(seed * 127.1 + t * .07) * 43758.5)) % sc1.length;
+    [sc1[idx], sc2[idx % sc2.length]].forEach((freq, k) => {
+        const osc  = actx.createOscillator();
+        const gain = actx.createGain();
+        const pan  = actx.createStereoPanner();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(vol * .6, t + .8);
+        gain.gain.exponentialRampToValueAtTime(.0001, t + 7);
+        pan.pan.value = k === 0 ? -.4 : .4;
+        osc.connect(gain); gain.connect(pan); pan.connect(masterGain);
+        osc.start(t); osc.stop(t + 7.5);
+    });
+}
+
+// ═══════════════════════════════════════════════════════
+// MOTOR DE SINFONÍA ÁURICA
+// Detecta eventos de proximidad entre todos los tipos de
+// organismos y genera acordes multi-voz armónicamente
+// coherentes con las escalas de cada especie
+// ═══════════════════════════════════════════════════════
+class AuricSymphony {
+
+    constructor() {
+        this.tNextScan       = 0;
+        this.tNextUserChoir  = 0;
+        this.tNextCrossover  = 0;
+        this.activeVoices    = 0;         // conteo de voces activas
+        this.maxVoices       = 10;        // límite de polifonía
+        this.symphonyLabel   = document.getElementById('symphony-ui');
+        this.tLabelOff       = 0;
+    }
+
+    // Escaneo principal — llamado desde el loop principal
+    scan(time, camPos) {
+        if (time < this.tNextScan) return;
+        this.tNextScan = time + 1.8;  // escaneo cada 1.8 segundos
+
+        this._scanUserChoir(time, camPos);
+        this._scanOrganismClusters(time, camPos);
+        this._scanCrossover(time, camPos);
+        this._updateLabel(time);
+    }
+
+    // Apagar el indicador de sinfonía después de un delay
+    _updateLabel(time) {
+        if (time > this.tLabelOff && this.symphonyLabel.classList.contains('on')) {
+            this.symphonyLabel.classList.remove('on');
+        }
+    }
+
+    _showLabel(text, duration) {
+        this.symphonyLabel.textContent = text;
+        this.symphonyLabel.classList.add('on');
+        this.tLabelOff = (clock ? clock.getElapsedTime() : 0) + duration;
+    }
+
+    // ── CORO DE USUARIO ──────────────────────────────────────────────
+    // Cuando el usuario está rodeado de varios organismos de distintas
+    // especies, se genera un acorde que los une en tonalidades relativas
+    _scanUserChoir(time, camPos) {
+        if (time < this.tNextUserChoir || this.activeVoices >= this.maxVoices) return;
+
+        const nearScales  = [];
+        const nearSeeds   = [];
+        const CHOIR_DIST  = 550;
+
+        // Recoger GoldenOrganisms cercanos
+        for (const org of allOrganisms) {
+            const dx = org.pos.x - camPos.x;
+            const dy = org.pos.y - camPos.y;
+            const dz = org.pos.z - camPos.z;
+            const d  = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (d < CHOIR_DIST) {
+                nearScales.push(org.sp.scale);
+                nearSeeds.push(org.seed);
+                org.interactLvl = Math.max(org.interactLvl, 0.5 * (1 - d / CHOIR_DIST));
+            }
+        }
+
+        // Recoger Ctenóforos cercanos
+        for (const cteno of allCtenophores) {
+            const gp = cteno.G.position;
+            const dx = gp.x - camPos.x;
+            const dy = gp.y - camPos.y;
+            const dz = gp.z - camPos.z;
+            const d  = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (d < CHOIR_DIST) {
+                nearScales.push(cteno.scaleName);
+                nearSeeds.push(cteno.seed);
+                cteno.externalBoost = Math.max(cteno.externalBoost || 0, 0.6);
+            }
+        }
+
+        if (nearScales.length >= 2) {
+            this._playChord(nearScales, nearSeeds, nearScales.length, 'CORO ÁURICO');
+            this.tNextUserChoir = time + 4 + Math.random() * 3;
+        }
+    }
+
+    // ── CLUSTERS DE ORGANISMOS ────────────────────────────────────────
+    // Busca grupos de 3+ organismos cercanos y genera acordes
+    // basados en la combinación de sus escalas
+    _scanOrganismClusters(time, camPos) {
+        if (this.activeVoices >= this.maxVoices) return;
+        const CLUSTER_DIST = 380;
+        const visited      = new Set();
+
+        // Verificar clusters de GoldenOrganisms
+        for (let i = 0; i < allOrganisms.length; i++) {
+            if (visited.has(i)) continue;
+            const cluster      = [allOrganisms[i]];
+            const clusterIdx   = [i];
+
+            for (let j = i + 1; j < allOrganisms.length; j++) {
+                const dx = allOrganisms[i].pos.x - allOrganisms[j].pos.x;
+                const dy = allOrganisms[i].pos.y - allOrganisms[j].pos.y;
+                const dz = allOrganisms[i].pos.z - allOrganisms[j].pos.z;
+                if (Math.sqrt(dx*dx + dy*dy + dz*dz) < CLUSTER_DIST) {
+                    cluster.push(allOrganisms[j]);
+                    clusterIdx.push(j);
+                }
+            }
+
+            if (cluster.length >= 3) {
+                // Verificar si el cluster es audible
+                const dx = cluster[0].pos.x - camPos.x;
+                const dy = cluster[0].pos.y - camPos.y;
+                const dz = cluster[0].pos.z - camPos.z;
+                const distToCam = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+                if (distToCam < 1200) {
+                    const scales = cluster.map(o => o.sp.scale);
+                    const seeds  = cluster.map(o => o.seed);
+                    cluster.forEach(o => { o.interactLvl = Math.max(o.interactLvl, 0.75); });
+                    this._playChord(scales, seeds, cluster.length, 'RESONANCIA CLUSTER');
+                }
+                clusterIdx.forEach(idx => visited.add(idx));
+            }
+        }
+    }
+
+    // ── RESONANCIA CRUZADA Ctenóforo ↔ GoldenOrganism ────────────────
+    // Cuando un Ctenóforo y un GoldenOrganism se solapan, producen
+    // un timbre híbrido único: el ciliar del Cteno activa el Aureum
+    // y viceversa, generando una intermodulación armónica
+    _scanCrossover(time, camPos) {
+        if (time < this.tNextCrossover) return;
+
+        const CROSS_DIST = 300;
+
+        for (const cteno of allCtenophores) {
+            const gp = cteno.G.position;
+            for (const aureum of allOrganisms) {
+                const dx = gp.x - aureum.pos.x;
+                const dy = gp.y - aureum.pos.y;
+                const dz = gp.z - aureum.pos.z;
+                const d  = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+                if (d < CROSS_DIST) {
+                    // Distancia al usuario para modular el volumen
+                    const dcx = gp.x - camPos.x;
+                    const dcy = gp.y - camPos.y;
+                    const dcz = gp.z - camPos.z;
+                    const distToCam = Math.sqrt(dcx*dcx + dcy*dcy + dcz*dcz);
+
+                    if (distToCam < 900 && this.activeVoices < this.maxVoices) {
+                        this._playCrossoverResonance(
+                            cteno.scaleName, aureum.sp.scale,
+                            d, cteno.seed + aureum.seed, distToCam
+                        );
+                        // Aumentar brillo visual de ambos
+                        cteno.externalBoost  = Math.max(cteno.externalBoost || 0, 0.9);
+                        aureum.interactLvl   = Math.max(aureum.interactLvl, 0.9);
+
+                        this._showLabel('RESONANCIA CRUZADA', 3.5);
+                    }
+                }
+            }
+        }
+        this.tNextCrossover = time + 3 + Math.random() * 2;
+    }
+
+    // ── GENERADOR DE ACORDES ─────────────────────────────────────────
+    // Construye un acorde de N voces tomando frecuencias de múltiples
+    // escalas de forma que sean armónicamente consonantes
+    _playChord(scaleNames, seeds, voiceCount, label) {
+        if (!audioReady || !actx) return;
+        if (this.activeVoices + voiceCount > this.maxVoices) return;
+
+        const t     = actx.currentTime;
+        const nVoices = Math.min(voiceCount, 4);  // máx 4 voces simultáneas
+        const vol   = 0.055 / Math.sqrt(nVoices);
+
+        for (let v = 0; v < nVoices; v++) {
+            const sc   = SCALES[scaleNames[v % scaleNames.length]];
+            if (!sc) continue;
+            const seed = seeds[v % seeds.length];
+            const idx  = Math.floor(Math.abs(Math.sin(seed * 31.7 + t * .09 + v * 7.3) * 43758.5)) % sc.length;
+            const freq = sc[idx];
+
+            const osc  = actx.createOscillator();
+            const gain = actx.createGain();
+            const pan  = actx.createStereoPanner();
+
+            osc.type = v % 2 === 0 ? 'sine' : 'triangle';
+            osc.frequency.setValueAtTime(freq, t);
+            // Ligera modulación de frecuencia para mayor expresividad
+            osc.frequency.linearRampToValueAtTime(
+                freq * (1 + Math.sin(t * .7 + v) * .008), t + 6
+            );
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(vol, t + .7 + v * .15);
+            gain.gain.exponentialRampToValueAtTime(.0001, t + 8);
+            pan.pan.value = (v / nVoices - .5) * .9;  // distribuir en el campo estéreo
+
+            osc.connect(gain); gain.connect(pan); pan.connect(masterGain);
+            osc.start(t); osc.stop(t + 8.5);
+            this.activeVoices++;
+            setTimeout(() => { this.activeVoices = Math.max(0, this.activeVoices - 1); }, 8500);
+        }
+
+        if (label) this._showLabel(label, 4);
+    }
+
+    // ── RESONANCIA CRUZADA ────────────────────────────────────────────
+    // Timbre especial para el encuentro Cteno ↔ Aureum:
+    // usa osciladores intermodulados (suma y diferencia de frecuencias)
+    _playCrossoverResonance(ctScale, auScale, dist, seed, distToCam) {
+        if (!audioReady || !actx) return;
+        const sc1 = SCALES[ctScale];
+        const sc2 = SCALES[auScale];
+        if (!sc1 || !sc2) return;
+
+        const vol = Math.pow(Math.max(0, 1 - distToCam / 900), 2) * .07;
+        if (vol < .001) return;
+
+        const t    = actx.currentTime;
+        const idx1 = Math.floor(Math.abs(Math.sin(seed * 17.3 + t * .11) * 43758.5)) % sc1.length;
+        const idx2 = Math.floor(Math.abs(Math.sin(seed * 31.7 + t * .09) * 43758.5)) % sc2.length;
+        const f1   = sc1[idx1];
+        const f2   = sc2[idx2];
+        const fSum = (f1 + f2) * .5;  // frecuencia suma (acorde)
+
+        // Voz 1: onda sinusoidal de la frecuencia cteno
+        const oscA  = actx.createOscillator();
+        const gainA = actx.createGain();
+        const panA  = actx.createStereoPanner();
+        oscA.type = 'sine';
+        oscA.frequency.value = f1;
+        gainA.gain.setValueAtTime(0, t);
+        gainA.gain.linearRampToValueAtTime(vol, t + .5);
+        gainA.gain.exponentialRampToValueAtTime(.0001, t + 6);
+        panA.pan.value = -.55;
+        oscA.connect(gainA); gainA.connect(panA); panA.connect(masterGain);
+        oscA.start(t); oscA.stop(t + 6.5);
+
+        // Voz 2: onda triangle de la frecuencia aureum
+        const oscB  = actx.createOscillator();
+        const gainB = actx.createGain();
+        const panB  = actx.createStereoPanner();
+        oscB.type = 'triangle';
+        oscB.frequency.value = f2;
+        gainB.gain.setValueAtTime(0, t);
+        gainB.gain.linearRampToValueAtTime(vol * .8, t + .7);
+        gainB.gain.exponentialRampToValueAtTime(.0001, t + 7);
+        panB.pan.value = .55;
+        oscB.connect(gainB); gainB.connect(panB); panB.connect(masterGain);
+        oscB.start(t); oscB.stop(t + 7.5);
+
+        // Voz 3: frecuencia suma — voz etérea de la fusión
+        const oscC  = actx.createOscillator();
+        const gainC = actx.createGain();
+        oscC.type = 'sine';
+        oscC.frequency.value = fSum;
+        gainC.gain.setValueAtTime(0, t);
+        gainC.gain.linearRampToValueAtTime(vol * .45, t + 1.2);
+        gainC.gain.exponentialRampToValueAtTime(.0001, t + 9);
+        oscC.connect(gainC); gainC.connect(masterGain);
+        oscC.start(t); oscC.stop(t + 9.5);
+
+        this.activeVoices += 3;
+        setTimeout(() => { this.activeVoices = Math.max(0, this.activeVoices - 3); }, 9500);
+    }
+}
+
+// Instancia global del motor de sinfonías
+const auricSymphony = new AuricSymphony();
+
+// ═══════════════════════════════════════════════════════
+// TEXTURAS GLOW
+// ═══════════════════════════════════════════════════════
+function makeGlowTexture(sharp) {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    const cx = cv.getContext('2d');
+    const g  = cx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    if (sharp) {
+        g.addColorStop(0,   'rgba(255,255,255,1)');
+        g.addColorStop(.1,  'rgba(255,255,255,.9)');
+        g.addColorStop(.3,  'rgba(255,255,255,.3)');
+        g.addColorStop(.6,  'rgba(255,255,255,.06)');
+        g.addColorStop(1,   'rgba(0,0,0,0)');
+    } else {
+        g.addColorStop(0,   'rgba(255,255,255,1)');
+        g.addColorStop(.25, 'rgba(255,255,255,.6)');
+        g.addColorStop(.55, 'rgba(255,255,255,.12)');
+        g.addColorStop(1,   'rgba(0,0,0,0)');
+    }
+    cx.fillStyle = g;
+    cx.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(cv);
+}
+
+// ═══════════════════════════════════════════════════════
+// UTILIDADES
+// ═══════════════════════════════════════════════════════
+function seededRng(seed) {
+    let mw = (123456789 + seed) >>> 0;
+    let mz = (987654321 - seed) >>> 0;
+    return () => {
+        mz = (36969 * (mz & 65535) + (mz >>> 16)) >>> 0;
+        mw = (18000 * (mw & 65535) + (mw >>> 16)) >>> 0;
+        return (((mz << 16) + mw) >>> 0) / 4294967296;
+    };
+}
+
+function hashFloat(n) {
+    return Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
+}
+
+// ═══════════════════════════════════════════════════════
+// FRUSTUM CULLING CPU-SIDE — idéntico a v4
+// ═══════════════════════════════════════════════════════
+function updateFrustumMatrix() {
+    _projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    _frustum.setFromProjectionMatrix(_projScreen);
+}
+
+function isInCameraFrustum(orgPos, boundR) {
+    _bSphere.center.copy(orgPos);
+    _bSphere.radius = boundR;
+    return _frustum.intersectsSphere(_bSphere);
+}
+
+// ═══════════════════════════════════════════════════════
+// CLASE CTENOPHORA — organismo bioluminiscente de Abyssum
+// Migrado al ecosistema de Aureum Nebulae v4
+// ═══════════════════════════════════════════════════════
+class Cteno {
+
+    constructor(pos, seed, solo) {
+        this.seed         = seed;
+        this.solo         = solo;
+        this.G            = new THREE.Group();
+        this.G.position.copy(pos);
+        this.nOff         = hashFloat(seed) * 1000;
+        this.tNext        = Math.random() * 3;  // escalonar arranques
+        this.rev          = 0;
+        this.externalBoost = 0;   // boost de brillo por interacción externa
+        this.felmerFrame  = 0;
+
+        this._dna();
+        this._build();
+
+        scene.add(this.G);
+        allCtenophores.push(this);
+        total++;
+    }
+
+    _dna() {
+        const r = hashFloat(this.seed * 13.37);
+        this.spectral = hashFloat(this.seed * 99.9) < .12;
+
+        if (this.solo) {
+            this.tempo     = .5;
+            this.scaleName = r < .55 ? CTENO_SCALES.ELONGATA[0] : CTENO_SCALES.ELONGATA[1];
+            this.sub       = r < .55 ? 'ELONGATA' : 'REGALIS';
+            this.pal       = r < .55 ? CTENO_PAL.elongata : CTENO_PAL.regalis;
+        } else {
+            this.tempo     = 1.3;
+            this.scaleName = r < .5 ? CTENO_SCALES.ROTUNDA[0] : CTENO_SCALES.REGALIS[0];
+            this.sub       = r < .5 ? 'ROTUNDA' : 'REGALIS';
+            this.pal       = r < .5 ? CTENO_PAL.rotunda : CTENO_PAL.regalis;
+        }
+    }
+
+    _build() {
+        // Tamaño variado: micro (6) → gigante (110)
+        const sr  = hashFloat(this.seed * 55.5);
+        const sM  = sr * sr * sr;  // distribución cúbica → gigantes raros
+        const bR  = 6 + sM * 104;
+
+        let bodyR, bodyH, CR;
+        if      (this.sub === 'ELONGATA') { bodyR = bR * .55; bodyH = bodyR * PHI * 2.8; CR = 5; }
+        else if (this.sub === 'ROTUNDA')  { bodyR = bR * 1.25; bodyH = bodyR * 1.05; CR = 13; }
+        else                              { bodyR = bR; bodyH = bodyR * PHI; CR = 8; }
+
+        this.bodyH = bodyH;
+        this.bodyR = bodyR;
+        this.CR    = CR;
+        this.PR    = Math.floor(1400 / CR);
+        const PC   = 800 + CR * this.PR;
+        this.PC    = PC;
+        this.BC    = 800;
+
+        // Radio de bounding para frustum test
+        this.boundR = Math.max(bodyR, bodyH) * 1.4;
+
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(PC * 3);
+        const col = new Float32Array(PC * 3);
+
+        // Cuerpo traslúcido (esferoide)
+        for (let i = 0; i < this.BC; i++) {
+            const t   = i / this.BC;
+            const th  = i * GOLDEN_ANGLE;
+            const phi = Math.acos(1 - 2 * t);
+            let sm    = 1;
+            if (this.sub === 'ELONGATA') sm = .8 + .2 * Math.sin(phi * 4);
+            pos[i*3]     = bodyR * sm * Math.sin(phi) * Math.cos(th);
+            pos[i*3 + 1] = bodyH * Math.cos(phi);
+            pos[i*3 + 2] = bodyR * sm * Math.sin(phi) * Math.sin(th);
+            // Cuerpo en L muy baja — casi transparente, visible solo por AdditiveBlending
+            hslToArrayInline(this.pal.h, this.pal.s * .3, .04, col, i * 3);
+        }
+
+        // Cilios — aquí vive el Efecto Felmer del Cteno
+        for (let row = 0; row < CR; row++) {
+            const rowA = row * (TAU / CR);
+            for (let p = 0; p < this.PR; p++) {
+                const idx = this.BC + row * this.PR + p;
+                if (idx >= PC) break;
+                const t   = p / this.PR;
+                const phi = Math.PI * .1 + t * Math.PI * .8;
+                const off = rowA + (hashFloat(idx) - .5) * .04;
+                const r   = bodyR * 1.18 + hashFloat(idx) * 2;
+                pos[idx*3]     = r * Math.sin(phi) * Math.cos(off);
+                pos[idx*3 + 1] = bodyH * Math.cos(phi);
+                pos[idx*3 + 2] = r * Math.sin(phi) * Math.sin(off);
+                col[idx*3] = col[idx*3 + 1] = col[idx*3 + 2] = 1;
+            }
+        }
+
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+        this.col = col;  // referencia directa al array para el Felmer
+
+        const pSize = Math.max(4, Math.min(18, bR * 0.14));
+        this.mat = new THREE.PointsMaterial({
+            size:            pSize,
+            map:             glowSharp,
+            vertexColors:    true,
+            transparent:     true,
+            opacity:         0,
+            blending:        THREE.AdditiveBlending,
+            depthWrite:      false,
+            sizeAttenuation: true,
+        });
+        this.pts = new THREE.Points(geo, this.mat);
+        this.G.add(this.pts);
+        this.G.rotation.z = (hashFloat(this.seed) - .5) * .5;
+    }
+
+    update(time, dt, camPos, inFrustum, dist) {
+        this.rev = Math.min(1, this.rev + dt * .4);
+        if (dist > 3200) { this.G.visible = false; return; }
+        this.G.visible = true;
+
+        // ── Movimiento ondulante 3D sin sesgo vertical ────────────────
+        const nx = Math.sin(time * .09 + this.nOff) * 2;
+        const ny = Math.cos(time * .11 + this.nOff + 3) * 2;
+        const nz = Math.sin(time * .10 + this.nOff + 7) * 2;
+        this.G.position.x += nx * dt * 4.5;
+        this.G.position.y += ny * dt * 4.5;
+        this.G.position.z += nz * dt * 4.5;
+
+        // Rotación suave según subtipo
+        const rs = this.sub === 'ROTUNDA' ? .0035 : this.sub === 'ELONGATA' ? .0012 : .0022;
+        this.G.rotation.y += rs + nx * dt * .035;
+        this.G.position.y += Math.sin(time * .5 * this.tempo + this.seed) * .07;
+
+        // ── Audio bioluminiscente ─────────────────────────────────────
+        if (audioReady && time > this.tNext) {
+            const chance = this.solo ? .7 : .38;
+            if (Math.random() < chance) {
+                playBioNote(this.scaleName, dist, this.seed, this.bodyR / 15, true);
+            }
+            this.tNext = time + (2 + Math.random() * 3.5) / this.tempo;
+        }
+
+        // ── Opacidad ──────────────────────────────────────────────────
+        const targetOp = Math.min(.95, .95 * this.rev * Math.max(.15, 1 - dist / 3200 * .5));
+        this.mat.opacity += (targetOp - this.mat.opacity) * .06;
+
+        // ── Efecto Felmer con LOD + frustum culling ───────────────────
+        // Los cilios solo se animan si el Cteno está en el frustum
+        if (inFrustum) {
+            this._updateCiliosWithLOD(time, dist);
+        }
+
+        // Decay del boost externo (de interacciones de la sinfonía)
+        this.externalBoost = (this.externalBoost || 0) * .92;
+
+        // Registrar más cercano para UI
+        if (dist < nearDist) {
+            nearDist = dist;
+            nearData = {
+                desc:   this.sub + ' CTENÓFORO',
+                scale:  this.scaleName.toUpperCase(),
+                radius: (this.bodyR).toFixed(1),
+            };
+        }
+    }
+
+    // LOD de 3 niveles para la animación de cilios
+    _updateCiliosWithLOD(time, dist) {
+        this.felmerFrame++;
+
+        if (dist < LOD.FELMER_FULL_DIST) {
+            if (this.felmerFrame % 2 !== 0) return;
+            this._runCiliosFelmer(time, 1.0);
+
+        } else if (dist < LOD.FELMER_HALF_DIST) {
+            if (this.felmerFrame % 4 !== 0) return;
+            this._runCiliosFelmer(time, 0.6);
+
+        } else if (dist < LOD.FELMER_OFF_DIST) {
+            if (this.felmerFrame % 8 !== 0) return;
+            this._runCiliosFelmer(time, 0.3);
+        }
+    }
+
+    // Animación de cilios — Efecto Felmer del Cteno
+    // Combina el Felmer original de Abyssum con el boost externo de sinfonía
+    _runCiliosFelmer(time, intensity) {
+        const col    = this.col;
+        const boost  = this.externalBoost || 0;
+
+        for (let row = 0; row < this.CR; row++) {
+            for (let p = 0; p < this.PR; p++) {
+                const idx = this.BC + row * this.PR + p;
+                if (idx >= this.PC) break;
+
+                const pct   = p / this.PR;
+                const wave  = time * .9 * this.tempo - pct * 4 + row * (1 / PHI) * 2;
+                const bright = (.5 + Math.sin(wave * Math.PI * 2) * .5) * intensity;
+
+                // Boost externo amplifica el brillo cuando hay resonancia
+                const brightBoosted = Math.min(1, bright + boost * .4);
+
+                if (this.spectral) {
+                    const hue = ((wave * .3 + row * .1) % 1 + 1) % 1;
+                    hslToArrayInline(hue, 1.0, brightBoosted * .28 * this.rev, col, idx * 3);
+                } else {
+                    const hue = (this.pal.h + (wave * .15) % 1 * .22 + 1) % 1;
+                    hslToArrayInline(hue, this.pal.s, brightBoosted * .24 * this.rev, col, idx * 3);
+                }
+            }
+        }
+        this.pts.geometry.attributes.color.needsUpdate = true;
+    }
+
+    dispose() {
+        this.pts.geometry.dispose();
+        this.mat.dispose();
+        scene.remove(this.G);
+        const idx = allCtenophores.indexOf(this);
+        if (idx !== -1) allCtenophores.splice(idx, 1);
+        total--;
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLASE GOLDEN ORGANISM — v4 completamente intacto
+// ═══════════════════════════════════════════════════════════════
+class GoldenOrganism {
+
+    constructor(rng, wx, wy, wz) {
+        const spIdx = Math.floor(rng() * SPECIES_KEYS.length);
+        this.spKey  = SPECIES_KEYS[spIdx];
+        this.sp     = SPECIES[this.spKey];
+
+        const rawSeed = rng() * 99999;
+        this.seed     = rawSeed;
+        this.dna = {
+            complexity: 2   + Math.floor(rng() * 7),
+            tightness:  0.5 + rng() * 0.8,
+            baseRadius: 30  + Math.pow(rng(), 1.5) * 490,
+            chaos:      rng() * 0.4,
+            vit:        0.3 + rng() * 0.7,
+            petalAmp:   0.1 + rng() * 0.6,
+        };
+
+        this.pos     = new THREE.Vector3(wx, wy, wz);
+        this.tOff    = rng() * 18000;
+        this.flowSpd = (3 + rng() * 10) / (this.dna.baseRadius * .015 + 1);
+        this.flow    = new THREE.Vector3(rng() - .5, rng() - .5, rng() - .5).normalize();
+
+        const rs = this.sp.rot;
+        this.rotSpeed = new THREE.Vector3(
+            (rng() - .5) * 2 * rs[0],
+            (rng() - .5) * 2 * rs[1],
+            (rng() - .5) * 2 * rs[2]
+        );
+
+        this.breathSpeed = 0.35 + rng() * 0.8;
+        this.breathPhase = rng() * Math.PI * 2;
+        this.breathAmp   = 0.06 + rng() * 0.12;
+
+        this.tNextNote   = Math.random() * 4;
+        this.tNextHarm   = Math.random() * 6;
+        this.tempo       = 0.5 + rng() * 1.5;
+        this.interactLvl = 0;
+        this.felmerFrame = 0;
+        this.boundR      = this.dna.baseRadius * 1.65;
+
+        this._buildGeometry(rng);
+
+        const pSize = Math.max(4, Math.min(20, 3.2 * Math.sqrt(this.dna.baseRadius * .03)));
+        this.mat = new THREE.PointsMaterial({
+            size:            pSize,
+            map:             circleTexture,
+            vertexColors:    true,
+            transparent:     true,
+            opacity:         0,
+            blending:        THREE.AdditiveBlending,
+            depthWrite:      false,
+            sizeAttenuation: true,
+        });
+
+        this.mesh = new THREE.Points(this.geo, this.mat);
+        this.mesh.position.copy(this.pos);
+        this.mesh.rotation.set(rng() * TAU, rng() * TAU, rng() * TAU);
+        scene.add(this.mesh);
+        allOrganisms.push(this);
+        total++;
+    }
+
+    _buildGeometry(rng) {
+        const { baseRadius, complexity, tightness, chaos, petalAmp } = this.dna;
+        const { h, s, l, morph } = this.sp;
+
+        const PC = Math.floor(
+            (5000 + complexity * 2000) * Math.sqrt(baseRadius * .02 + .1)
+        );
+
+        const positions = new Float32Array(PC * 3);
+        const colors    = new Float32Array(PC * 3);
+        this.hslStore   = new Float32Array(PC * 3);
+
+        for (let i = 0; i < PC; i++) {
+            const t     = i / PC;
+            const theta = i * GOLDEN_ANGLE;
+            const phi   = Math.acos(Math.max(-1, Math.min(1, 1 - 2 * t * tightness)));
+
+            let x, y, z;
+
+            if (morph === 'radial') {
+                const petal = 1 + petalAmp * Math.sin(theta * complexity + this.seed);
+                const r     = baseRadius * Math.sqrt(t) * petal;
+                x = r * Math.sin(phi) * Math.cos(theta);
+                y = r * Math.sin(phi) * Math.sin(theta);
+                z = r * Math.cos(phi);
+            } else if (morph === 'spiral') {
+                const r     = baseRadius * t;
+                const twist = t * TAU * (3 + complexity * .5);
+                x = r * Math.cos(theta + twist);
+                y = r * Math.sin(theta + twist);
+                z = Math.sin(t * TAU * complexity) * baseRadius * .3;
+            } else if (morph === 'toroidal') {
+                const R   = baseRadius * PHI * .4;
+                const tR  = baseRadius * .22 * (1 + .3 * Math.sin(t * TAU * complexity));
+                const psi = t * TAU * (complexity + 2);
+                const ro  = R + tR * Math.cos(psi);
+                x = ro * Math.cos(theta);
+                y = tR * Math.sin(psi);
+                z = ro * Math.sin(theta);
+            } else if (morph === 'helical') {
+                const r  = baseRadius * (.5 + .4 * Math.sin(t * TAU * complexity));
+                y = (t - .5) * baseRadius * PHI * 1.4;
+                const tw = t * TAU * complexity * PHI;
+                x = r * Math.cos(theta + tw);
+                z = r * Math.sin(theta + tw);
+            } else if (morph === 'petals') {
+                const nPetal = 2 + complexity;
+                const petal  = 1 + petalAmp * Math.sin(phi * nPetal + theta * (complexity * .5));
+                const r      = baseRadius * Math.sqrt(t) * petal;
+                x = r * Math.sin(phi) * Math.cos(theta);
+                y = r * Math.cos(phi);
+                z = r * Math.sin(phi) * Math.sin(theta);
+            } else {
+                const r = baseRadius * t;
+                x = r * Math.sin(phi) * Math.cos(theta);
+                y = r * Math.sin(phi) * Math.sin(theta);
+                z = r * Math.cos(phi);
+            }
+
+            const ns = chaos * baseRadius * .4;
+            x += (rng() - .5) * ns;
+            y += (rng() - .5) * ns;
+            z += (rng() - .5) * ns;
+
+            positions[i * 3]     = x;
+            positions[i * 3 + 1] = y;
+            positions[i * 3 + 2] = z;
+
+            const varH = (h + (rng() - .5) * .14 + 1) % 1;
+            const varS = .85 + rng() * .15;
+            const radL = 1 - Math.pow(t, .45);
+            const varL = l * (.3 + radL * .7);
+
+            this.hslStore[i * 3]     = varH;
+            this.hslStore[i * 3 + 1] = varS;
+            this.hslStore[i * 3 + 2] = varL;
+
+            hslToArrayInline(varH, varS, varL, colors, i * 3);
+        }
+
+        this.geo = new THREE.BufferGeometry();
+        this.geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        this.geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+        this.baseL = l;
+        this.PC    = PC;
+    }
+
+    update(time, dt, camPos, inFrustum, dist) {
+
+        if (dist > 3500) { this.mesh.visible = false; return; }
+        if (!this.mesh.visible) this.mesh.visible = true;
+
+        const targetOp = Math.pow(Math.max(0, 1 - dist / 2800), .6) * .92;
+        this.mat.opacity += (targetOp - this.mat.opacity) * .04;
+
+        const tFlow = time * .055 + this.tOff;
+        this.flow.x += Math.sin(tFlow * 1.1)  * .011;
+        this.flow.y += Math.cos(tFlow * .78)  * .011;
+        this.flow.z += Math.sin(tFlow * 1.33) * .011;
+        this.flow.normalize();
+        this.pos.x += this.flow.x * this.flowSpd * dt * 1.6;
+        this.pos.y += this.flow.y * this.flowSpd * dt * 1.6;
+        this.pos.z += this.flow.z * this.flowSpd * dt * 1.6;
+        this.mesh.position.x = this.pos.x;
+        this.mesh.position.y = this.pos.y;
+        this.mesh.position.z = this.pos.z;
+
+        this.mesh.rotation.x += this.rotSpeed.x;
+        this.mesh.rotation.y += this.rotSpeed.y;
+        this.mesh.rotation.z += this.rotSpeed.z;
+
+        const breath = 1 + Math.sin(time * this.breathSpeed + this.breathPhase) * this.breathAmp;
+        this.mesh.scale.setScalar(breath);
+
+        if (audioReady && time > this.tNextNote) {
+            const chance = Math.pow(Math.max(0, 1 - dist / 700), 2) * .6;
+            if (Math.random() < chance) {
+                playNote(this.sp.scale, dist, this.seed, true, null);
+            }
+            this.tNextNote = time + (1.5 + Math.random() * 3) / this.tempo;
+        }
+
+        if (time > this.tNextHarm) {
+            this._checkHarmonicInteraction(time, dist);
+            this.tNextHarm = time + (2 + Math.random() * 4);
+        }
+
+        this.interactLvl *= .91;
+
+        if (inFrustum) {
+            this._updateFelmerWithLOD(time, dist);
+        }
+
+        if (dist < nearDist) {
+            nearDist = dist;
+            nearData = {
+                desc:   this.sp.desc,
+                scale:  this.sp.scale.toUpperCase(),
+                radius: this.dna.baseRadius.toFixed(0),
+            };
+        }
+    }
+
+    _updateFelmerWithLOD(time, dist) {
+        this.felmerFrame++;
+
+        if (dist < LOD.FELMER_FULL_DIST) {
+            if (this.felmerFrame % 2 !== 0) return;
+            this._runFelmerLoop(time, 1.0, 1);
+        } else if (dist < LOD.FELMER_HALF_DIST) {
+            if (this.felmerFrame % 4 !== 0) return;
+            this._runFelmerLoop(time, 0.65, 2);
+        } else if (dist < LOD.FELMER_OFF_DIST) {
+            if (this.felmerFrame % 8 !== 0) return;
+            this._runFelmerLoop(time, 0.3, 4);
+        }
+    }
+
+    _runFelmerLoop(time, intensity, stride) {
+        const col      = this.geo.attributes.color.array;
+        const hsl      = this.hslStore;
+        const baseL    = this.baseL;
+        const PC       = this.PC;
+        const wave     = time * 0.85;
+        const iL       = this.interactLvl * intensity;
+        const sinW025  = Math.sin(wave * .25);
+        const sinW070  = Math.sin(wave * .70);
+
+        for (let i = 0; i < PC; i += stride) {
+            const o  = i * 3;
+            const hv = hsl[o];
+            const sv = hsl[o + 1];
+            const lv = hsl[o + 2];
+            const wv = Math.sin(i * .045 - wave) * .5 + .5;
+            const bst = iL * wv;
+            const nh  = (hv + bst * .05 + sinW025 * .018 + 1) % 1;
+            const nl  = Math.min(baseL * 3, lv + bst * .32 + sinW070 * baseL * .38);
+            const ns  = sv + bst * .08;
+            hslToArrayInline(nh, ns > 1 ? 1 : ns, nl, col, o);
+        }
+        this.geo.attributes.color.needsUpdate = true;
+    }
+
+    // Interacción armónica con otros GoldenOrganisms Y con Ctenóforos
+    _checkHarmonicInteraction(time, distToCam) {
+        // Con otros GoldenOrganisms
+        for (const other of allOrganisms) {
+            if (other === this) continue;
+            const d = this.pos.distanceTo(other.pos);
+            if (d < 480) {
+                const intensity = Math.pow(1 - d / 480, 2);
+                this.interactLvl  = Math.max(this.interactLvl,  intensity);
+                other.interactLvl = Math.max(other.interactLvl, intensity * .7);
+                if (distToCam < 900 && Math.random() < intensity * .5) {
+                    playHarmonicNote(this.sp.scale, other.sp.scale, d, this.seed + other.seed);
+                }
+            }
+        }
+
+        // Con Ctenóforos cercanos — respuesta recíproca
+        for (const cteno of allCtenophores) {
+            const gp = cteno.G.position;
+            const dx = this.pos.x - gp.x;
+            const dy = this.pos.y - gp.y;
+            const dz = this.pos.z - gp.z;
+            const d  = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            if (d < 520) {
+                const intensity = Math.pow(1 - d / 520, 2);
+                this.interactLvl      = Math.max(this.interactLvl, intensity * .8);
+                cteno.externalBoost   = Math.max(cteno.externalBoost || 0, intensity * .7);
+                if (distToCam < 900 && Math.random() < intensity * .35) {
+                    playHarmonicNote(this.sp.scale, cteno.scaleName, d, this.seed + cteno.seed);
+                }
+            }
+        }
+    }
+
+    dispose() {
+        this.geo.dispose();
+        this.mat.dispose();
+        scene.remove(this.mesh);
+        const idx = allOrganisms.indexOf(this);
+        if (idx !== -1) allOrganisms.splice(idx, 1);
+        total--;
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// SECTOR — ahora genera tanto GoldenOrganism como Ctenóforos
+// Proporciones ajustadas para poblar el cosmos de forma
+// equilibrada: ~55% Áureos, ~45% Bioluminiscentes
+// ═══════════════════════════════════════════════════════
+const SECTOR_SIZE = 900;
+
+class Sector {
+    constructor(sx, sy, sz) {
+        this.entities = [];
+        const raw  = Math.sin(sx * 12.9898 + sy * 78.233 + sz * 37.719) * 43758.5453;
+        const seed = Math.abs(raw - Math.floor(raw)) * 99999;
+        const rng  = seededRng(Math.floor(seed));
+
+        // 1–5 entidades por sector (mezcla de ambos tipos)
+        const n = 1 + Math.floor(rng() * 4.5);
+
+        for (let i = 0; i < n; i++) {
+            const ox   = sx * SECTOR_SIZE + (rng() - .5) * SECTOR_SIZE * .85;
+            const oy   = sy * SECTOR_SIZE + (rng() - .5) * SECTOR_SIZE * .85;
+            const oz   = sz * SECTOR_SIZE + (rng() - .5) * SECTOR_SIZE * .85;
+            const roll = rng();
+
+            if (roll < .38) {
+                // GoldenOrganism solo
+                const org = new GoldenOrganism(seededRng(Math.floor(seed + i * 137)), ox, oy, oz);
+                this.entities.push(org);
+
+            } else if (roll < .58) {
+                // Ctenóforo solitario (gigante o mediano)
+                const pos = new THREE.Vector3(ox, oy, oz);
+                const ct  = new Cteno(pos, seed + i * 113 + 1, true);
+                this.entities.push(ct);
+
+            } else if (roll < .75) {
+                // GoldenOrganism + pequeño grupo de Ctenóforos satélite
+                const org = new GoldenOrganism(seededRng(Math.floor(seed + i * 137)), ox, oy, oz);
+                this.entities.push(org);
+                const nc = 1 + Math.floor(rng() * 3);
+                for (let j = 0; j < nc; j++) {
+                    const jx = ox + (rng() - .5) * 160;
+                    const jy = oy + (rng() - .5) * 160;
+                    const jz = oz + (rng() - .5) * 160;
+                    const ct = new Cteno(new THREE.Vector3(jx, jy, jz), seed + i * 113 + j * 31 + 7, false);
+                    this.entities.push(ct);
+                }
+
+            } else {
+                // Cluster de Ctenóforos (banco)
+                const nc = 2 + Math.floor(rng() * 4);
+                for (let j = 0; j < nc; j++) {
+                    const jx = ox + (rng() - .5) * 120;
+                    const jy = oy + (rng() - .5) * 120;
+                    const jz = oz + (rng() - .5) * 120;
+                    const ct = new Cteno(
+                        new THREE.Vector3(jx, jy, jz),
+                        seed + i * 113 + j * 31,
+                        false
+                    );
+                    this.entities.push(ct);
+                }
+            }
+        }
+    }
+
+    dispose() {
+        // dispose() llama a los métodos de cada tipo que se eliminan
+        // de allOrganisms / allCtenophores internamente
+        this.entities.forEach(e => e.dispose());
+        this.entities = [];
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// POLVO CÓSMICO — idéntico a v4 (Float32Array velocidades)
+// ═══════════════════════════════════════════════════════
+let cosmicDust, dustVelArr;
+
+function makeDust() {
+    const N    = 3200;
+    const geo  = new THREE.BufferGeometry();
+    const pos  = new Float32Array(N * 3);
+    const col  = new Float32Array(N * 3);
+    dustVelArr = new Float32Array(N * 3);
+
+    for (let i = 0; i < N; i++) {
+        pos[i*3]   = (Math.random() - .5) * 900;
+        pos[i*3+1] = (Math.random() - .5) * 900;
+        pos[i*3+2] = (Math.random() - .5) * 900;
+        col[i*3]   = .3 + Math.random() * .2;
+        col[i*3+1] = .5 + Math.random() * .2;
+        col[i*3+2] = .8 + Math.random() * .2;
+        dustVelArr[i*3]   = (Math.random() - .5) * .06;
+        dustVelArr[i*3+1] = (Math.random() - .5) * .06;
+        dustVelArr[i*3+2] = (Math.random() - .5) * .06;
+    }
+
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+    cosmicDust = new THREE.Points(geo, new THREE.PointsMaterial({
+        size: 1.3, transparent: true, opacity: .28,
+        vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    cosmicDust.frustumCulled = false;
+    scene.add(cosmicDust);
+}
+
+function updateDust() {
+    const pos = cosmicDust.geometry.attributes.position.array;
+    const cpx = camera.position.x;
+    const cpy = camera.position.y;
+    const cpz = camera.position.z;
+    const R   = 450;
+    const N   = dustVelArr.length / 3;
+    for (let i = 0; i < N; i++) {
+        const o = i * 3;
+        pos[o]   += dustVelArr[o];
+        pos[o+1] += dustVelArr[o+1];
+        pos[o+2] += dustVelArr[o+2];
+        if (pos[o]   > cpx + R) pos[o]   -= R * 2;
+        if (pos[o]   < cpx - R) pos[o]   += R * 2;
+        if (pos[o+1] > cpy + R) pos[o+1] -= R * 2;
+        if (pos[o+1] < cpy - R) pos[o+1] += R * 2;
+        if (pos[o+2] > cpz + R) pos[o+2] -= R * 2;
+        if (pos[o+2] < cpz - R) pos[o+2] += R * 2;
+    }
+    cosmicDust.geometry.attributes.position.needsUpdate = true;
+    cosmicDust.position.copy(camera.position);
+}
+
+// ═══════════════════════════════════════════════════════
+// INPUT — idéntico a v4
+// ═══════════════════════════════════════════════════════
+function setupInput() {
+    ['keydown', 'mousedown', 'touchstart'].forEach(ev =>
+        window.addEventListener(ev, initAudio, { once: true, passive: true })
+    );
+
+    window.addEventListener('keydown', e => {
+        keys[e.code] = true;
+        lastAction   = Date.now();
+        if (e.code === 'Space') e.preventDefault();
+
+        if (e.code === 'Digit3' || e.code === 'Numpad3') {
+            isStereoMode = !isStereoMode;
+            onResize();
+            document.getElementById('stereo-label').innerText =
+                isStereoMode ? 'MODO ESTÉREO ACTIVO' : '';
+        }
+        if (isStereoMode) {
+            if (e.code === 'Digit9') eyeSeparation = Math.min(4, eyeSeparation + .15);
+            if (e.code === 'Digit0') eyeSeparation = Math.max(.1, eyeSeparation - .15);
+        }
+    });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    document.addEventListener('mousemove', e => {
+        if (document.pointerLockElement === renderer.domElement) {
+            camRot.y -= e.movementX * .0022;
+            camRot.x -= e.movementY * .0022;
+            camRot.x  = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camRot.x));
+            lastAction = Date.now();
+        }
+    });
+
+    renderer.domElement.addEventListener('click', () => {
+        renderer.domElement.requestPointerLock();
+        initAudio();
+    });
+}
+
+function initTouchControls() {
+    isTouchDevice = true;
+    const L = document.getElementById('joy-left');
+    const R = document.getElementById('joy-right');
+
+    function startJoy(joy, knobId, touch) { joy.active = true; moveJoy(joy, knobId, touch); }
+    function moveJoy(joy, knobId, touch) {
+        const zone = document.getElementById(knobId).parentElement;
+        const rect = zone.getBoundingClientRect();
+        const cx   = rect.left + rect.width  / 2;
+        const cy   = rect.top  + rect.height / 2;
+        let dx = (touch.clientX - cx) / (rect.width  / 2);
+        let dy = (touch.clientY - cy) / (rect.height / 2);
+        const len = Math.sqrt(dx*dx + dy*dy);
+        if (len > 1) { dx /= len; dy /= len; }
+        joy.x = dx; joy.y = dy;
+        document.getElementById(knobId).style.transform = `translate(${dx*30}px,${dy*30}px)`;
+    }
+    function endJoy(joy, knobId) {
+        joy.active = false; joy.x = 0; joy.y = 0;
+        document.getElementById(knobId).style.transform = '';
+    }
+
+    L.addEventListener('touchstart', e => { e.preventDefault(); startJoy(joyLeft,  'knob-left',  e.targetTouches[0]); }, { passive: false });
+    L.addEventListener('touchmove',  e => { e.preventDefault(); moveJoy (joyLeft,  'knob-left',  e.targetTouches[0]); }, { passive: false });
+    L.addEventListener('touchend',   () => endJoy(joyLeft, 'knob-left'));
+    R.addEventListener('touchstart', e => { e.preventDefault(); startJoy(joyRight, 'knob-right', e.targetTouches[0]); }, { passive: false });
+    R.addEventListener('touchmove',  e => { e.preventDefault(); moveJoy (joyRight, 'knob-right', e.targetTouches[0]); }, { passive: false });
+    R.addEventListener('touchend',   () => endJoy(joyRight, 'knob-right'));
+    window.addEventListener('touchstart', () => { lastAction = Date.now(); }, { passive: true });
+}
+
+function updatePhysics(dt) {
+    const speed = 220 * (keys['Space'] ? 10 : 1) * dt;
+    _fwdVec.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    _rgtVec.set(1, 0,  0).applyQuaternion(camera.quaternion);
+    const mFwd  = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0) + (joyLeft.active  ? -joyLeft.y  : 0);
+    const mSide = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0) + (joyLeft.active  ?  joyLeft.x  : 0);
+    const mVert = (keys['KeyX'] ? 1 : 0) - (keys['KeyZ'] ? 1 : 0) + (joyRight.active ? -joyRight.y : 0);
+    const rYaw  = (keys['KeyE'] ? 1 : 0) - (keys['KeyQ'] ? 1 : 0) + (joyRight.active ? -joyRight.x : 0);
+    camera.position.x += (_fwdVec.x * mFwd + _rgtVec.x * mSide) * speed;
+    camera.position.y += (_fwdVec.y * mFwd + _rgtVec.y * mSide + mVert) * speed;
+    camera.position.z += (_fwdVec.z * mFwd + _rgtVec.z * mSide) * speed;
+    camRot.y += rYaw * 2 * dt;
+    camera.rotation.set(camRot.x, camRot.y, 0, 'YXZ');
+
+    if (isTouchDevice) {
+        const opacity = Date.now() - lastAction > 5000 ? '0' : '1';
+        document.getElementById('joy-left').style.opacity  = opacity;
+        document.getElementById('joy-right').style.opacity = opacity;
+    }
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDERIZADO — idéntico a v4 (normal + estéreo)
+// ═══════════════════════════════════════════════════════
+function renderFrame() {
+    const W = window.innerWidth, H = window.innerHeight;
+    if (isStereoMode) {
+        renderer.setScissorTest(true);
+        camera.position.x += eyeSeparation;
+        renderer.setScissor(0, 0, W / 2, H);
+        renderer.setViewport(0, 0, W / 2, H);
+        renderer.render(scene, camera);
+        camera.position.x -= eyeSeparation * 2;
+        renderer.setScissor(W / 2, 0, W / 2, H);
+        renderer.setViewport(W / 2, 0, W / 2, H);
+        renderer.render(scene, camera);
+        camera.position.x += eyeSeparation;
+        renderer.setScissorTest(false);
+    } else {
+        renderer.setViewport(0, 0, W, H);
+        renderer.render(scene, camera);
+    }
+}
+
+function onResize() {
+    const W = window.innerWidth, H = window.innerHeight;
+    renderer.setSize(W, H);
+    camera.aspect = (isStereoMode ? W / 2 : W) / H;
+    camera.updateProjectionMatrix();
+}
+
+// ═══════════════════════════════════════════════════════
+// INICIALIZACIÓN
+// ═══════════════════════════════════════════════════════
+function init() {
+    scene  = new THREE.Scene();
+    scene.background = new THREE.Color(0x000308);
+    scene.fog = new THREE.FogExp2(0x000308, .00095);
+
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 1, 4500);
+    camera.position.set(0, 0, 0);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    document.body.appendChild(renderer.domElement);
+
+    clock         = new THREE.Clock();
+    circleTexture = makeGlowTexture(false);   // suave — GoldenOrganism
+    glowSharp     = makeGlowTexture(true);    // nítido — Ctenóforos
+
+    makeDust();
+    setupInput();
+
+    if (('ontouchstart' in window) || navigator.maxTouchPoints > 0) {
+        initTouchControls();
+    }
+
+    window.addEventListener('resize', onResize);
+
+    document.getElementById('btn').addEventListener('click', () => {
+        initAudio();
+        const ov = document.getElementById('overlay');
+        ov.style.opacity = '0';
+        setTimeout(() => ov.remove(), 1500);
+    });
+
+    animate();
+}
+
+// ═══════════════════════════════════════════════════════
+// LOOP PRINCIPAL — v4 + update de Ctenóforos + Sinfonía
+// ═══════════════════════════════════════════════════════
+function animate() {
+    requestAnimationFrame(animate);
+    const dt   = Math.min(clock.getDelta(), .1);
+    const time = clock.getElapsedTime();
+    frameCount++;
+
+    nearDist = Infinity;
+    nearData = null;
+
+    updatePhysics(dt);
+    updateDust();
+
+    camera.updateMatrixWorld();
+    updateFrustumMatrix();
+
+    // ── Streaming de sectores ─────────────────────────────────────────
+    const cx = Math.round(camera.position.x / SECTOR_SIZE);
+    const cy = Math.round(camera.position.y / SECTOR_SIZE);
+    const cz = Math.round(camera.position.z / SECTOR_SIZE);
+    const active = new Set();
+
+    for (let x = cx - 1; x <= cx + 1; x++)
+    for (let y = cy - 1; y <= cy + 1; y++)
+    for (let z = cz - 1; z <= cz + 1; z++) {
+        const k = `${x},${y},${z}`;
+        active.add(k);
+        if (!sectors.has(k)) sectors.set(k, new Sector(x, y, z));
+    }
+    for (const [k, sec] of sectors) {
+        if (!active.has(k)) { sec.dispose(); sectors.delete(k); }
+    }
+
+    // ── Update GoldenOrganisms con frustum + presupuesto ─────────────
+    const tBudgetStart  = performance.now();
+    let budgetExceeded  = false;
+
+    for (let i = 0; i < allOrganisms.length; i++) {
+        const org = allOrganisms[i];
+        const dx  = org.pos.x - camera.position.x;
+        const dy  = org.pos.y - camera.position.y;
+        const dz  = org.pos.z - camera.position.z;
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+        const inFrustum = !budgetExceeded && isInCameraFrustum(org.pos, org.boundR);
+        org.update(time, dt, camera.position, inFrustum, dist);
+        if (!budgetExceeded && (performance.now() - tBudgetStart > LOD.FRAME_BUDGET_MS * .6)) {
+            budgetExceeded = true;
+        }
+    }
+
+    // ── Update Ctenóforos con frustum + presupuesto compartido ────────
+    for (let i = 0; i < allCtenophores.length; i++) {
+        const ct  = allCtenophores[i];
+        const gp  = ct.G.position;
+        const dx  = gp.x - camera.position.x;
+        const dy  = gp.y - camera.position.y;
+        const dz  = gp.z - camera.position.z;
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        // Usar pos temporal para frustum test del Group
+        _bSphere.center.copy(gp);
+        _bSphere.radius = ct.boundR;
+        const inFrustum = !budgetExceeded && _frustum.intersectsSphere(_bSphere);
+
+        ct.update(time, dt, camera.position, inFrustum, dist);
+
+        if (!budgetExceeded && (performance.now() - tBudgetStart > LOD.FRAME_BUDGET_MS)) {
+            budgetExceeded = true;
+        }
+    }
+
+    // ── Motor de sinfonías áuricas ────────────────────────────────────
+    auricSymphony.scan(time, camera.position);
+
+    const frameMs = performance.now() - tBudgetStart;
+    _perfEwma += (frameMs - _perfEwma) * .05;
+
+    // ── UI ────────────────────────────────────────────────────────────
+    document.getElementById('coords').innerText = `${cx},${cy},${cz}`;
+    document.getElementById('count').innerText  = total;
+
+    if (frameCount % 30 === 0) {
+        document.getElementById('perf').innerText =
+            `${_perfEwma.toFixed(1)}ms · ${allOrganisms.length}AU ${allCtenophores.length}CT · ${(frameMs > LOD.FRAME_BUDGET_MS ? '⚡' : '✓')}`;
+    }
+
+    const banner = document.getElementById('banner');
+    const dnaEl  = document.getElementById('dna');
+
+    if (nearDist < 1200 && nearData) {
+        dnaEl.innerHTML =
+            `${nearData.desc}<br>` +
+            `<span style="font-size:.52rem;color:rgba(100,210,255,.35)">` +
+            `${nearData.scale} · R ${nearData.radius}</span>`;
+        dnaEl.style.opacity = String(Math.min(1, 1.1 - nearDist / 1200));
+        document.getElementById('spec').innerText = nearData.desc.split(' ')[0];
+
+        if (nearDist < 380) {
+            banner.textContent = nearData.desc;
+            banner.classList.add('on');
+        } else {
+            banner.classList.remove('on');
+        }
+    } else {
+        dnaEl.style.opacity = '.18';
+        banner.classList.remove('on');
+    }
+
+    renderFrame();
+}
+
+window.onload = init;
+</script>
+</body>
+</html>
