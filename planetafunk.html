@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Musicosmos - Gran Ecosistema Planetario</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+        .ui-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+        .controls-hint {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #4ade80;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        #loading {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            color: #ff8c00;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="text-center">
+            <div class="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mb-4 mx-auto"></div>
+            <p class="animate-pulse text-lg font-bold uppercase tracking-widest">Afinando Horizonte Planetario...</p>
+        </div>
+    </div>
+
+    <div class="ui-overlay">
+        <h1 class="text-2xl font-black tracking-tighter uppercase">Musicosmos: Mundo Vivo</h1>
+        <p class="text-xs opacity-70" id="coords">ALT: 0m | Lat: 0 | Lon: 0</p>
+        <p class="text-[10px] uppercase tracking-widest text-orange-400 mt-1" id="status">Sincronizando...</p>
+    </div>
+
+    <div class="controls-hint">
+        <p><strong>Click + Arrastrar:</strong> Mirar 360°</p>
+        <p><strong>WASD:</strong> Vuelo libre</p>
+        <p><strong>Z / X:</strong> Espacio / Tierra</p>
+    </div>
+
+    <script>
+        // --- CONFIGURACIÓN TÉCNICA REFINADA ---
+        const CHUNK_SIZE = 160; 
+        const CHUNK_RES = 48; 
+        const VIEW_DISTANCE = 7; 
+        const CURVATURE = 0.00006; // Curvatura muy sutil para planeta masivo
+        const SEA_LEVEL = -2.0;
+
+        let scene, camera, renderer, clock;
+        let chunks = new Map();
+        let chunkQueue = [];
+        let activeClouds = [];
+        let sunLight, moonLight, ambientLight;
+        let sunMesh, moonMesh, planetSphere; // planetSphere para silueta redonda
+        let cosmosGroup, cosmosMaterials = [], pulsarObjects = [];
+        let playerRotation = 0, pitchRotation = 0;
+        let isMouseDown = false;
+        let lastMousePos = { x: 0, y: 0 };
+        const keys = {};
+
+        // Ciclo Día/Noche
+        let dayTime = 40; 
+        const dayDuration = 120; 
+
+        const noise = {
+            seed: Math.random() * 5000,
+            get: function(x, z) {
+                let h = Math.sin(x * 0.004 + this.seed) * Math.cos(z * 0.003 + this.seed) * 60;
+                h += Math.sin(x * 0.015) * Math.cos(z * 0.02) * 20;
+                h += Math.sin(x * 0.08) * 4;
+                if (h > 18) h += Math.pow(h - 18, 1.2);
+                if (h < -15) h -= Math.pow(Math.abs(h + 15), 1.1);
+                return h;
+            }
+        };
+
+        const worldCurvatureShader = {
+            onBeforeCompile: (shader) => {
+                shader.uniforms.uCurvature = { value: CURVATURE };
+                shader.vertexShader = `uniform float uCurvature;\n` + shader.vertexShader;
+                shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', 
+                    `#include <begin_vertex>\n
+                    vec4 worldPos = modelMatrix * vec4(position, 1.0);\n
+                    float dist = distance(worldPos.xz, cameraPosition.xz);\n
+                    transformed.y -= pow(dist, 2.0) * uCurvature;`
+                );
+            }
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+            scene.fog = new THREE.FogExp2(0x000000, 0.0004); 
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 5, 35000);
+            camera.position.set(0, 150, 0);
+            camera.rotation.order = 'YXZ';
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            document.body.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            // LUZ AMBIENTAL REFORZADA (Para que nunca sea 100% negro)
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+
+            sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            sunLight.castShadow = true;
+            scene.add(sunLight);
+
+            moonLight = new THREE.DirectionalLight(0xa0b0ff, 0.0); // Luz azulada de luna
+            scene.add(moonLight);
+
+            // Cuerpos Celestes
+            sunMesh = new THREE.Mesh(new THREE.SphereGeometry(80, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffdd44 }));
+            scene.add(sunMesh);
+
+            moonMesh = new THREE.Mesh(new THREE.SphereGeometry(60, 32, 32), new THREE.MeshBasicMaterial({ color: 0xeeeeff }));
+            scene.add(moonMesh);
+
+            // ESFERA BASE DEL PLANETA (Para silueta redonda desde el espacio)
+            const planetGeo = new THREE.SphereGeometry(3000, 64, 64);
+            const planetMat = new THREE.MeshStandardMaterial({ 
+                color: 0x001133, 
+                roughness: 0.8, 
+                transparent: true, 
+                opacity: 0.6 
+            });
+            planetSphere = new THREE.Mesh(planetGeo, planetMat);
+            planetSphere.position.y = -3010; // Un poco bajo el nivel del mar
+            scene.add(planetSphere);
+
+            createCosmosBackground();
+
+            window.addEventListener('keydown', e => keys[e.code] = true);
+            window.addEventListener('keyup', e => keys[e.code] = false);
+            window.addEventListener('mousedown', e => { isMouseDown = true; lastMousePos = { x: e.clientX, y: e.clientY }; });
+            window.addEventListener('mouseup', () => { isMouseDown = false; });
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onResize);
+
+            document.getElementById('loading').style.display = 'none';
+            animate();
+        }
+
+        function createCosmosBackground() {
+            cosmosGroup = new THREE.Group();
+            scene.add(cosmosGroup);
+
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 35000;
+            const starPos = new Float32Array(starCount * 3);
+            for(let i=0; i<starCount; i++) {
+                const r = 12000 + Math.random() * 10000;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                starPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+                starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                starPos[i*3+2] = r * Math.cos(phi);
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 5.5, transparent: true, opacity: 0 });
+            cosmosMaterials.push(starMat);
+            cosmosGroup.add(new THREE.Points(starGeo, starMat));
+
+            const colors = [0xff00ff, 0x00ffff, 0xffaa00, 0x44ffaa, 0x9944ff];
+            for(let i=0; i<40; i++) createPulsar(colors[i % colors.length]);
+        }
+
+        function createPulsar(colorHex) {
+            const particles = 1800;
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(particles * 3);
+            const col = new Float32Array(particles * 3);
+            const baseColor = new THREE.Color(colorHex);
+            const group = new THREE.Group();
+            const distance = 15000 + Math.random() * 8000;
+            group.position.setFromSphericalCoords(distance, Math.random() * Math.PI, Math.random() * Math.PI * 2);
+
+            const pulsarScale = 0.5 + Math.random() * 1.2;
+            for(let j=0; j<particles; j++) {
+                const r = Math.pow(Math.random(), 2.5) * 1200 * pulsarScale;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                pos[j*3] = r * Math.sin(phi) * Math.cos(theta);
+                pos[j*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                pos[j*3+2] = r * Math.cos(phi);
+                const c = baseColor.clone().offsetHSL((Math.random()-0.5)*0.1, 0, (Math.random()-0.5)*0.2);
+                col[j*3] = c.r; col[j*3+1] = c.g; col[j*3+2] = c.b;
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+            const mat = new THREE.PointsMaterial({ size: 30 * pulsarScale, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+            cosmosMaterials.push(mat);
+            group.add(new THREE.Points(geo, mat));
+            cosmosGroup.add(group);
+            pulsarObjects.push({ mesh: group, rotSpeed: (Math.random() - 0.5) * 0.007 });
+        }
+
+        function createChunk(cx, cz) {
+            const group = new THREE.Group();
+            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES, CHUNK_RES);
+            terrainGeo.rotateX(-Math.PI / 2);
+
+            const vertices = terrainGeo.attributes.position.array;
+            const colors = new Float32Array(vertices.length);
+
+            for (let i = 0; i < vertices.length; i += 3) {
+                const vx = vertices[i] + cx * CHUNK_SIZE;
+                const vz = vertices[i + 2] + cz * CHUNK_SIZE;
+                const h = noise.get(vx, vz);
+                vertices[i + 1] = h;
+
+                let r, g, b;
+                if (h > 55) { [r, g, b] = [0.95, 0.95, 1]; } 
+                else if (h > 28) { [r, g, b] = [0.4, 0.35, 0.3]; }
+                else if (h > SEA_LEVEL + 1.2) { [r, g, b] = [0.12, 0.4, 0.12]; }
+                else if (h > SEA_LEVEL) { [r, g, b] = [0.75, 0.7, 0.5]; }
+                else { [r, g, b] = [0.02, 0.1, 0.25]; }
+                colors[i] = r; colors[i+1] = g; colors[i+2] = b;
+
+                if (h > SEA_LEVEL + 4 && h < 45 && Math.random() > 0.985) {
+                    addTree(group, vertices[i], h, vertices[i+2]);
+                }
+            }
+
+            terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            terrainGeo.computeVertexNormals();
+
+            // MATERIAL CON FUNDIDO (OPAQUE -> TRANSPARENT)
+            const terrainMat = new THREE.MeshStandardMaterial({ 
+                vertexColors: true, 
+                roughness: 0.9, 
+                transparent: true, 
+                opacity: 0 // Inicia invisible
+            });
+            terrainMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+            const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+            group.add(terrainMesh);
+
+            const waterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 40, 40);
+            waterGeo.rotateX(-Math.PI / 2);
+            const waterMat = new THREE.MeshStandardMaterial({ 
+                color: 0x0055aa, 
+                transparent: true, 
+                opacity: 0 // Inicia invisible
+            });
+            waterMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+            const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.position.y = SEA_LEVEL;
+            group.add(waterMesh);
+
+            // Nubes agrupadas
+            if (Math.random() > 0.4) {
+                const isStorm = Math.random() > 0.7;
+                for(let k=0; k<(isStorm ? 3 : 1); k++) createCloud(group, isStorm);
+            }
+
+            group.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
+            scene.add(group);
+            
+            return { 
+                mesh: group, 
+                materials: [terrainMat, waterMat],
+                creationTime: clock.elapsedTime 
+            };
+        }
+
+        function addTree(parent, x, y, z) {
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x2b1d0e, transparent: true, opacity: 0 });
+            trunkMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.5, 4, 6), trunkMat);
+            trunk.position.set(x, y + 2, z);
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x082408, transparent: true, opacity: 0 });
+            leafMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+            const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.5, 9, 8), leafMat);
+            leaves.position.set(x, y + 8, z);
+            parent.add(trunk); parent.add(leaves);
+        }
+
+        function createCloud(parent, isStorm) {
+            const cloudMat = new THREE.MeshStandardMaterial({ color: isStorm ? 0x222222 : 0xffffff, transparent: true, opacity: 0 });
+            cloudMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+            const cloudGroup = new THREE.Group();
+            const baseScale = 4 + Math.random() * 8;
+            for(let i=0; i<(isStorm ? 12 : 6); i++) {
+                const p = new THREE.Mesh(new THREE.SphereGeometry(baseScale * (0.8 + Math.random() * 0.5), 8, 8), cloudMat);
+                p.position.set(Math.random()*40 - 20, Math.random()*8, Math.random()*40 - 20);
+                cloudGroup.add(p);
+            }
+            cloudGroup.position.set((Math.random()-0.5)*CHUNK_SIZE, 180 + Math.random()*250, (Math.random()-0.5)*CHUNK_SIZE);
+            parent.add(cloudGroup);
+            activeClouds.push({ mesh: cloudGroup, mat: cloudMat, isStorm: isStorm, speed: 0.05 + Math.random() * 0.1 });
+        }
+
+        function updateChunks() {
+            const px = Math.round(camera.position.x / CHUNK_SIZE);
+            const pz = Math.round(camera.position.z / CHUNK_SIZE);
+            const camDir = new THREE.Vector3();
+            camera.getWorldDirection(camDir);
+
+            for (let x = px - VIEW_DISTANCE; x <= px + VIEW_DISTANCE; x++) {
+                for (let z = pz - VIEW_DISTANCE; z <= pz + VIEW_DISTANCE; z++) {
+                    const key = `${x},${z}`;
+                    if (chunks.has(key)) continue;
+                    const chunkPos = new THREE.Vector3(x * CHUNK_SIZE, 0, z * CHUNK_SIZE);
+                    const toChunk = new THREE.Vector3().subVectors(chunkPos, camera.position).normalize();
+                    const dot = camDir.dot(toChunk);
+                    if (dot < -0.4 && Math.abs(x-px) > 2 && Math.abs(z-pz) > 2) continue;
+                    if(!chunkQueue.some(q => q.key === key)) chunkQueue.push({ key, x, z });
+                }
+            }
+            
+            // ANIMAR OPACIDAD Y LIMPIAR
+            for (const [key, chunk] of chunks) {
+                const [cx, cz] = key.split(',').map(Number);
+                if (Math.abs(cx - px) > VIEW_DISTANCE + 1 || Math.abs(cz - pz) > VIEW_DISTANCE + 1) {
+                    scene.remove(chunk.mesh);
+                    activeClouds = activeClouds.filter(c => !chunk.mesh.children.includes(c.mesh));
+                    chunks.delete(key);
+                } else {
+                    // Efecto de aparición suave (2 segundos)
+                    const life = clock.elapsedTime - chunk.creationTime;
+                    const alpha = THREE.MathUtils.clamp(life / 2.0, 0, 1);
+                    chunk.materials.forEach(m => m.opacity = alpha * (m === chunk.materials[1] ? 0.7 : 1.0));
+                    // Árboles dentro del chunk
+                    chunk.mesh.traverse(obj => {
+                        if(obj.material && obj.material.transparent) obj.material.opacity = alpha;
+                    });
+                }
+            }
+        }
+
+        function processChunkQueue() {
+            if (chunkQueue.length === 0) return;
+            const next = chunkQueue.shift();
+            if (!chunks.has(next.key)) chunks.set(next.key, createChunk(next.x, next.z));
+        }
+
+        function updateAtmosphere(dt) {
+            dayTime += dt;
+            let cycle = (dayTime % dayDuration) / dayDuration; 
+
+            const h = camera.position.y;
+            const status = document.getElementById('status');
+            const dayC = new THREE.Color(0x87ceeb), sunsetC = new THREE.Color(0xff5500), nightC = new THREE.Color(0x000000);    
+
+            let skyColor = new THREE.Color(), sunP = 0, moonP = 0, starF = 0;
+            let label = "";
+
+            // CICLO NO LINEAL (Transiciones rápidas)
+            if (cycle < 0.05) { // Amanecer
+                let t = cycle / 0.05;
+                skyColor.copy(nightC).lerp(sunsetC, t).lerp(dayC, t);
+                sunP = t; starF = 1.0 - t; label = "Amanecer";
+            } else if (cycle < 0.45) { // Día
+                skyColor.copy(dayC); sunP = 1.0; starF = 0; label = "Día";
+            } else if (cycle < 0.55) { // Atardecer (ESTRELLAS APARECEN AQUÍ)
+                let t = (cycle - 0.45) / 0.10;
+                skyColor.copy(dayC).lerp(sunsetC, t);
+                sunP = 1.0 - t;
+                starF = t * 0.9; // Brillan mucho ya en el naranja
+                label = "Atardecer";
+            } else { // Noche Plateada
+                let t = (cycle - 0.55) / 0.45;
+                skyColor.copy(sunsetC).lerp(nightC, Math.min(1, t * 6));
+                moonP = 1.0; starF = 1.0; label = "Noche de Luna";
+            }
+
+            let spaceT = THREE.MathUtils.clamp((h - 200) / 800, 0, 1);
+            let finalSky = skyColor.clone().lerp(nightC, spaceT);
+            scene.background.copy(finalSky);
+            
+            let fogFactor = Math.max(spaceT, starF);
+            scene.fog.color.copy(finalSky);
+            scene.fog.density = THREE.MathUtils.lerp(0.0004, 0.000001, fogFactor);
+
+            cosmosMaterials.forEach(mat => mat.opacity = fogFactor * 0.95);
+
+            const orbitDist = 8000;
+            const sunAngle = cycle * Math.PI * 2;
+            sunMesh.position.set(Math.cos(sunAngle) * orbitDist, Math.sin(sunAngle) * orbitDist, -4000);
+            moonMesh.position.set(Math.cos(sunAngle + Math.PI) * orbitDist, Math.sin(sunAngle + Math.PI) * orbitDist, -4000);
+
+            sunLight.intensity = sunP * 1.2;
+            sunLight.position.copy(sunMesh.position);
+            moonLight.intensity = moonP * 0.5; // Luna nunca deja el terreno a oscuras
+            moonLight.position.copy(moonMesh.position);
+            
+            // LUZ AMBIENTAL NOCTURNA: Asegura visibilidad del terreno de noche
+            ambientLight.intensity = 0.2 + (sunP * 0.3) + (moonP * 0.3);
+
+            status.innerText = `${label} | ${h > 400 ? "ESPACIO" : "BIÓSFERA"}`;
+            status.style.color = starF > 0.4 ? "#a5f3fc" : "#ffcc00";
+
+            activeClouds.forEach(c => {
+                c.mesh.position.x += dt * 15 * c.speed;
+                c.mat.opacity = 0.8 * (1.0 - spaceT) * (starF > 0.8 ? 0.3 : 1.0);
+            });
+
+            // Mover la esfera del planeta para que siempre esté bajo el jugador
+            planetSphere.position.x = camera.position.x;
+            planetSphere.position.z = camera.position.z;
+        }
+
+        function onMouseMove(e) {
+            if (!isMouseDown) return;
+            playerRotation -= (e.clientX - lastMousePos.x) * 0.004;
+            pitchRotation = THREE.MathUtils.clamp(pitchRotation - (e.clientY - lastMousePos.y) * 0.004, -1.45, 1.45);
+            lastMousePos = { x: e.clientX, y: e.clientY };
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = clock.getDelta();
+            
+            const speed = (keys['ShiftLeft'] ? 800 : 300) * dt;
+            camera.rotation.y = playerRotation;
+            camera.rotation.x = pitchRotation;
+
+            const dir = new THREE.Vector3();
+            if (keys['KeyW']) dir.z -= 1; if (keys['KeyS']) dir.z += 1;
+            if (keys['KeyA']) dir.x -= 1; if (keys['KeyD']) dir.x += 1;
+            dir.applyQuaternion(camera.quaternion);
+            
+            const hDir = new THREE.Vector3(dir.x, 0, dir.z).normalize();
+            if (hDir.length() > 0) camera.position.addScaledVector(hDir, speed);
+            if (keys['KeyZ']) camera.position.y += speed;
+            if (keys['KeyX']) camera.position.y -= speed;
+
+            const groundH = Math.max(SEA_LEVEL - 5, noise.get(camera.position.x, camera.position.z) + 18);
+            if (camera.position.y < groundH) camera.position.y = THREE.MathUtils.lerp(camera.position.y, groundH, 0.1);
+
+            updateChunks();
+            processChunkQueue();
+            updateAtmosphere(dt);
+
+            if(cosmosGroup) {
+                cosmosGroup.position.copy(camera.position);
+                cosmosGroup.rotation.y += 0.00008;
+                pulsarObjects.forEach(p => {
+                    p.mesh.rotation.y += p.rotSpeed;
+                    p.mesh.rotation.z += p.rotSpeed * 0.4;
+                });
+            }
+
+            document.getElementById('coords').innerText = 
+                `ALT: ${camera.position.y.toFixed(0)}m | Lat: ${Math.round(camera.position.x)} | Lon: ${Math.round(camera.position.z)}`;
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
