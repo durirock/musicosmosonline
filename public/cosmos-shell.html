@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chamalnquimyst · Cosmos Shell</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #000;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        /* ── Iframes apilados ── */
+        .universe-frame {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            opacity: 0;
+            z-index: 1;
+            pointer-events: none;
+            transition: opacity 1.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .universe-frame.active {
+            opacity: 1;
+            z-index: 10;
+            pointer-events: all;
+        }
+
+        .universe-frame.fading-out {
+            opacity: 0;
+            z-index: 9;
+            pointer-events: none;
+            transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ── Canvas de efectos de portal ── */
+        #portal-canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        /* ── HUD mínimo (debug, toggle con H) ── */
+        #hud {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            background: rgba(0,0,0,0.55);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 100px;
+            padding: 6px 16px;
+            backdrop-filter: blur(12px);
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        #hud.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #hud-label {
+            font-family: 'Space Mono', monospace;
+            font-size: 10px;
+            color: rgba(255,255,255,0.35);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        #hud-active {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 13px;
+            font-style: italic;
+            color: rgba(255,255,255,0.7);
+            letter-spacing: 0.05em;
+        }
+
+        .hud-sep {
+            width: 1px;
+            height: 12px;
+            background: rgba(255,255,255,0.12);
+        }
+
+        /* ── Botones de debug en HUD ── */
+        .hud-btn {
+            font-family: 'Space Mono', monospace;
+            font-size: 9px;
+            color: rgba(255,255,255,0.4);
+            cursor: pointer;
+            padding: 2px 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 100px;
+            background: transparent;
+            transition: all 0.2s;
+            letter-spacing: 0.08em;
+        }
+
+        .hud-btn:hover {
+            color: rgba(255,255,255,0.9);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        /* ── Pantalla de carga inicial ── */
+        #loader {
+            position: absolute;
+            inset: 0;
+            background: #000;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            transition: opacity 1s ease;
+        }
+
+        #loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #loader-title {
+            font-size: 18px;
+            font-weight: 300;
+            letter-spacing: 0.4em;
+            color: rgba(255,255,255,0.5);
+            text-transform: uppercase;
+        }
+
+        #loader-subtitle {
+            font-size: 13px;
+            font-style: italic;
+            color: rgba(255,255,255,0.2);
+            letter-spacing: 0.1em;
+        }
+
+        #loader-progress {
+            width: 120px;
+            height: 1px;
+            background: rgba(255,255,255,0.08);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #loader-bar {
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.4);
+            animation: loader-slide 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loader-slide {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ══════════════════════════════════════════════
+         IFRAMES — universos apilados
+         Ajusta las URLs a tus rutas reales de GitHub Pages
+    ══════════════════════════════════════════════ -->
+
+    <iframe
+        id="frame-musicosmos"
+        class="universe-frame"
+        data-universe="musicosmos"
+        title="Musicosmos"
+        allow="autoplay; microphone; midi"
+    ></iframe>
+
+    <iframe
+        id="frame-kalpa"
+        class="universe-frame"
+        data-universe="kalpa"
+        title="Kalpa · Hifa"
+        allow="autoplay; microphone"
+    ></iframe>
+
+    <iframe
+        id="frame-planetafunk"
+        class="universe-frame"
+        data-universe="planetafunk"
+        title="PlanetaFunk"
+        allow="autoplay"
+    ></iframe>
+
+    <iframe
+        id="frame-mundointerior"
+        class="universe-frame"
+        data-universe="mundointerior"
+        title="MundoInterior"
+        allow="autoplay; microphone"
+    ></iframe>
+
+    <!-- Canvas para efectos de portal (grieta índigo, vórtice, etc.) -->
+    <canvas id="portal-canvas"></canvas>
+
+    <!-- HUD de debug — toggle con tecla H -->
+    <div id="hud">
+        <span id="hud-label">universo</span>
+        <div class="hud-sep"></div>
+        <span id="hud-active">musicosmos</span>
+        <div class="hud-sep"></div>
+        <button class="hud-btn" onclick="CosmosShell.debugTransition('musicosmos','kalpa','hifa-cosmica')">→ kalpa</button>
+        <button class="hud-btn" onclick="CosmosShell.debugTransition('kalpa','planetafunk','atmosfera')">→ funk</button>
+        <button class="hud-btn" onclick="CosmosShell.debugTransition('planetafunk','mundointerior','hifa-interior')">→ mundo</button>
+        <button class="hud-btn" onclick="CosmosShell.debugTransition('mundointerior','musicosmos','grieta-indigo')">→ cosmos</button>
+    </div>
+
+    <!-- Pantalla de carga inicial -->
+    <div id="loader">
+        <div id="loader-title">Chamalnquimyst</div>
+        <div id="loader-subtitle">tejiendo los universos</div>
+        <div id="loader-progress"><div id="loader-bar"></div></div>
+    </div>
+
+
+    <script>
+    /*
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║  COSMOS SHELL · Orquestador de Universos                        ║
+    ║  Cuerpo Calloso Digital — arquitectura de atención soberana     ║
+    ║                                                                  ║
+    ║  Patrón: iframes preloaded + CSS crossfade + BroadcastChannel   ║
+    ║  El usuario viaja sin "loading screens" porque todos los        ║
+    ║  universos están vivos en segundo plano.                        ║
+    ╚══════════════════════════════════════════════════════════════════╝
+    */
+
+    // ── CONFIGURACIÓN DE UNIVERSOS ──────────────────────────────────
+    // AJUSTA estas URLs a tu estructura real de GitHub Pages
+    const UNIVERSOS = {
+        musicosmos: {
+            url: 'https://durirock.github.io/musicosmosonline/public/index.html',
+            label: 'Musicosmos',
+            color: '#6B48FF',        // púrpura cósmico
+            preloadDelay: 0          // carga inmediata
+        },
+        kalpa: {
+            url: 'https://durirock.github.io/chamlanquimyxperiments/kalpa6.0.html',
+            label: 'Kalpa · Hifa',
+            color: '#00D4AA',        // teal orgánico
+            preloadDelay: 3000       // carga 3s después del inicio
+        },
+        planetafunk: {
+            url: 'https://durirock.github.io/musicosmosonline/planetafunk.html',
+            label: 'PlanetaFunk',
+            color: '#FF6B35',        // naranja terrestre
+            preloadDelay: 6000       // carga 6s después
+        },
+        mundointerior: {
+            url: 'https://durirock.github.io/paramispacientespacientes/archhtml.html',
+            label: 'Mundo Interior',
+            color: '#4B0082',        // índigo profundo
+            preloadDelay: 9000       // carga 9s después
+        }
+    };
+
+    // ── MAPA DE PORTALES ────────────────────────────────────────────
+    // Define qué universos están conectados y qué efecto se usa
+    const PORTALES = {
+        'musicosmos->kalpa':       { tipo: 'hifa-cosmica',   duracion: 1800 },
+        'kalpa->planetafunk':      { tipo: 'atmosfera',      duracion: 2000 },
+        'kalpa->musicosmos':       { tipo: 'hifa-cosmica',   duracion: 1800 },
+        'planetafunk->kalpa':      { tipo: 'atmosfera',      duracion: 2000 },
+        'kalpa->mundointerior':    { tipo: 'hifa-interior',  duracion: 1800 },
+        'mundointerior->kalpa':    { tipo: 'hifa-interior',  duracion: 1800 },
+        'mundointerior->musicosmos': { tipo: 'grieta-indigo', duracion: 2200 },
+        'musicosmos->mundointerior': { tipo: 'grieta-indigo', duracion: 2200 }
+    };
+
+    // ── COSMOS STATE ────────────────────────────────────────────────
+    // Estado compartido del multiverso. Se envía a cada universo por BroadcastChannel.
+    const CosmosState = {
+        activeUniverse: 'musicosmos',
+        previousUniverse: null,
+        transitioning: false,
+        pv: parseInt(localStorage.getItem('cosmos_pv') || '100'),
+        mu: parseInt(localStorage.getItem('cosmos_mu') || '0'),
+        sessionStart: Date.now(),
+        position: { x: 0, y: 0, z: 0 },  // posición 3D del avatar (sincronizada desde KP)
+        history: [],                        // historial de universos visitados
+        kpEvents: []                        // buffer de eventos de Killer Pendiente
+    };
+
+    // ── BROADCAST CHANNEL ───────────────────────────────────────────
+    // Canal de comunicación entre el shell y todos los iframes (mismo origen)
+    const channel = new BroadcastChannel('cosmos-hifa');
+
+    channel.onmessage = (e) => {
+        const { type } = e.data;
+
+        // Un universo solicita navegar a otro
+        if (type === 'portal-request') {
+            const { from, to, portalType } = e.data;
+            if (!CosmosState.transitioning) {
+                CosmosShell.transition(from, to, portalType);
+            }
+        }
+
+        // Un universo reporta su posición 3D (para sincronizar con KP)
+        if (type === 'position-update') {
+            CosmosState.position = e.data.position;
+        }
+
+        // Un universo reporta cambio de PV/MU (vendrá de KP en el futuro)
+        if (type === 'stats-update') {
+            CosmosState.pv = e.data.pv ?? CosmosState.pv;
+            CosmosState.mu = e.data.mu ?? CosmosState.mu;
+            localStorage.setItem('cosmos_pv', CosmosState.pv);
+            localStorage.setItem('cosmos_mu', CosmosState.mu);
+        }
+    };
+
+    // ── COSMOS SHELL ENGINE ─────────────────────────────────────────
+    const CosmosShell = {
+
+        // Inicia el shell: carga Musicosmos y programa el preload de los demás
+        init() {
+            const canvas = document.getElementById('portal-canvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            window.addEventListener('resize', () => {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            });
+
+            // Carga Musicosmos primero
+            this._loadFrame('musicosmos');
+
+            // Programa la carga progresiva de los demás universos
+            Object.entries(UNIVERSOS).forEach(([id, cfg]) => {
+                if (id === 'musicosmos') return;
+                setTimeout(() => this._loadFrame(id), cfg.preloadDelay);
+            });
+
+            // Cuando Musicosmos carga, escóndemos el loader
+            const frame = document.getElementById('frame-musicosmos');
+            frame.addEventListener('load', () => {
+                setTimeout(() => {
+                    document.getElementById('loader').classList.add('hidden');
+                    frame.classList.add('active');
+                    // Avisa a Musicosmos que es el universo activo
+                    channel.postMessage({
+                        type: 'universe-activated',
+                        universe: 'musicosmos',
+                        state: CosmosState
+                    });
+                }, 400);
+            }, { once: true });
+
+            // Keyboard shortcuts (debug + navegación)
+            document.addEventListener('keydown', (e) => this._handleKeys(e));
+
+            console.log('%c⬡ Cosmos Shell iniciado', 'color:#6B48FF;font-size:14px;');
+        },
+
+        // Carga un iframe asignando su src
+        _loadFrame(universoId) {
+            const frame = document.getElementById(`frame-${universoId}`);
+            if (frame && !frame.src) {
+                frame.src = UNIVERSOS[universoId].url;
+                console.log(`%c⬡ Preloading: ${universoId}`, 'color:#444;font-size:11px;');
+            }
+        },
+
+        // ── TRANSICIÓN PRINCIPAL ──────────────────────────────────
+        // from: string, to: string, portalType: string (opcional, auto-detectado)
+        async transition(from, to, portalType) {
+            if (CosmosState.transitioning) return;
+            if (from === to) return;
+
+            // Auto-detecta el tipo de portal si no se especifica
+            const portalKey = `${from}->${to}`;
+            const portalCfg = PORTALES[portalKey] || { tipo: 'fade', duracion: 1500 };
+            const tipo = portalType || portalCfg.tipo;
+            const duracion = portalCfg.duracion;
+
+            CosmosState.transitioning = true;
+            CosmosState.previousUniverse = from;
+            CosmosState.history.push(from);
+
+            const frameFrom = document.getElementById(`frame-${from}`);
+            const frameTo = document.getElementById(`frame-${to}`);
+
+            if (!frameTo) {
+                console.error(`Frame no encontrado: frame-${to}`);
+                CosmosState.transitioning = false;
+                return;
+            }
+
+            // Asegura que el universo destino esté cargado
+            if (!frameTo.src) this._loadFrame(to);
+
+            // Avisa al universo origen que se va a ir
+            channel.postMessage({ type: 'universe-leaving', universe: from, destination: to });
+
+            // Avisa al universo destino que se aproxima
+            channel.postMessage({ type: 'universe-incoming', universe: to, portalType: tipo, origin: from });
+
+            // 1) Ejecuta el efecto visual de portal
+            await PortalEffects.play(tipo, duracion);
+
+            // 2) Crossfade de iframes
+            if (frameTo) frameTo.style.zIndex = '9';
+            frameTo.classList.add('active');
+            if (frameFrom) {
+                frameFrom.classList.remove('active');
+                frameFrom.classList.add('fading-out');
+                setTimeout(() => {
+                    frameFrom.classList.remove('fading-out');
+                    frameFrom.style.zIndex = '1';
+                }, 1200);
+            }
+
+            // 3) Actualiza el estado
+            CosmosState.activeUniverse = to;
+            CosmosState.transitioning = false;
+
+            // Actualiza HUD
+            document.getElementById('hud-active').textContent = UNIVERSOS[to]?.label || to;
+
+            // Notifica a todos que el universo cambió
+            channel.postMessage({
+                type: 'universe-activated',
+                universe: to,
+                origin: from,
+                state: CosmosState
+            });
+
+            // Guarda en localStorage
+            localStorage.setItem('cosmos_active', to);
+
+            console.log(`%c⬡ ${from} → ${to} [${tipo}]`, 'color:#00D4AA;font-size:12px;');
+        },
+
+        // Método de debug directo desde HUD
+        debugTransition(from, to, tipo) {
+            // Si el universo actual no coincide, fuerza el estado
+            const currentActive = document.querySelector('.universe-frame.active');
+            if (currentActive && currentActive.dataset.universe !== from) {
+                // Activa el frame 'from' silenciosamente para que la transición sea coherente
+                currentActive.classList.remove('active');
+                const frameFrom = document.getElementById(`frame-${from}`);
+                if (frameFrom) frameFrom.classList.add('active');
+                CosmosState.activeUniverse = from;
+            }
+            this.transition(from, to, tipo);
+        },
+
+        // Shortcuts de teclado
+        _handleKeys(e) {
+            // H → toggle HUD
+            if (e.key === 'h' || e.key === 'H') {
+                document.getElementById('hud').classList.toggle('visible');
+            }
+            // Solo en modo debug (Ctrl + número)
+            if (e.ctrlKey) {
+                const keys = { '1': 'musicosmos', '2': 'kalpa', '3': 'planetafunk', '4': 'mundointerior' };
+                if (keys[e.key]) {
+                    const dest = keys[e.key];
+                    const orig = CosmosState.activeUniverse;
+                    if (orig !== dest) this.transition(orig, dest);
+                }
+            }
+        }
+    };
+
+    // ── PORTAL EFFECTS ──────────────────────────────────────────────
+    // Efectos visuales sobre el canvas durante las transiciones
+    const PortalEffects = {
+
+        canvas: null,
+        ctx: null,
+        animId: null,
+
+        init() {
+            this.canvas = document.getElementById('portal-canvas');
+            this.ctx = this.canvas.getContext('2d');
+        },
+
+        // Ejecuta un efecto y devuelve Promise que resuelve al completarse
+        play(tipo, duracion) {
+            this.init();
+            return new Promise((resolve) => {
+                cancelAnimationFrame(this.animId);
+                this.canvas.style.opacity = '1';
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                switch (tipo) {
+                    case 'grieta-indigo':
+                        this._efectoGrietaIndigo(duracion, resolve);
+                        break;
+                    case 'hifa-cosmica':
+                        this._efectoHifaCosmica(duracion, resolve);
+                        break;
+                    case 'atmosfera':
+                        this._efectoAtmosfera(duracion, resolve);
+                        break;
+                    case 'hifa-interior':
+                        this._efectoHifaInterior(duracion, resolve);
+                        break;
+                    default:
+                        this._efectoFade(duracion, resolve);
+                }
+            });
+        },
+
+        // ── GRIETA ÍNDIGO ─────────────────────────────────────────
+        // Para MundoInterior → Musicosmos
+        // Fracturas que irradian desde el centro, color índigo → blanco
+        _efectoGrietaIndigo(duracion, onComplete) {
+            const w = this.canvas.width, h = this.canvas.height;
+            const cx = w / 2, cy = h / 2;
+            const ctx = this.ctx;
+            const startTime = performance.now();
+
+            // Genera las líneas de grieta una sola vez
+            const grietas = [];
+            const NUM_GRIETAS = 12;
+            for (let i = 0; i < NUM_GRIETAS; i++) {
+                const angle = (i / NUM_GRIETAS) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+                const len = Math.max(w, h) * (0.6 + Math.random() * 0.6);
+                const puntos = this._generarGrieta(cx, cy, angle, len, 5);
+                grietas.push({
+                    puntos,
+                    delay: Math.random() * 0.3,    // inicio escalonado
+                    width: 1 + Math.random() * 2.5
+                });
+            }
+
+            const animate = (now) => {
+                const elapsed = now - startTime;
+                const t = Math.min(elapsed / duracion, 1);
+                ctx.clearRect(0, 0, w, h);
+
+                // Fondo: negro → índigo conforme avanza
+                if (t > 0.4) {
+                    const bgT = (t - 0.4) / 0.6;
+                    const alpha = bgT * 0.92;
+                    ctx.fillStyle = `rgba(20, 0, 50, ${alpha})`;
+                    ctx.fillRect(0, 0, w, h);
+                }
+
+                // Dibuja grietas
+                grietas.forEach(g => {
+                    const localT = Math.max(0, Math.min(1, (t - g.delay) / (1 - g.delay)));
+                    if (localT <= 0) return;
+
+                    const maxPunto = Math.floor(localT * g.puntos.length);
+                    if (maxPunto < 2) return;
+
+                    ctx.beginPath();
+                    ctx.moveTo(g.puntos[0].x, g.puntos[0].y);
+                    for (let i = 1; i <= maxPunto; i++) {
+                        ctx.lineTo(g.puntos[i].x, g.puntos[i].y);
+                    }
+
+                    // Color: índigo → violeta → blanco conforme t avanza
+                    const hue = 270 - t * 40;
+                    const light = 40 + t * 50;
+                    const glow = t > 0.7 ? (t - 0.7) / 0.3 : 0;
+                    ctx.strokeStyle = `hsl(${hue}, 100%, ${light}%)`;
+                    ctx.lineWidth = g.width * (1 + glow * 3);
+                    ctx.shadowColor = `hsl(${hue}, 100%, 80%)`;
+                    ctx.shadowBlur = 8 + glow * 20;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                });
+
+                // Flash blanco al final
+                if (t > 0.85) {
+                    const flashT = (t - 0.85) / 0.15;
+                    ctx.fillStyle = `rgba(200, 180, 255, ${flashT * 0.8})`;
+                    ctx.fillRect(0, 0, w, h);
+                }
+
+                if (t < 1) {
+                    this.animId = requestAnimationFrame(animate);
+                } else {
+                    // Fade out del canvas
+                    this.canvas.style.transition = 'opacity 0.5s';
+                    this.canvas.style.opacity = '0';
+                    setTimeout(() => {
+                        ctx.clearRect(0, 0, w, h);
+                        this.canvas.style.transition = '';
+                        onComplete();
+                    }, 500);
+                }
+            };
+
+            this.animId = requestAnimationFrame(animate);
+        },
+
+        // Genera puntos de una grieta fracturada (recta con desvíos aleatorios)
+        _generarGrieta(sx, sy, angle, longitud, ramificaciones) {
+            const puntos = [{ x: sx, y: sy }];
+            let x = sx, y = sy;
+            const SEGMENTOS = 20;
+            const paso = longitud / SEGMENTOS;
+
+            for (let i = 0; i < SEGMENTOS; i++) {
+                const desvio = (Math.random() - 0.5) * 0.3;
+                x += Math.cos(angle + desvio) * paso;
+                y += Math.sin(angle + desvio) * paso;
+                puntos.push({ x, y });
+            }
+            return puntos;
+        },
+
+        // ── HIFA CÓSMICA ──────────────────────────────────────────
+        // Para Musicosmos ↔ Kalpa
+        // Partículas que convergen en espiral hacia el centro
+        _efectoHifaCosmica(duracion, onComplete) {
+            const w = this.canvas.width, h = this.canvas.height;
+            const ctx = this.ctx;
+            const cx = w / 2, cy = h / 2;
+            const startTime = performance.now();
+
+            // Genera partículas desde los bordes
+            const particulas = [];
+            const NUM = 120;
+            for (let i = 0; i < NUM; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const radio = Math.max(w, h) * 0.4 + Math.random() * Math.max(w, h) * 0.2;
+                particulas.push({
+                    x: cx + Math.cos(angle) * radio,
+                    y: cy + Math.sin(angle) * radio,
+                    targetX: cx + (Math.random() - 0.5) * 20,
+                    targetY: cy + (Math.random() - 0.5) * 20,
+                    size: 1 + Math.random() * 2.5,
+                    delay: Math.random() * 0.4,
+                    color: Math.random() > 0.5 ? '#6B48FF' : '#00D4AA'
+                });
+            }
+
+            const animate = (now) => {
+                const t = Math.min((now - startTime) / duracion, 1);
+                ctx.fillStyle = `rgba(0, 0, 0, 0.15)`;
+                ctx.fillRect(0, 0, w, h);
+
+                particulas.forEach(p => {
+                    const pt = Math.max(0, (t - p.delay) / (1 - p.delay));
+                    // easing: cúbico
+                    const et = 1 - Math.pow(1 - pt, 3);
+
+                    const x = p.x + (p.targetX - p.x) * et;
+                    const y = p.y + (p.targetY - p.y) * et;
+                    const alpha = pt < 0.8 ? pt / 0.8 : (1 - pt) / 0.2;
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, p.size * (1 - et * 0.5), 0, Math.PI * 2);
+                    ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0');
+                    ctx.fill();
+                });
+
+                // Vórtice central al final
+                if (t > 0.6) {
+                    const vt = (t - 0.6) / 0.4;
+                    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80 * vt);
+                    grad.addColorStop(0, `rgba(107, 72, 255, ${vt * 0.9})`);
+                    grad.addColorStop(0.5, `rgba(0, 212, 170, ${vt * 0.4})`);
+                    grad.addColorStop(1, `rgba(0, 0, 0, 0)`);
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, 80 * vt, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                if (t < 1) {
+                    this.animId = requestAnimationFrame(animate);
+                } else {
+                    this.canvas.style.transition = 'opacity 0.6s';
+                    this.canvas.style.opacity = '0';
+                    setTimeout(() => {
+                        ctx.clearRect(0, 0, w, h);
+                        this.canvas.style.transition = '';
+                        onComplete();
+                    }, 600);
+                }
+            };
+            this.animId = requestAnimationFrame(animate);
+        },
+
+        // ── ATMÓSFERA ─────────────────────────────────────────────
+        // Para Kalpa ↔ PlanetaFunk
+        // Niebla verde/naranja que se expande desde los bordes
+        _efectoAtmosfera(duracion, onComplete) {
+            const w = this.canvas.width, h = this.canvas.height;
+            const ctx = this.ctx;
+            const startTime = performance.now();
+
+            const animate = (now) => {
+                const t = Math.min((now - startTime) / duracion, 1);
+                ctx.clearRect(0, 0, w, h);
+
+                // Niebla que entra desde abajo
+                const fogHeight = h * t * 1.3;
+                const grad = ctx.createLinearGradient(0, h, 0, h - fogHeight);
+                grad.addColorStop(0, `rgba(100, 200, 80, ${Math.min(t * 1.2, 0.9)})`);
+                grad.addColorStop(0.4, `rgba(180, 140, 40, ${t * 0.6})`);
+                grad.addColorStop(1, `rgba(0, 0, 0, 0)`);
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, h - fogHeight, w, fogHeight);
+
+                // Halos de sol al final
+                if (t > 0.5) {
+                    const st = (t - 0.5) / 0.5;
+                    const grad2 = ctx.createRadialGradient(w * 0.5, h * 0.3, 0, w * 0.5, h * 0.3, w * 0.4 * st);
+                    grad2.addColorStop(0, `rgba(255, 200, 80, ${st * 0.5})`);
+                    grad2.addColorStop(1, `rgba(0, 0, 0, 0)`);
+                    ctx.fillStyle = grad2;
+                    ctx.fillRect(0, 0, w, h);
+                }
+
+                if (t < 1) {
+                    this.animId = requestAnimationFrame(animate);
+                } else {
+                    this.canvas.style.transition = 'opacity 0.7s';
+                    this.canvas.style.opacity = '0';
+                    setTimeout(() => {
+                        ctx.clearRect(0, 0, w, h);
+                        this.canvas.style.transition = '';
+                        onComplete();
+                    }, 700);
+                }
+            };
+            this.animId = requestAnimationFrame(animate);
+        },
+
+        // ── HIFA INTERIOR ─────────────────────────────────────────
+        // Para Kalpa ↔ MundoInterior — azul ciánico, orgánico
+        _efectoHifaInterior(duracion, onComplete) {
+            const w = this.canvas.width, h = this.canvas.height;
+            const ctx = this.ctx;
+            const startTime = performance.now();
+
+            const animate = (now) => {
+                const t = Math.min((now - startTime) / duracion, 1);
+                ctx.fillStyle = `rgba(0, 5, 20, 0.2)`;
+                ctx.fillRect(0, 0, w, h);
+
+                // Venas ciánicas que crecen desde el centro
+                const numVenas = 8;
+                for (let v = 0; v < numVenas; v++) {
+                    const angle = (v / numVenas) * Math.PI * 2;
+                    const maxLen = Math.max(w, h) * 0.7 * t;
+                    const delay = v * 0.05;
+                    const lt = Math.max(0, t - delay);
+
+                    ctx.beginPath();
+                    ctx.moveTo(w / 2, h / 2);
+                    let x = w / 2, y = h / 2;
+                    const segs = 15;
+                    for (let s = 0; s < segs; s++) {
+                        const st = s / segs;
+                        if (st > lt) break;
+                        const desvio = Math.sin(s * 2.3 + v) * 30;
+                        x += Math.cos(angle + desvio * 0.05) * (maxLen / segs);
+                        y += Math.sin(angle + desvio * 0.05) * (maxLen / segs);
+                        ctx.lineTo(x, y);
+                    }
+
+                    const alpha = Math.min(lt * 2, 0.8);
+                    ctx.strokeStyle = `rgba(0, 180, 220, ${alpha})`;
+                    ctx.lineWidth = 1.5 - lt * 0.8;
+                    ctx.shadowColor = 'rgba(0, 220, 255, 0.6)';
+                    ctx.shadowBlur = 6;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+
+                if (t < 1) {
+                    this.animId = requestAnimationFrame(animate);
+                } else {
+                    this.canvas.style.transition = 'opacity 0.5s';
+                    this.canvas.style.opacity = '0';
+                    setTimeout(() => {
+                        ctx.clearRect(0, 0, w, h);
+                        this.canvas.style.transition = '';
+                        onComplete();
+                    }, 500);
+                }
+            };
+            this.animId = requestAnimationFrame(animate);
+        },
+
+        // ── FADE simple ────────────────────────────────────────────
+        _efectoFade(duracion, onComplete) {
+            const w = this.canvas.width, h = this.canvas.height;
+            const ctx = this.ctx;
+            const startTime = performance.now();
+            const half = duracion / 2;
+
+            const animate = (now) => {
+                const elapsed = now - startTime;
+                const t = Math.min(elapsed / duracion, 1);
+                const alpha = t < 0.5 ? (t / 0.5) : (1 - (t - 0.5) / 0.5);
+                ctx.clearRect(0, 0, w, h);
+                ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.95})`;
+                ctx.fillRect(0, 0, w, h);
+
+                if (t < 1) {
+                    this.animId = requestAnimationFrame(animate);
+                } else {
+                    this.canvas.style.opacity = '0';
+                    ctx.clearRect(0, 0, w, h);
+                    onComplete();
+                }
+            };
+            this.animId = requestAnimationFrame(animate);
+        }
+    };
+
+
+    // ══════════════════════════════════════════════════════════════
+    // ARRANQUE
+    // ══════════════════════════════════════════════════════════════
+    CosmosShell.init();
+
+    // Exponer globalmente para debug desde consola del browser
+    window.CosmosShell = CosmosShell;
+    window.CosmosState = CosmosState;
+    </script>
+
+
+    <!--
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║  COSMOS BRIDGE — SNIPPET PARA CADA UNIVERSO                     ║
+    ║                                                                  ║
+    ║  Agrega este bloque al FINAL del <script> principal de cada     ║
+    ║  archivo HTML (index.html, kalpa6.0.html, planetafunk.html,     ║
+    ║  archhtml.html). No modifica el código existente.               ║
+    ║                                                                  ║
+    ║  SOLO CAMBIAR: 'musicosmos' por el id correcto en cada archivo  ║
+    ╚══════════════════════════════════════════════════════════════════╝
+
+    // ── COSMOS BRIDGE ─────────────────────────────────────────────
+    const _COSMOS_ID = 'musicosmos';   // ← CAMBIAR por: kalpa / planetafunk / mundointerior
+
+    const _cosmosChannel = new BroadcastChannel('cosmos-hifa');
+
+    // Escucha mensajes del shell (el shell te habla)
+    _cosmosChannel.onmessage = (e) => {
+        const { type } = e.data;
+
+        if (type === 'universe-activated' && e.data.universe === _COSMOS_ID) {
+            // Este universo se volvió activo — puedes resumir audio, animaciones, etc.
+            console.log(`[${_COSMOS_ID}] Activado desde cosmos-shell`);
+            // Ejemplo: if (audioContext?.state === 'suspended') audioContext.resume();
+        }
+
+        if (type === 'universe-leaving' && e.data.universe === _COSMOS_ID) {
+            // Este universo se va a dormir — pausar audio costoso si quieres
+            console.log(`[${_COSMOS_ID}] Entrando en modo background`);
+        }
+
+        if (type === 'universe-incoming' && e.data.universe === _COSMOS_ID) {
+            // El usuario está viajando HACIA aquí — puedes preparar una animación de llegada
+            console.log(`[${_COSMOS_ID}] Llegada inminente vía ${e.data.portalType}`);
+        }
+
+        if (type === 'cegg-event') {
+            // Evento de Killer Pendiente — el universo reacciona a las tareas del usuario
+            // e.data.payload: { type: 'TASK_COMPLETE', user, pv, mu, ... }
+        }
+    };
+
+    // Función para solicitar una transición al shell
+    // Llámala cuando el usuario llegue a una zona de portal en tu escena 3D
+    function _cosmosPortal(destino, tipo) {
+        _cosmosChannel.postMessage({
+            type: 'portal-request',
+            from: _COSMOS_ID,
+            to: destino,     // 'kalpa' | 'planetafunk' | 'musicosmos' | 'mundointerior'
+            portalType: tipo // opcional, el shell lo auto-detecta
+        });
+    }
+
+    // Ejemplo de uso en el loop de Three.js:
+    // if (camera.position.distanceTo(PORTAL_KALPA_POS) < 50) {
+    //     _cosmosPortal('kalpa');
+    // }
+    // ── FIN COSMOS BRIDGE ─────────────────────────────────────────
+    -->
+
+</body>
+</html>
