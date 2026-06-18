@@ -6341,7 +6341,9 @@
                     feature.update(deltaTime);
                 }
             });
-
+            // ═══ ACTUALIZAR CINÉTICA DE PENDIENTES DEL CUERPO CALLOSO ═══
+            updateKpPulsarsKinematics(deltaTime);
+                        // ════════════════════════════════════════════════════════════
             renderer.render(scene, camera);
             // --- LÓGICA DE RENDERIZADO (NORMAL O ESTÉREO MANUAL) ---
             if (isStereoMode) {
@@ -6473,16 +6475,23 @@
             // 2. Cuando recibimos un mensaje del servidor
             socket.onmessage = (event) => {
                     
-                // --- AÑADE ESTAS LÍNEAS ---
-                //console.log("<-- RECIBIDO:", event.data); 
-                const data = JSON.parse(event.data);
-               // console.log("    Data parseada:", data);
-               // console.log("    Mi username local:", username);
-               // console.log("    Comparando data.id (" + data.id + ") === username (" + username + ") ? ", data.id === username);
-                // --- FIN LÍNEAS AÑADIDAS ---TODO BIEN HASTA AQUI!!
-
-                // Ignoramos nuestros propios mensajes (que el servidor nos reenvía)
-                if (data.id === username) return; // <-- ¡ESTA ES LA CORRECCIÓN!
+                    // --- AÑADE ESTAS LÍNEAS ---
+                    //console.log("<-- RECIBIDO:", event.data); 
+                    const data = JSON.parse(event.data);
+                    // console.log("    Data parseada:", data);
+                    // console.log("    Mi username local:", username);
+                    // console.log("    Comparando data.id (" + data.id + ") === username (" + username + ") ? ", data.id === username);
+                    // --- FIN LÍNEAS AÑADIDAS ---TODO BIEN HASTA AQUI!!
+                    
+                    // ═══ CUERPO CALLOSO: INTERCEPTOR DE EVENTOS CEGG DE KILLER PENDIENTE ═══
+                    if (data.type === 'TASK_COMPLETE' || data.type === 'KP_STATUS' || data.type === 'PV_UPDATE') {
+                        handleKpEvent(data);
+                        return; // Detiene la ejecución para no colisionar con la lógica multijugador
+                    }
+                    // ═══════════════════════════════════════════════════════════════════════
+    
+                    // Ignoramos nuestros propios mensajes (que el servidor nos reenvía)
+                    if (data.id === username) return; // <-- ¡ESTA ES LA CORRECCIÓN!
 
                 // Si no tenemos una galaxia para este jugador, la creamos
                 if (!galaxies[data.id]) {
@@ -7879,6 +7888,194 @@
 
     console.log(`%c⬡ Cosmos Bridge activo: ${_COSMOS_ID}`, 'color:#00D4AA;font-size:11px;');
 })();
+
+    // ===================================================================
+    // NÚCLEO CUERPO CALLOSO: SISTEMA DE DIBUJO ESTELAR Y GRAVITACIONAL CEGG
+    // ===================================================================
+    const kpPulsarsBook = []; // Array de persistencia para las nebulosas de tus pendientes
+
+    function handleKpEvent(data) {
+        console.log('[CEGG EVENT RECIBIDO]', data.type, data);
+
+        switch (data.type) {
+            case 'KP_STATUS':
+                showCosmicNotification(
+                    data.online ? '🔗 Cuerpo Calloso: Killer Pendiente Enlazado' : '⚡ Killer Pendiente Offline',
+                    data.online ? '#7F77DD' : '#888780'
+                );
+                break;
+
+            case 'TASK_COMPLETE':
+                spawnTaskPulsar(data);
+                break;
+
+            case 'PV_UPDATE':
+                // Pulso masivo en tu propia galaxia al mutar energía psíquica
+                if (galaxies[username] && galaxies[username].pixelGalaxy) {
+                    galaxies[username].pixelGalaxy.midiScaleFactor = 1.6;
+                    setTimeout(() => {
+                        if(galaxies[username] && galaxies[username].pixelGalaxy) {
+                            galaxies[username].pixelGalaxy.midiScaleFactor = 1.0;
+                        }
+                    }, 800);
+                }
+                break;
+        }
+    }
+
+    function spawnTaskPulsar(data) {
+        // 1. Mapeo Cromático basado en Prioridades o Categorías de KP
+        let hueBase = 0.6; // Por defecto: Azul Eléctrico
+        let categoryLabel = data.category || "General";
+        
+        if (data.category === 'A') hueBase = 0.75; // Creativo / Piano / Paquidermo Funk (Púrpuras)
+        if (data.category === 'B') hueBase = 0.35; // Lógica / Código / Nexum / Constellator (Verdes)
+        if (data.category === 'C') hueBase = 0.08; // Biológico / Invernadero / Bosque / Mate (Naranjas)
+
+        // 2. Cálculo Topológico de la Resistencia (Eje Z e Inercia de Procrastinación)
+        // Extraemos los días que la tarea estuvo acumulando polvo psíquico
+        const daysDelayed = data.days_delayed || 0; 
+        
+        // El Big Bang brota directamente desde el Avatar actual
+        const spawnPosition = avatarObject.position.clone();
+
+        // Las tareas postergadas se hunden en el espacio profundo (Eje Z negativo)
+        // A mayor arrastre, más atrás y con mayor tamaño nacen (la gravedad de tu sombra)
+        const zDepth = -(daysDelayed * 35.0) - (15.0 + Math.random() * 20.0);
+        const sizeScale = 1.0 + Math.min(3.0, daysDelayed * 0.4);
+
+        // Crear el Cúmulo de Partículas usando la geometría nítida del ecosistema
+        const particleCount = 1200 + (daysDelayed * 300);
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount; i++) {
+            const radius = Math.pow(Math.random(), 2.0) * 30.0 * sizeScale;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+            positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta) * 0.4; // Aplastamiento cósmico
+            positions[i * 3 + 2] = radius * Math.cos(phi);
+
+            // Paleta degradada interna
+            const color = new THREE.Color().setHSL(
+                (hueBase + (Math.random() - 0.5) * 0.08) % 1.0,
+                0.9,
+                0.4 + Math.random() * 0.3
+            );
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.PointsMaterial({
+            size: 0.8 * (sizeScale * 0.7),
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.85,
+            blending: THREE.AdditiveBlending,
+            map: createSharperCircleTexture(),
+            depthWrite: false
+        });
+
+        const pulsarMesh = new THREE.Points(geometry, material);
+        
+        // Posicionamiento inicial al lado del viajero
+        pulsarMesh.position.copy(spawnPosition);
+        scene.add(pulsarMesh);
+
+        // Guardar metadatos en el objeto 3D para interacción futura por clicks
+        pulsarMesh.userData = {
+            taskName: data.task_name || "Pendiente Liberado",
+            daysDelayed: daysDelayed,
+            category: categoryLabel,
+            creationTime: Date.now()
+        };
+
+        // Estructura cinética del astro
+        const pulsarData = {
+            mesh: pulsarMesh,
+            velocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 0.05,
+                (Math.random() - 0.5) * 0.02,
+                (Math.random() - 0.5) * 0.05
+            ),
+            targetZDepth: zDepth,
+            zSpeed: 0.02, // Velocidad a la que se desplaza hacia su plano de resistencia definitivo
+            rotationSpeed: 0.002 + Math.random() * 0.003
+        };
+
+        kpPulsarsBook.push(pulsarData);
+
+        showCosmicNotification(
+            `✨ Resistencia Vencida: "${pulsarMesh.userData.taskName}" [${daysDelayed}d de retraso] ➔ Nebulosa Creada`,
+            hueBase === 0.75 ? '#FF62B5' : (hueBase === 0.35 ? '#62FF96' : '#FF9662')
+        );
+    }
+
+    function updateKpPulsarsKinematics(deltaTime) {
+        // Loop de simulación física y gravitacional
+        for (let i = 0; i < kpPulsarsBook.length; i++) {
+            const p1 = kpPulsarsBook[i];
+            
+            // 1. Rotación orbital interna sobre su propio eje
+            p1.mesh.rotation.y += p1.mesh.userData.daysDelayed > 0 ? p1.rotationSpeed * 0.5 : p1.rotationSpeed;
+
+            // 2. Empuje hacia el plano de profundidad Z según su resistencia histórica
+            if (Math.abs(p1.mesh.position.z - p1.targetZDepth) > 1.0) {
+                p1.mesh.position.z = THREE.MathUtils.lerp(p1.mesh.position.z, p1.targetZDepth, p1.zSpeed);
+            }
+
+            // 3. Movimiento inercial lento por el vacío (dibujo del espacio)
+            p1.mesh.position.addScaledVector(p1.velocity, deltaTime * 60);
+
+            // 4. Interacción Gravitatoria mutua suave (Atracción y trenzado de nebulosas cercanas)
+            for (let j = i + 1; j < kpPulsarsBook.length; j++) {
+                const p2 = kpPulsarsBook[j];
+                const dist = p1.mesh.position.distanceTo(p2.mesh.position);
+                
+                if (dist < 400.0 && dist > 10.0) {
+                    // Vector de atracción de sutil acoplamiento gravitatorio
+                    const force = (1.0 - dist / 400.0) * 0.003;
+                    const dir = new THREE.Vector3().subVectors(p2.mesh.position, p1.mesh.position).normalize();
+                    
+                    p1.velocity.addScaledVector(dir, force);
+                    p2.velocity.addScaledVector(dir, -force);
+                }
+            }
+        }
+    }
+
+    function showCosmicNotification(text, color = '#EF9F27') {
+        const el = document.createElement('div');
+        el.textContent = text;
+        el.style.cssText = `
+            position: fixed;
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(4, 8, 20, 0.85);
+            color: ${color};
+            font-family: 'Orbitron', monospace;
+            font-size: 12px;
+            letter-spacing: 1px;
+            padding: 10px 22px;
+            border-radius: 30px;
+            border: 1px solid ${color}66;
+            z-index: 99999;
+            pointer-events: none;
+            box-shadow: 0 0 15px ${color}33;
+            transition: opacity 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+        `;
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; }, 4000);
+        setTimeout(() => { el.remove(); }, 4650);
+    }
 // ── FIN COSMOS BRIDGE ──────────────────────────────────────────────
 
     </script>
