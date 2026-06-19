@@ -6481,6 +6481,7 @@
                 // ═══ CUERPO CALLOSO: INTERCEPTOR DE EVENTOS CEGG DE KILLER PENDIENTE ═══
                 if (data.type === 'TASK_COMPLETE' || data.type === 'KP_STATUS' || data.type === 'PV_UPDATE') {
                     handleKpEvent(data);
+
                     return; // Detiene la ejecución para no colisionar con el multiplayer
                 }
                 // ═══════════════════════════════════════════════════════════════════════
@@ -7929,6 +7930,33 @@
                 }
                 break;
         }
+    }
+
+        // ── Notificación Flotante Estilo Cosmos ──
+    function showCosmicNotification(text, color = '#EF9F27') {
+        const el = document.createElement('div');
+        el.textContent = text;
+        el.style.cssText = `
+            position: fixed;
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(4, 8, 20, 0.9);
+            color: ${color};
+            font-family: monospace;
+            font-size: 12px;
+            letter-spacing: 1px;
+            padding: 10px 22px;
+            border-radius: 30px;
+            border: 1px solid ${color}66;
+            z-index: 99999;
+            pointer-events: none;
+            box-shadow: 0 0 15px ${color}33;
+            transition: opacity 0.6s ease;
+        `;
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; }, 4000);
+        setTimeout(() => { el.remove(); }, 4650);
     }
 
     function spawnTaskPulsar(data) {
