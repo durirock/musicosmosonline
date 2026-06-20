@@ -620,46 +620,49 @@ class Pikitipu {
     this.body=new THREE.Mesh(geo,this.mat); this.g.add(this.body);
   }
   _eyes(){
-    // FIX DEFINITIVO: ojos empujados FUERA de la elipsoide (z=2.08 > superficie ≈1.93)
-    // transparent:true + depthWrite:false → integración correcta en pipeline de transparencia
-    // SIN depthTest:false (eso causaba los bloques parpadeantes)
+    // Ojos con depthTest:false para superponer sobre el shader transparente del cuerpo.
+    // El LID (párpado negro) fue eliminado — era la fuente de los "bloques negros"
     const makeEye=(x)=>{
       const eg=new THREE.Group();
-      // Helper: material transparente, no escribe al z-buffer, sí testea contra él
-      const dm=(color,emissive=0,emI=0)=>new THREE.MeshStandardMaterial({
-        color,emissive,emissiveIntensity:emI,roughness:.05,
-        transparent:true,opacity:.998,depthWrite:false
-      });
-      const bm=(color)=>new THREE.MeshBasicMaterial({
-        color,transparent:true,opacity:.998,depthWrite:false
-      });
 
-      const base=new THREE.Mesh(new THREE.SphereGeometry(.38,32,32),dm(0x0c0c22));
-      base.scale.set(1.0,1.15,.8); base.renderOrder=3; eg.add(base);
+      // Esclera oscura
+      const base=new THREE.Mesh(
+        new THREE.SphereGeometry(.38,32,32),
+        new THREE.MeshStandardMaterial({color:0x0c0c22,roughness:.05,depthTest:false})
+      );
+      base.scale.set(1.0,1.15,.8); base.renderOrder=2; eg.add(base);
 
-      const iMat=dm(0x3ae0d6,0x137880,.8);
-      const iris=new THREE.Mesh(new THREE.SphereGeometry(.24,32,32),iMat);
-      iris.position.set(x>0?-.03:.03,-.02,.12); iris.renderOrder=4; eg.add(iris);
+      // Iris — color ciclante arcoíris (se actualiza en _eyeAnim cada frame)
+      const iMat=new THREE.MeshStandardMaterial({
+        color:0x3ae0d6,emissive:0x137880,emissiveIntensity:.8,roughness:0,depthTest:false
+      });
+      const iris=new THREE.Mesh(new THREE.SphereGeometry(.24,24,24),iMat);
+      iris.position.set(x>0?-.03:.03,-.02,.12); iris.renderOrder=3; eg.add(iris);
       eg.userData.irisMat=iMat;
 
-      const pup=new THREE.Mesh(new THREE.SphereGeometry(.135,48,48),bm(0x010106));
-      pup.position.set(x>0?-.03:.03,-.02,.205); pup.renderOrder=5; eg.add(pup);
-
-      const s1=new THREE.Mesh(new THREE.SphereGeometry(.072,20,20),bm(0xffffff));
-      s1.position.set(.085,.115,.265); s1.renderOrder=6; eg.add(s1);
-      const s2=new THREE.Mesh(new THREE.SphereGeometry(.036,14,14),bm(0xffffff));
-      s2.position.set(-.08,-.08,.265); s2.renderOrder=6; eg.add(s2);
-
-      const lid=new THREE.Mesh(
-        new THREE.CylinderGeometry(.40,.40,.40,32,1,false,Math.PI,Math.PI),
-        new THREE.MeshBasicMaterial({color:0x0b1326,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false})
+      // Pupila — sin lid = sin bloques negros
+      const pup=new THREE.Mesh(
+        new THREE.SphereGeometry(.135,32,32),
+        new THREE.MeshBasicMaterial({color:0x010106,depthTest:false})
       );
-      lid.rotation.z=Math.PI/2; lid.position.z=.14; lid.renderOrder=7; eg.add(lid);
-      eg.userData.lid=lid;
+      pup.position.set(x>0?-.03:.03,-.02,.205); pup.renderOrder=4; eg.add(pup);
 
-      // CLAVE: z=2.08 → fuera de la elipsoide (superficie en esa dirección ≈1.93)
-      // Los ojos quedan DELANTE de la superficie del cuerpo → depth test correcto
-      eg.position.set(x*.90,.15,2.08);
+      // Brillos de ternura (estrellita)
+      const s1=new THREE.Mesh(
+        new THREE.SphereGeometry(.072,12,12),
+        new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false})
+      );
+      s1.position.set(.085,.115,.265); s1.renderOrder=5; eg.add(s1);
+      const s2=new THREE.Mesh(
+        new THREE.SphereGeometry(.036,8,8),
+        new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false})
+      );
+      s2.position.set(-.08,-.08,.265); s2.renderOrder=5; eg.add(s2);
+
+      // NO hay lid — era el origen de los bloques negros parpadeantes
+      eg.userData.lid = null; // mantener compatibilidad con _eyeAnim
+
+      eg.position.set(x,.15,1.82);
       this.g.add(eg); return eg;
     };
     this.eyeL=makeEye(-.82); this.eyeR=makeEye(.82);
@@ -883,16 +886,13 @@ class Pikitipu {
     this._updateHUD();
   }
   _eyeAnim(t,dt){
-    this.blinkTimer+=dt;
-    const forceSleep=(S.energy<=0);
-    if(!forceSleep&&!this.isBlinking&&this.blinkTimer>3.5+Math.random()*3){this.isBlinking=true;this.blinkTimer=0;}
     const readyToEvolve=(S.love>=95&&S.bond>=95&&S.energy>=95);
     [this.eyeL,this.eyeR].forEach(eg=>{
-      const lid=eg.userData.lid;
-      if(forceSleep) lid.material.opacity=THREE.MathUtils.lerp(lid.material.opacity,1.0,dt*5);
-      else if(this.isBlinking){ lid.material.opacity=Math.min(1,lid.material.opacity+dt*10); if(lid.material.opacity>=.95)this.isBlinking=false; }
-      else lid.material.opacity=Math.max(0,lid.material.opacity-dt*8);
-      eg.scale.y+=((S.mood==='sleepy'?.25:S.mood==='sad'?.6:1.0)-eg.scale.y)*.1;
+      // Lid eliminado — era la fuente de los bloques negros parpadeantes
+      // Expresión via escala vertical del grupo de ojo completo
+      const forceSleep=(S.energy<=0);
+      const tScaleY = forceSleep?0.10:S.mood==='sleepy'?0.24:S.mood==='sad'?0.62:1.0;
+      eg.scale.y += (tScaleY - eg.scale.y) * 0.1;
       if(readyToEvolve){
         eg.userData.irisMat.color.setRGB(2.5,2.5,2.5);
         eg.userData.irisMat.emissive.setRGB(2.0,2.0,2.0);
@@ -1032,29 +1032,27 @@ class DragonaHakuryu {
     this.breathPhase+=dt*.4;
 
     // ── DRAGON ENERGY DECAY ───────────────────────────────────
-    // Timer activo (tarea en curso): 2%/min → muy lento, el dragón se sostiene trabajando
-    // Timer inactivo + pendientes:  15%/min → urgencia: ¡inicia una tarea!
-    // Timer inactivo + sin pendientes: 22%/min → crítico: ¡crea tareas!
-    // Inactivo >60s extra: x1.4 adicional
+    // Timer activo (tarea corriendo): ~3%/min — se sostiene
+    // Sin timer + pendientes: ~70%/min (~1.4min desde 100%)
+    // Sin timer + sin pendientes: ~100%/min (~1min desde 100%) — máxima urgencia
+    // Extra si inactivo >30s: x1.5
     const inactiveTime = t - S.lastTaskTime;
     const noPendientes = (S.pendientes===0);
     let decayRate;
     if(S.timerActive){
-      decayRate = 0.00033;                           // ~2%/min — trabajando
+      decayRate = 0.0005;                               // ~3%/min — trabajando
     } else if(noPendientes){
-      decayRate = 0.0067 * (inactiveTime>45?1.5:1.0); // ~40-60%/min — sin propósito
+      decayRate = 0.017 * (inactiveTime>30?1.5:1.0);   // ~100-150%/min
     } else {
-      decayRate = 0.0042 * (inactiveTime>45?1.5:1.0); // ~25-37%/min — tiene tareas pero no actúa
+      decayRate = 0.012 * (inactiveTime>30?1.5:1.0);   // ~70-105%/min
     }
     S.dragonEnergy = Math.max(0, S.dragonEnergy - decayRate * dt * 60);
     updateDragonEnergyBar();
 
-    // Feedback visual proporcional a la energía del dragón
+    // Feedback visual proporcional a la energía
     const eRatio = S.dragonEnergy / 100;
-    // Opacidad del shader: a menos energía más translúcida la dragona
-    sharedU.uOpacityBase.value = 0.15 * (0.4 + eRatio * 0.6);
+    sharedU.uOpacityBase.value    = 0.15 * (0.4 + eRatio * 0.6);
     sharedU.uFresnelIntensity.value = 0.55 * (0.5 + eRatio * 0.5);
-    // Movimiento más lento al debilitarse
     const moveScale = 0.4 + eRatio * 0.6;
 
     this.g.scale.setScalar((1.0+Math.sin(this.breathPhase)*.015) * (0.85 + eRatio * 0.15));
@@ -1062,16 +1060,27 @@ class DragonaHakuryu {
     this.g.rotation.z=Math.sin(t*1.2*moveScale)*.02;
     this.g.rotation.y=Math.sin(t*.2*moveScale)*.03;
 
-    // Alerta crítica < 30%
-    if(S.dragonEnergy < 30 && S.dragonEnergy > 0){
-      drgL.intensity = 3 + Math.abs(Math.sin(t*3)) * 2; // parpadeo urgente
+    // ── ALERTAS VISUALES POR UMBRAL ──────────────────────────
+    if(S.dragonEnergy < 8 && S.dragonEnergy > 0){
+      // <8%: rojo intenso pulsante rápido — involución inminente
+      drgL.color.setRGB(1,0.1,0);
+      drgL.intensity = 5 + Math.abs(Math.sin(t*8)) * 4;
+      bloom.strength = S.bloomBase + 1.2 + Math.abs(Math.sin(t*8)) * 0.8;
+    } else if(S.dragonEnergy < 20){
+      // <20%: rojo suave pulsante — alerta
+      drgL.color.setRGB(1, 0.25 + eRatio*0.5, 0);
+      drgL.intensity = 3.5 + Math.abs(Math.sin(t*4)) * 2.5;
+      bloom.strength = S.bloomBase + 0.5;
     } else {
+      // Normal: luz celeste
+      drgL.color.setRGB(0.8, 0.9, 1.0);
       drgL.intensity = 4 + Math.sin(t*.7)*.8;
+      bloom.strength = S.bloomBase + 0.3;
     }
 
-    // ── AUTO-RETORNO AL LLEGAR A 0 ───────────────────────────
-    if(S.dragonEnergy <= 0 && S.evoPhase === 'dragon'){
-      _triggerDragonReturn('depletion'); // retorno narrativo: "semilla de luz"
+    // ── AUTO-RETORNO: involución al llegar a 8% ───────────────
+    if(S.dragonEnergy <= 8 && S.evoPhase === 'dragon'){
+      _triggerDragonReturn('depletion');
     }
 
     if(this.wings){
