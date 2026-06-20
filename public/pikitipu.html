@@ -40,32 +40,115 @@ body{overflow:hidden;background:#03030d;color:#f0f0ff;font-family:'Quicksand',sa
 #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:999;transition:opacity .15s}
 #flash.on{opacity:1}
 
-/* ── DROPMASK ── */
+/* ── DROPMASK — huevo durmiente ── */
 #dropmask{
   position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;
-  background:rgba(4,4,14,.97);transition:opacity .5s;
+  background:rgba(3,3,13,.97);transition:opacity .8s,pointer-events .8s;
+  cursor:pointer;
 }
 #dropmask.hidden{opacity:0;pointer-events:none}
-.loader-egg{
-  width:110px;height:140px;margin:0 auto 24px;
-  background:linear-gradient(135deg,var(--cyan),var(--lav),var(--mint));
+
+/* Huevo durmiente */
+.egg-scene{position:relative;margin-bottom:28px;}
+.sleep-egg{
+  width:110px;height:145px;margin:0 auto;
+  background:linear-gradient(160deg,rgba(99,245,161,.12) 0%,rgba(92,230,255,.08) 50%,rgba(211,158,255,.12) 100%);
   border-radius:50% 50% 50% 50%/60% 60% 40% 40%;
-  box-shadow:0 0 60px rgba(77,219,255,.4);animation:eggFloat 3s ease-in-out infinite;
+  border:1px solid rgba(99,245,161,.25);
+  box-shadow:0 0 45px rgba(92,230,255,.12),0 0 90px rgba(99,245,161,.06),
+             inset 0 0 25px rgba(255,255,255,.03);
+  position:relative;overflow:hidden;
+  animation:eggBreathe 3.8s ease-in-out infinite;
 }
-@keyframes eggFloat{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-18px) rotate(3deg)}}
-.egg-title{font-family:'Fredoka',sans-serif;font-size:2rem;font-weight:500;
+@keyframes eggBreathe{
+  0%,100%{transform:scaleX(1) scaleY(1) rotate(-1.5deg)}
+  50%     {transform:scaleX(1.03) scaleY(1.04) rotate(1.5deg)}
+}
+/* Brillo interno pulsante */
+.sleep-egg::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 40% 35%,rgba(200,255,220,.12) 0%,transparent 70%);
+  animation:eggGlow 3.8s ease-in-out infinite;
+}
+@keyframes eggGlow{0%,100%{opacity:.6}50%{opacity:1}}
+/* Ojos dormidos — dos arcos suaves */
+.egg-eyes{
+  position:absolute;top:52%;left:50%;transform:translate(-50%,-50%);
+  display:flex;gap:22px;align-items:center;
+}
+.egg-eye{
+  width:18px;height:6px;
+  border-bottom:2px solid rgba(99,245,161,.7);
+  border-radius:0 0 18px 18px;
+  animation:eyeDroop 3.8s ease-in-out infinite;
+}
+@keyframes eyeDroop{0%,100%{opacity:.7;transform:scaleY(1)}50%{opacity:.4;transform:scaleY(.7)}}
+/* ZZZ flotantes */
+.zzz-wrap{
+  position:absolute;top:-8px;right:-10px;
+  display:flex;flex-direction:column;gap:2px;align-items:flex-end;
+}
+.zzz-wrap span{
+  font-size:.7rem;color:rgba(92,230,255,.6);
+  font-family:'Fredoka',sans-serif;font-weight:300;
+  animation:floatZ 2.4s ease-in-out infinite;
+}
+.zzz-wrap span:nth-child(1){animation-delay:0s;font-size:.6rem}
+.zzz-wrap span:nth-child(2){animation-delay:.4s;font-size:.75rem}
+.zzz-wrap span:nth-child(3){animation-delay:.8s;font-size:.9rem}
+@keyframes floatZ{
+  0%  {opacity:0;transform:translateY(0) translateX(0)}
+  30% {opacity:.8}
+  100%{opacity:0;transform:translateY(-22px) translateX(6px)}
+}
+/* Crack de eclosión */
+.sleep-egg.hatching{animation:hatchShake .15s ease-in-out 4;}
+@keyframes hatchShake{
+  0%,100%{transform:rotate(-1.5deg) translateX(0)}
+  25%    {transform:rotate(3deg) translateX(-3px)}
+  75%    {transform:rotate(-3deg) translateX(3px)}
+}
+.sleep-egg.hatching::after{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse,rgba(200,255,220,.4) 0%,transparent 70%);
+  animation:hatchFlash .6s ease-out;
+}
+@keyframes hatchFlash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+
+/* Textos */
+.egg-title{font-family:'Fredoka',sans-serif;font-size:1.85rem;font-weight:400;
   background:linear-gradient(90deg,var(--mint),var(--cyan));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:8px;}
-.egg-sub{font-size:.85rem;opacity:.5;margin-bottom:28px;}
-.btn-load{
-  padding:14px 38px;border:none;border-radius:50px;cursor:pointer;
-  background:linear-gradient(135deg,var(--mint),var(--cyan));
-  color:#060612;font-family:'Fredoka',sans-serif;font-size:1.1rem;font-weight:600;
-  box-shadow:0 6px 30px rgba(82,214,138,.35);transition:all .3s;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:6px;text-align:center;}
+.egg-sub{font-size:.8rem;opacity:.38;margin-bottom:24px;text-align:center;letter-spacing:.04em;}
+
+/* Botón principal conectar */
+.btn-connect{
+  padding:13px 36px;border:none;border-radius:50px;cursor:pointer;
+  background:linear-gradient(135deg,rgba(99,245,161,.15),rgba(92,230,255,.15));
+  border:1px solid rgba(99,245,161,.4);
+  color:var(--mint);font-family:'Fredoka',sans-serif;font-size:1.05rem;font-weight:500;
+  letter-spacing:.08em;backdrop-filter:blur(10px);
+  box-shadow:0 4px 28px rgba(99,245,161,.12);transition:all .35s;display:block;margin:0 auto 14px;
 }
-.btn-load:hover{transform:translateY(-3px) scale(1.04);}
-.btn-skip{margin-top:14px;display:block;font-size:.8rem;opacity:.4;cursor:pointer;background:none;border:none;color:#fff;font-family:'Quicksand',sans-serif}
-.btn-skip:hover{opacity:.7}
+.btn-connect:hover{background:linear-gradient(135deg,rgba(99,245,161,.28),rgba(92,230,255,.2));
+  box-shadow:0 6px 40px rgba(99,245,161,.28);color:#fff;border-color:rgba(255,255,255,.5);}
+.btn-connect:disabled{opacity:.4;cursor:default}
+.btn-connect.connecting{
+  animation:connectPulse 1s ease-in-out infinite;
+  color:var(--cyan);border-color:rgba(92,230,255,.5);
+}
+@keyframes connectPulse{0%,100%{box-shadow:0 4px 28px rgba(92,230,255,.15)}
+                         50%{box-shadow:0 4px 50px rgba(92,230,255,.45)}}
+
+/* Opciones secundarias */
+.egg-opts{display:flex;align-items:center;gap:12px;justify-content:center;margin-top:4px;}
+.egg-opts-sep{font-size:.7rem;opacity:.25;}
+.cegg-link,.skip-link{
+  font-size:.75rem;opacity:.38;cursor:pointer;background:none;border:none;
+  color:#f0f0ff;font-family:'Quicksand',sans-serif;transition:opacity .2s;
+}
+.cegg-link:hover,.skip-link:hover{opacity:.7;}
 #file-input{display:none}
 
 /* ── HUD ── */
@@ -231,14 +314,21 @@ body{overflow:hidden;background:#03030d;color:#f0f0ff;font-family:'Quicksand',sa
   </div>
 </div>
 
-<div id="dropmask">
-  <div style="text-align:center">
-    <div class="loader-egg"></div>
-    <div class="egg-title">🌿 Pikitipu 2.0</div>
-    <div class="egg-sub">Materialización de tu Voluntad Total</div>
-    <button class="btn-load" onclick="document.getElementById('file-input').click()">🥚 Cargar Huevo Cósmico (.cegg)</button>
-    <input type="file" id="file-input" accept=".cegg,.json">
-    <button class="btn-skip" onclick="skipCegg()">Iniciar sin huevo →</button>
+<div id="dropmask" onclick="hatchAndStart()">
+  <div style="text-align:center;cursor:pointer">
+    <div class="egg-scene">
+      <div class="sleep-egg" id="hatch-egg">
+        <div class="egg-eyes">
+          <div class="egg-eye"></div>
+          <div class="egg-eye"></div>
+        </div>
+      </div>
+      <div class="zzz-wrap">
+        <span>z</span><span>z</span><span>z</span>
+      </div>
+    </div>
+    <!-- .cegg oculto: arrastrar archivo encima activa -->
+    <input type="file" id="file-input" accept=".cegg,.json" style="display:none">
   </div>
 </div>
 
@@ -530,53 +620,47 @@ class Pikitipu {
     this.body=new THREE.Mesh(geo,this.mat); this.g.add(this.body);
   }
   _eyes(){
-    // FIX PUPILA: depthTest:false en todas las capas del ojo para evitar
-    // el artefacto de bounding-box cuadrado que emerge con depthWrite:false en el cuerpo
+    // FIX DEFINITIVO: ojos empujados FUERA de la elipsoide (z=2.08 > superficie ≈1.93)
+    // transparent:true + depthWrite:false → integración correcta en pipeline de transparencia
+    // SIN depthTest:false (eso causaba los bloques parpadeantes)
     const makeEye=(x)=>{
       const eg=new THREE.Group();
-      eg.renderOrder=2; // renderizar ojos DESPUÉS del cuerpo transparente
-
-      const base=new THREE.Mesh(
-        new THREE.SphereGeometry(.38,32,32),
-        new THREE.MeshStandardMaterial({color:0x0c0c22,roughness:.05,depthTest:false})
-      );
-      base.scale.set(1.0,1.15,.8); base.renderOrder=2; eg.add(base);
-
-      const iMat=new THREE.MeshStandardMaterial({
-        color:0x3ae0d6,emissive:0x137880,emissiveIntensity:.8,roughness:0,depthTest:false
+      // Helper: material transparente, no escribe al z-buffer, sí testea contra él
+      const dm=(color,emissive=0,emI=0)=>new THREE.MeshStandardMaterial({
+        color,emissive,emissiveIntensity:emI,roughness:.05,
+        transparent:true,opacity:.998,depthWrite:false
       });
+      const bm=(color)=>new THREE.MeshBasicMaterial({
+        color,transparent:true,opacity:.998,depthWrite:false
+      });
+
+      const base=new THREE.Mesh(new THREE.SphereGeometry(.38,32,32),dm(0x0c0c22));
+      base.scale.set(1.0,1.15,.8); base.renderOrder=3; eg.add(base);
+
+      const iMat=dm(0x3ae0d6,0x137880,.8);
       const iris=new THREE.Mesh(new THREE.SphereGeometry(.24,32,32),iMat);
-      iris.position.set(x>0?-.03:.03,-.02,.12); iris.renderOrder=3; eg.add(iris); eg.userData.irisMat=iMat;
+      iris.position.set(x>0?-.03:.03,-.02,.12); iris.renderOrder=4; eg.add(iris);
+      eg.userData.irisMat=iMat;
 
-      // PUPILA: círculo perfecto — SphereGeometry con más segmentos + depthTest:false
-      const pup=new THREE.Mesh(
-        new THREE.SphereGeometry(.135,48,48),                        // 48 seg → círculo suave
-        new THREE.MeshBasicMaterial({color:0x010106,depthTest:false}) // depthTest:false → sin caja
-      );
-      pup.position.set(x>0?-.03:.03,-.02,.205); pup.renderOrder=4; eg.add(pup);
+      const pup=new THREE.Mesh(new THREE.SphereGeometry(.135,48,48),bm(0x010106));
+      pup.position.set(x>0?-.03:.03,-.02,.205); pup.renderOrder=5; eg.add(pup);
 
-      // Brillo 1 — destello principal (ternura clave)
-      const s1=new THREE.Mesh(
-        new THREE.SphereGeometry(.072,20,20),
-        new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false})
-      );
-      s1.position.set(.085,.115,.265); s1.renderOrder=5; eg.add(s1);
+      const s1=new THREE.Mesh(new THREE.SphereGeometry(.072,20,20),bm(0xffffff));
+      s1.position.set(.085,.115,.265); s1.renderOrder=6; eg.add(s1);
+      const s2=new THREE.Mesh(new THREE.SphereGeometry(.036,14,14),bm(0xffffff));
+      s2.position.set(-.08,-.08,.265); s2.renderOrder=6; eg.add(s2);
 
-      // Brillo 2 — mini destello secundario
-      const s2=new THREE.Mesh(
-        new THREE.SphereGeometry(.036,14,14),
-        new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false})
-      );
-      s2.position.set(-.08,-.08,.265); s2.renderOrder=5; eg.add(s2);
-
-      // Párpado
       const lid=new THREE.Mesh(
         new THREE.CylinderGeometry(.40,.40,.40,32,1,false,Math.PI,Math.PI),
-        new THREE.MeshBasicMaterial({color:0x0b1326,transparent:true,opacity:0,side:THREE.DoubleSide,depthTest:false})
+        new THREE.MeshBasicMaterial({color:0x0b1326,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false})
       );
-      lid.rotation.z=Math.PI/2; lid.position.z=.14; lid.renderOrder=6; eg.add(lid); eg.userData.lid=lid;
+      lid.rotation.z=Math.PI/2; lid.position.z=.14; lid.renderOrder=7; eg.add(lid);
+      eg.userData.lid=lid;
 
-      eg.position.set(x,.15,1.82); this.g.add(eg); return eg;
+      // CLAVE: z=2.08 → fuera de la elipsoide (superficie en esa dirección ≈1.93)
+      // Los ojos quedan DELANTE de la superficie del cuerpo → depth test correcto
+      eg.position.set(x*.90,.15,2.08);
+      this.g.add(eg); return eg;
     };
     this.eyeL=makeEye(-.82); this.eyeR=makeEye(.82);
   }
@@ -616,8 +700,19 @@ class Pikitipu {
     if(isRubedo){ this._triggerRubedo(); return; }
     const uc = new THREE.Color(userColorHex);
     const pc = new THREE.Color(PRIO[priority]||0x5ce6ff);
-    // 60% usuario, 40% prioridad
-    const mixed = uc.clone().lerp(pc, 0.4);
+    // Brillo del color del usuario
+    const brightness = uc.r*.299 + uc.g*.587 + uc.b*.114;
+    let mixed;
+    if(brightness < 0.2){
+      // Color muy oscuro → usar color de prioridad con leve tinte del aspecto
+      mixed = pc.clone().lerp(uc, 0.12);
+    } else {
+      // 60% usuario, 40% prioridad
+      mixed = uc.clone().lerp(pc, 0.4);
+    }
+    // Garantizar brillo mínimo visible (evita grises)
+    const m = mixed.r*.299 + mixed.g*.587 + mixed.b*.114;
+    if(m < 0.35) mixed.multiplyScalar(0.35 / Math.max(m, 0.001));
     this.flash(mixed.getHex(), intensity, dur);
   }
   _triggerRubedo(){
@@ -629,13 +724,16 @@ class Pikitipu {
   }
 
   // ── Catarsis proporcional a días de resistencia ────────────
-  _catharsis(days){
+  _catharsis(days, pvDelta=0){
     const tier = days>=61 ? 'mega' : days>=15 ? 'alta' : days>=4 ? 'media' : 'leve';
-    const energyGain = {leve:15, media:22, alta:32, mega:45}[tier];
-    const hearts     = {leve:3,  media:6,  alta:10, mega:15}[tier];
-    const msg        = days===0
+    const energyBase = {leve:12, media:20, alta:30, mega:42}[tier];
+    // +1 energía por cada 30 PV ganados (proporcional a voluntad invertida)
+    const energyFromPV = Math.min(20, Math.floor(pvDelta / 30));
+    const energyGain   = energyBase + energyFromPV;
+    const hearts       = {leve:3,  media:6,  alta:10, mega:15}[tier];
+    const msg          = days===0
       ? '✨ ¡Tarea completada!'
-      : `✨ ¡${days} días de resistencia liberados!`;
+      : `✨ ¡${days} días liberados!`;
 
     S.energy    = Math.min(100, S.energy+energyGain);
     S.happiness = Math.min(100, S.happiness+14);
@@ -645,7 +743,6 @@ class Pikitipu {
     showMood(msg);
 
     if(tier==='alta'||tier==='mega'){
-      // Temblor rápido
       let shakes=0; const shakeInt=setInterval(()=>{
         this.g.position.x=Math.sin(shakes*8)*.18;
         if(++shakes>8){this.g.position.x=0;clearInterval(shakeInt);}
@@ -653,45 +750,45 @@ class Pikitipu {
       setTimeout(()=>this.flash(0xffffff,.9,.3), 160);
     }
     if(tier==='mega'){
-      // Scale bounce
       this.g.scale.set(1.3,1.3,1.3);
       setTimeout(()=>this.g.scale.set(1,1,1), 400);
       toast('🌟 ¡Resistencia épica!',`${days} días superados. ¡Pikitipu explota de alegría!`,'#ffd700');
-      // Desbloquear evolución si stats altos
       if(S.energy>70) _checkEvolutionReady();
     }
   }
 
   // ── Reacciones a eventos KP ───────────────────────────────
   onTaskComplete(msg={}){
-    const pv         = msg.pv          || 0;
+    const pvNew      = msg.pv          || 0;
     const mu         = msg.mu          || 0;
     const days       = msg.days_delayed|| 0;
     const priority   = msg.priority    || 'B';
     const userColor  = msg.user_color  || '#5ce6ff';
-    const taskName   = msg.task_name   || '';
+
+    // Delta de PV: cuántos PV ganó esta tarea específica
+    const pvDelta    = pvNew > S.pv ? pvNew - S.pv : 0;
 
     S.lastUserColor = userColor;
     S.lastPriority  = priority;
     S.lastTaskTime  = _elapsed;
-    if(pv) S.pv=pv; if(mu) S.mu=mu;
+    if(pvNew) S.pv=pvNew; if(mu) S.mu=mu;
     S.tasks++;
     this.squish=.25;
 
-    // Flash mezclado con firma del aspecto
     this.flashMixed(userColor, priority, .88, .7);
+    // Catarsis proporcional a días + PV
+    this._catharsis(days, pvDelta);
 
-    // Catarsis proporcional a días de resistencia
-    this._catharsis(days);
-
-    // MODO DRAGÓN: multiplicador 1.5x + recarga energía
     if(S.form==='dragon'){
-      const bonus=Math.round(pv*.5);
+      const bonus=Math.round((pvNew||0)*.5);
       S.dragonPvBonus+=bonus;
-      const drgGain = days>=61?80:days>=15?55:days>=4?30:20;
+      // Recarga energía dragón también proporcional a PV delta
+      const drgBase = days>=61?80:days>=15?55:days>=4?30:20;
+      const drgPVBonus = Math.min(20, Math.floor(pvDelta / 50)); // +1 por cada 50 PV
+      const drgGain = drgBase + drgPVBonus;
       S.dragonEnergy=Math.min(100,S.dragonEnergy+drgGain);
       updateDragonEnergyBar();
-      showMood(`🔥 PV x1.5 +${bonus} · Dragon +${drgGain}`);
+      showMood(`🔥 PV x1.5 +${bonus} · 🐲+${drgGain}`);
     }
 
     this._syncHUDStats();
@@ -917,7 +1014,7 @@ class DragonaHakuryu {
         const f=new THREE.Mesh(new THREE.ShapeGeometry(shape),this.dragonMat);
         f.position.set(side*.15,i*.12,-.05);
         f.rotation.z=side*(Math.PI*.82-i*.12); f.rotation.x=.3+i*.05; f.rotation.y=side*.2;
-        f.userData={phaseOffset:i*.3,baseRy:f.rotation.y}; ws.add(f);
+        f.userData={phaseOffset:i*.3, baseRy:f.rotation.y, baseRz:f.rotation.z, idx:i}; ws.add(f);
       }
       ws.position.set(0,3.8,-.1); this.wings.add(ws);
     });
@@ -945,9 +1042,9 @@ class DragonaHakuryu {
     if(S.timerActive){
       decayRate = 0.00033;                           // ~2%/min — trabajando
     } else if(noPendientes){
-      decayRate = 0.0037 * (inactiveTime>60?1.4:1); // ~22-31%/min — sin propósito
+      decayRate = 0.0067 * (inactiveTime>45?1.5:1.0); // ~40-60%/min — sin propósito
     } else {
-      decayRate = 0.0025 * (inactiveTime>60?1.4:1); // ~15-21%/min — tiene tareas pero no actúa
+      decayRate = 0.0042 * (inactiveTime>45?1.5:1.0); // ~25-37%/min — tiene tareas pero no actúa
     }
     S.dragonEnergy = Math.max(0, S.dragonEnergy - decayRate * dt * 60);
     updateDragonEnergyBar();
@@ -978,14 +1075,39 @@ class DragonaHakuryu {
     }
 
     if(this.wings){
-      this.wings.children.forEach(ws=>{
-        ws.children.forEach(f=>{ f.rotation.y=f.userData.baseRy+Math.sin(t*1.5*moveScale+f.userData.phaseOffset)*.1; });
+      // Aleteo idle suave + aleteo fuerte al hacer click (_wflap timer)
+      const flapExtra = (this._wflap > 0)
+        ? Math.sin((1-(this._wflap/2.8)) * Math.PI * 3) * 0.55  // 3 aleteos rápidos
+        : 0;
+      if(this._wflap > 0) this._wflap -= dt;
+
+      this.wings.children.forEach((ws,si)=>{
+        const side = si===0 ? -1 : 1;
+        ws.children.forEach(f=>{
+          // Movimiento idle
+          const idleY = f.userData.baseRy + Math.sin(t*1.5*moveScale+f.userData.phaseOffset)*.1;
+          // Aleteo: las plumas de afuera se mueven más
+          const flapMult = 0.5 + (f.userData.idx||0) * 0.12;
+          f.rotation.y = idleY + flapExtra * side * flapMult * 0.4;
+          // Z del ala también se mueve (apertura)
+          f.rotation.z = f.userData.baseRz + flapExtra * side * flapMult * 0.25;
+        });
       });
     }
     const pp=this.pCloud.geometry.attributes.position;
     for(let i=0;i<pp.count;i++){ pp.setY(i,pp.getY(i)+dt*.5*eRatio); if(pp.getY(i)>8)pp.setY(i,-5); }
     pp.needsUpdate=true;
   }
+
+  flapWings(){
+    this._wflap = 2.8; // duración más larga — el dragón te reconoce con calma
+    // Flash dorado al aletear — el dragón te reconoce
+    sharedU.flashCol.value.set(0xffd700);
+    sharedU.flashInt.value = 0.38;
+    S.flashRate = 0.38 / 0.5;
+    S.love = Math.min(100, S.love + 5);
+  }
+
   setVisible(v){ this.g.visible=v; }
 }
 
@@ -1063,10 +1185,37 @@ function animate(){
     raycaster.setFromCamera(mouse,camera); isHover=raycaster.intersectObject(piki.body,false).length>0;
     if(isHover&&isDown&&!Cam.isDragging){isPetting=true;document.body.classList.add('petting');piki.pet(dt);}
   }
+  // Cariño desde ventana PiP — window._pipPetting es escrito por el pip window
+  if(window._pipPetting && _pipActive && S.evoPhase==='idle'){
+    isPetting=true;
+    if(S.form==='piki') piki.pet(dt);
+    // En modo dragón: cariño aumenta felicidad (y el dragón reacciona)
+    if(S.form==='dragon'){
+      S.happiness = Math.min(100, S.happiness + 20*dt);
+      S.love      = Math.min(100, S.love + 8*dt);
+    }
+  }
+  // Cariño al dragón desde canvas principal (click en canvas ya llama flapWings, esto da felicidad continua)
+  if(isDown && S.form==='dragon' && S.evoPhase==='dragon'){
+    S.happiness = Math.min(100, S.happiness + 15*dt);
+  }
   if(!isPetting) document.body.classList.remove('petting');
 
   piki.update(t,dt,isPetting); drg.update(t,dt);
   evoPart.update(dt); updateEvolution(dt); updateHearts(dt);
+
+  // Actualizar stats visuales en ventana PiP (throttled ~500ms)
+  if(_pipWin && !_pipWin.closed && _pipWin._statsBar && Math.floor(t*2)!==_pipStatsTick){
+    _pipStatsTick=Math.floor(t*2);
+    try{
+      const sb=_pipWin._statsBar;
+      const h=sb.querySelector('#pb-h'), e=sb.querySelector('#pb-e'),
+            b=sb.querySelector('#pb-bond'), l=sb.querySelector('#pb-love');
+      if(h)h.style.width=S.happiness+'%'; if(e)e.style.width=S.energy+'%';
+      if(b)b.style.width=S.bond+'%';     if(l)l.style.width=S.love+'%';
+    }catch(_){}
+  }
+
   composer.render();
 }
 
@@ -1148,6 +1297,7 @@ function updateEvolution(dt){
       document.getElementById('settings-btn').style.opacity='1';
       S.form='piki'; S.evoPhase='idle'; S.evoTimer=0;
       bloom.strength=S.bloomBase;
+      sendDragonBonusToKP(); // ← enviar bonus acumulado de vuelta a KP
       showMood('💚 Pikitipu regresó');
     }
   }
@@ -1245,8 +1395,74 @@ function parseCegg(raw){
 document.getElementById('file-input').addEventListener('change',e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>parseCegg(ev.target.result);r.readAsText(f);}});
 window.addEventListener('dragover',e=>e.preventDefault());
 window.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f){const r=new FileReader();r.onload=ev=>parseCegg(ev.target.result);r.readAsText(f);}});
-function hideDrop(){document.getElementById('dropmask').classList.add('hidden');}
-window.skipCegg=()=>{hideDrop();showMood('💚 Hola, Pikitipu');};
+function hideDrop(){ document.getElementById('dropmask').classList.add('hidden'); }
+window.skipCegg=()=>{ hideDrop(); showMood('💚 Hola, Pikitipu'); };
+
+// Click en el huevo → hatch + conectar WS en background
+function hatchAndStart(){
+  _hatchEgg(()=>{
+    connectWS(); // intenta en background, sin bloquear
+  });
+}
+
+// Eclosión del huevo al conectar
+function _hatchEgg(onComplete){
+  const egg = document.getElementById('hatch-egg');
+  const btn = document.getElementById('btn-connect');
+  if(btn){ btn.disabled=true; }
+
+  // 1. Temblor
+  egg.classList.add('hatching');
+
+  // 2. Flash blanco + ocultar dropmask
+  setTimeout(()=>{
+    const fl = document.getElementById('flash');
+    fl.classList.add('on');
+    setTimeout(()=>{
+      fl.classList.remove('on');
+      hideDrop();
+      showMood('💚 ¡Pikitipu despertó!');
+      if(onComplete) onComplete();
+    }, 220);
+  }, 700);
+}
+
+// Botón principal del dropmask: conectar a KP con animación
+function startKPConnection(){
+  const btn = document.getElementById('btn-connect');
+  if(!btn) return;
+  btn.textContent = '⏳ Conectando...';
+  btn.classList.add('connecting');
+  btn.disabled = true;
+
+  // Iniciar WS — al conectar eclosiona el huevo
+  const _onFirstConnect = ()=>{
+    _hatchEgg(()=>{
+      toast('🔌 KP conectado','El ecosistema está vivo.','#63f5a1');
+    });
+  };
+
+  // Hook de un solo uso en el evento de conexión
+  const _origSetStatus = _setWSStatus;
+  let _hooked = false;
+  window._onWSFirstConnect = ()=>{
+    if(_hooked) return; _hooked=true;
+    _onFirstConnect();
+  };
+
+  // Intentar conexión
+  connectWS();
+
+  // Si no conecta en 6s → eclosionar de todas formas (offline mode)
+  setTimeout(()=>{
+    if(!_wsReady && document.getElementById('dropmask') && !document.getElementById('dropmask').classList.contains('hidden')){
+      btn.textContent='🔌 Conectar a KP';
+      btn.classList.remove('connecting');
+      btn.disabled=false;
+      toast('⚠️ Sin conexión','KP no encontrado. Puedes continuar igual.','#ff8da1');
+    }
+  }, 6000);
+}
 
 // ══════════════════════════════════════════════════════════════
 // WEBSOCKET KP
@@ -1301,102 +1517,310 @@ function _triggerDragonReturn(reason){
 // (protegida contra llamadas múltiples con _dragonReturnPending)
 
 // ══════════════════════════════════════════════════════════════
-// PICTURE-IN-PICTURE — ventana flotante solo con Pikitipu/Dragona
-// La clave: canvas.captureStream() captura SOLO el WebGL (sin HTML)
+// PICTURE-IN-PICTURE — ventana flotante con zoom e interacción
+// Estrategia: al activar PiP, la cámara hace zoom close-up.
+// El stream del canvas captura esa vista ampliada (sin HTML overlays).
+// En Document PiP: overlay táctil que llama de vuelta al main window.
 // ══════════════════════════════════════════════════════════════
-let _pipStream = null;
+let _pipStream    = null;
+let _pipActive    = false;
+let _pipPetting   = false;
+let _pipWin       = null;
+let _savedRadius  = 11;
+let _savedYOffset = 0.5;
+let _savedTheta   = 0;
+let _savedPhi     = 0;
+let _pipStatsTick = -1;  // para throttle de stats en PiP
+
+// Zoom params para PiP — Pikitipu llena casi todo el frame
+const PIP_RADIUS  = 7.5;   // zoom suave — Pikitipu más grande sin pixelar
+const PIP_YOFFSET = 0.4;
+
+function _pipZoomIn(){
+  _savedRadius  = Cam.targetRadius;
+  _savedYOffset = Cam.targetYOffset;
+  _savedTheta   = Cam.targetTheta;
+  _savedPhi     = Cam.targetPhi;
+  Cam.targetRadius  = PIP_RADIUS;
+  Cam.targetYOffset = PIP_YOFFSET;
+  Cam.targetTheta   = 0;
+  Cam.targetPhi     = 0;
+}
+function _pipZoomOut(){
+  Cam.targetRadius  = _savedRadius;
+  Cam.targetYOffset = _savedYOffset;
+  Cam.targetTheta   = _savedTheta;
+  Cam.targetPhi     = _savedPhi;
+}
+
+function _pipClose(btn){
+  _pipActive  = false;
+  _pipPetting = false;
+  _pipWin     = null;
+  _pipZoomOut();
+  if(btn){ btn.textContent='📺 Flotar Pikitipu'; btn.classList.remove('active'); }
+  showMood('🌿 Pikitipu de vuelta');
+}
+
+// Overlay interactivo para el Document PiP window
+function _buildPipOverlay(pipWin, btn){
+  const doc  = pipWin.document;
+  const body = doc.body;
+
+  // ── Barra de stats visual (4 líneas de color sin texto) ──
+  const statsBar = doc.createElement('div');
+  statsBar.id='pip-stats';
+  statsBar.style.cssText=`position:fixed;top:0;left:0;right:0;padding:7px 7px 0;
+    display:flex;gap:3px;opacity:0;transition:opacity .35s;z-index:30;pointer-events:none;`;
+  statsBar.innerHTML=`
+    <div style="flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:3px">
+      <div id="pb-h"    style="height:100%;width:${S.happiness}%;background:linear-gradient(90deg,#ff8da1,#ffaac5);border-radius:3px;transition:width .6s"></div></div>
+    <div style="flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:3px">
+      <div id="pb-e"    style="height:100%;width:${S.energy}%;background:linear-gradient(90deg,#63f5a1,#5ce6ff);border-radius:3px;transition:width .6s"></div></div>
+    <div style="flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:3px">
+      <div id="pb-bond" style="height:100%;width:${S.bond}%;background:linear-gradient(90deg,#d39eff,#e0b0ff);border-radius:3px;transition:width .6s"></div></div>
+    <div style="flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:3px">
+      <div id="pb-love" style="height:100%;width:${S.love}%;background:linear-gradient(90deg,#ffd700,#ffec6e);border-radius:3px;transition:width .6s"></div></div>`;
+  body.appendChild(statsBar);
+
+  evoBtn.addEventListener('click', ()=>{ if(window.opener) window.opener.triggerEvolution(); });
+
+  // ── Overlay táctil: drag = rotar cámara · click sin drag = acariciar ──
+  const ov = doc.createElement('div');
+  ov.style.cssText=`position:fixed;inset:0;z-index:10;cursor:grab;background:transparent;touch-action:none;`;
+  body.appendChild(ov);
+
+  let dragX=0, dragY=0, didDrag=false;
+  let _hideStats;
+
+  const showStats=()=>{
+    statsBar.style.opacity='1';
+    clearTimeout(_hideStats);
+    _hideStats=setTimeout(()=>statsBar.style.opacity='0',2000);
+  };
+
+  ov.addEventListener('mousemove', e=>{
+    showStats();
+    if(!window._pipDragging) return;
+    const dx=e.clientX-dragX, dy=e.clientY-dragY;
+    dragX=e.clientX; dragY=e.clientY;
+    if(Math.abs(dx)>2||Math.abs(dy)>2) didDrag=true;
+    // Rotar cámara en la ventana principal
+    if(window.opener && window.opener.Cam){
+      window.opener.Cam.targetTheta -= dx*0.012;
+      window.opener.Cam.targetPhi   += dy*0.012;
+      window.opener.Cam.targetPhi=Math.max(-0.4,Math.min(0.8,window.opener.Cam.targetPhi));
+    }
+  });
+  ov.addEventListener('mousedown', e=>{
+    dragX=e.clientX; dragY=e.clientY; didDrag=false;
+    window._pipDragging=true; ov.style.cursor='grabbing';
+  });
+  ov.addEventListener('mouseup', ()=>{
+    window._pipDragging=false; ov.style.cursor='grab';
+    if(!didDrag){
+      // Click sin drag → acariciar
+      window._pipPetting=true;
+      ov.style.background='rgba(99,245,161,.04)';
+      // Dragon: aleteo al hacer click
+      if(window.opener && window.opener.S && window.opener.S.form==='dragon' && window.opener.drg){
+        window.opener.drg.flapWings();
+      }
+      setTimeout(()=>{ window._pipPetting=false; ov.style.background='transparent'; },300);
+    }
+  });
+  ov.addEventListener('mouseleave', ()=>{
+    window._pipDragging=false; window._pipPetting=false;
+    statsBar.style.opacity='0'; ov.style.cursor='grab'; ov.style.background='transparent';
+  });
+  // Touch
+  ov.addEventListener('touchstart',e=>{e.preventDefault();
+    dragX=e.touches[0].clientX; dragY=e.touches[0].clientY; didDrag=false;
+    window._pipDragging=true; window._pipPetting=true;
+    ov.style.background='rgba(99,245,161,.04)';
+  },{passive:false});
+  ov.addEventListener('touchmove',e=>{e.preventDefault();
+    const dx=e.touches[0].clientX-dragX, dy=e.touches[0].clientY-dragY;
+    dragX=e.touches[0].clientX; dragY=e.touches[0].clientY;
+    if(Math.abs(dx)>4||Math.abs(dy)>4){
+      didDrag=true; window._pipPetting=false;
+      if(window.opener&&window.opener.Cam){
+        window.opener.Cam.targetTheta-=dx*0.012;
+        window.opener.Cam.targetPhi=Math.max(-0.4,Math.min(0.8,window.opener.Cam.targetPhi+dy*0.012));
+      }
+    }
+  },{passive:false});
+  ov.addEventListener('touchend',()=>{
+    window._pipDragging=false; window._pipPetting=false;
+    ov.style.background='transparent';
+    if(!didDrag && window.opener && window.opener.S && window.opener.S.form==='dragon' && window.opener.drg)
+      window.opener.drg.flapWings();
+  });
+
+  pipWin._mainBtn  = btn;
+  pipWin._statsBar = statsBar;
+  pipWin.addEventListener('pagehide', ()=>{ window._pipPetting=false; window._pipDragging=false; _pipClose(btn); });
+}
 
 async function togglePiP(){
   const btn = document.getElementById('pip-btn');
   const vid = document.getElementById('pip-video');
 
-  // Si ya hay PiP activo → cerrarlo
-  if(document.pictureInPictureElement){
-    await document.exitPictureInPicture();
-    btn.textContent = '📺 Flotar Pikitipu';
-    btn.classList.remove('active');
+  // ── CERRAR ───────────────────────────────────────────────
+  if(_pipActive){
+    if(_pipWin && !_pipWin.closed) _pipWin.close();
+    if(document.pictureInPictureElement) await document.exitPictureInPicture().catch(()=>{});
+    _pipClose(btn);
     return;
   }
 
+  // ── ABRIR ─────────────────────────────────────────────────
   try{
-    // Capturar stream del canvas WebGL (solo 3D, sin overlays HTML)
+    // Stream del canvas sin modificar la cámara → sin pixelación
     if(!_pipStream){
-      _pipStream = canvas.captureStream(30);
+      _pipStream    = canvas.captureStream(30);
       vid.srcObject = _pipStream;
     }
-    await vid.play();
+    await vid.play().catch(()=>{});
 
-    // Intento 1: Document Picture-in-Picture API (Chrome 116+, más flexible)
+    _pipActive = true;
+    btn.textContent = '✖ Cerrar flotante';
+    btn.classList.add('active');
+
+    // ── Intento 1: Document PiP API (Chrome 116+) — interactivo ──
     if('documentPictureInPicture' in window){
-      const pipWin = await window.documentPictureInPicture.requestWindow({
-        width: 380, height: 380
+      _pipWin = await window.documentPictureInPicture.requestWindow({
+        width: 260, height: 280,   // pequeño y centrado
+        disallowReturnToOpener: false,
       });
-      // Clonar estilos mínimos al pip window
-      const style = pipWin.document.createElement('style');
-      style.textContent = `
+      const d = _pipWin.document;
+      d.head.innerHTML=`<style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{background:#03030d;overflow:hidden;width:100%;height:100%}
-        video{width:100%;height:100%;object-fit:cover;border-radius:12px}
-      `;
-      pipWin.document.head.appendChild(style);
-      // Mover video al pip window
-      const pipVid = pipWin.document.createElement('video');
+        video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
+        body::after{content:'';position:fixed;inset:0;
+          border:1px solid rgba(99,245,161,.1);border-radius:6px;
+          pointer-events:none;z-index:20}
+      </style>`;
+      const pipVid = d.createElement('video');
       pipVid.srcObject = _pipStream;
-      pipVid.muted = true; pipVid.autoplay = true; pipVid.playsinline = true;
-      pipVid.style.cssText='width:100%;height:100%;object-fit:cover';
-      pipWin.document.body.appendChild(pipVid);
-      await pipVid.play();
-
-      pipWin.addEventListener('pagehide', ()=>{
-        btn.textContent='📺 Flotar Pikitipu';
-        btn.classList.remove('active');
-      });
-      btn.textContent = '✖ Cerrar flotante';
-      btn.classList.add('active');
-      showMood('📺 Pikitipu flotando');
+      pipVid.muted=true; pipVid.autoplay=true; pipVid.playsinline=true;
+      pipVid.style.cssText='position:fixed;inset:0;width:100%;height:100%;object-fit:cover';
+      d.body.appendChild(pipVid);
+      pipVid.play().catch(()=>{});
+      _buildPipOverlay(_pipWin, btn);
+      showMood('📺 Pikitipu flotando — ¡dale cariño!');
       return;
     }
 
-    // Fallback: Video PiP clásico (compatible con todos los navegadores modernos)
+    // ── Fallback: Video PiP clásico ──
     await vid.requestPictureInPicture();
-    btn.textContent = '✖ Cerrar flotante';
-    btn.classList.add('active');
     showMood('📺 Pikitipu flotando');
-
-    vid.addEventListener('leavepictureinpicture', ()=>{
-      btn.textContent='📺 Flotar Pikitipu';
-      btn.classList.remove('active');
-    }, {once:true});
+    vid.addEventListener('leavepictureinpicture', ()=>_pipClose(btn), {once:true});
 
   } catch(err){
     console.warn('[PiP]', err);
-    // Si el navegador no soporta PiP, abrir ventana popup como último recurso
-    _pipPopupFallback();
+    _pipActive=false; btn.textContent='📺 Flotar Pikitipu'; btn.classList.remove('active');
+    _pipPopupFallback(btn);
   }
 }
 
-function _pipPopupFallback(){
-  // Último recurso: ventana popup con el canvas mirroreado
+function _pipPopupFallback(btn){
   const pw = window.open('','_pikitipu_pip',
-    'width=360,height=360,resizable=yes,alwaysOnTop=yes,toolbar=no,menubar=no,location=no');
-  if(!pw){ toast('⚠️ PiP','Permite ventanas emergentes para esta función.','#ff8da1'); return; }
-  pw.document.write(`<!DOCTYPE html><html>
-  <head><style>*{margin:0}body{background:#03030d;overflow:hidden}
-  canvas{width:100%;height:100%;display:block}</style></head>
-  <body><canvas id="pc"></canvas><script>
+    'width=290,height=310,resizable=yes,toolbar=no,menubar=no,location=no,status=no');
+  if(!pw){
+    toast('⚠️ PiP','Permite ventanas emergentes.','#ff8da1');
+    _pipActive=false; btn.textContent='📺 Flotar Pikitipu'; btn.classList.remove('active');
+    return;
+  }
+  pw.document.write(`<!DOCTYPE html><html><head>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#03030d;overflow:hidden;touch-action:none;cursor:grab}
+    body:active{cursor:grabbing}
+    canvas{display:block;width:100vw;height:100vh}
+    /* Stats bar — sin texto, solo colores */
+    #sb{position:fixed;top:0;left:0;right:0;padding:7px 7px 0;
+      display:flex;gap:3px;opacity:0;transition:opacity .35s;pointer-events:none}
+    body:hover #sb{opacity:1}
+    .sl{flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:3px}
+    .sf{height:100%;border-radius:3px;transition:width .6s}
+    /* Glow petting */
+    body.petting{background:rgba(99,245,161,.03)}
+  </style></head>
+  <body>
+  <canvas id="pc"></canvas>
+  <div id="sb">
+    <div class="sl"><div id="ph" class="sf" style="width:0%;background:linear-gradient(90deg,#ff8da1,#ffaac5)"></div></div>
+    <div class="sl"><div id="pe" class="sf" style="width:0%;background:linear-gradient(90deg,#63f5a1,#5ce6ff)"></div></div>
+    <div class="sl"><div id="pb" class="sf" style="width:0%;background:linear-gradient(90deg,#d39eff,#e0b0ff)"></div></div>
+    <div class="sl"><div id="pl" class="sf" style="width:0%;background:linear-gradient(90deg,#ffd700,#ffec6e)"></div></div>
+  </div>
+  <script>
     const src=window.opener.document.getElementById('c');
     const dst=document.getElementById('pc');
-    dst.width=360;dst.height=360;
+    dst.width=290; dst.height=310;
     const ctx=dst.getContext('2d');
-    (function draw(){ ctx.drawImage(src,0,0,360,360); requestAnimationFrame(draw); })();
+    // Mirror canvas + actualizar stats
+    (function draw(){
+      if(!window.opener||window.opener.closed){window.close();return;}
+      ctx.drawImage(src,0,0,290,310);
+      // Stats desde main window
+      const S=window.opener.S||{};
+      const set=(id,v)=>{const el=document.getElementById(id);if(el)el.style.width=(v||0)+'%';};
+      set('ph',S.happiness); set('pe',S.energy); set('pb',S.bond); set('pl',S.love);
+      requestAnimationFrame(draw);
+    })();
+    ['mousedown','touchstart'].forEach(ev=>
+      document.addEventListener(ev,e=>{e.preventDefault();
+        window.opener._pipPetting=true;document.body.classList.add('petting');
+      },{passive:false})
+    );
+    ['mouseup','touchend','mouseleave'].forEach(ev=>
+      document.addEventListener(ev,()=>{
+        window.opener._pipPetting=false;document.body.classList.remove('petting');
+      })
+    );
+    window.addEventListener('beforeunload',()=>{window.opener._pipPetting=false;});
   <\/script></body></html>`);
   pw.document.close();
-  showMood('📺 Pikitipu en ventana');
-  toast('📺 Ventana flotante','Ábrela y minimiza esta pestaña.','#63f5a1');
+  showMood('📺 Pikitipu flotando');
 }
 
-window.togglePiP = togglePiP;
+window.togglePiP   = togglePiP;
+window._pipPetting = false; // leído por el animate loop desde el pip window
 
+
+
+// ══════════════════════════════════════════════════════════════
+// CANAL INVERSO — Bonus dragón de vuelta al ecosistema KP
+// KP necesita: POST /api/dragon_bonus {pv_bonus, user, timestamp}
+// ══════════════════════════════════════════════════════════════
+function sendDragonBonusToKP(){
+  if(S.dragonPvBonus <= 0) return;
+  const payload = {
+    type:'DRAGON_BONUS', pv_bonus:S.dragonPvBonus,
+    user:S.lastUser||'unknown', timestamp:Date.now()
+  };
+  // Canal 1: WS local directo
+  if(ws && ws.readyState===1 && _wsSource==='local'){
+    try{ ws.send(JSON.stringify(payload)); }catch(e){}
+  }
+  // Canal 2: HTTP Flask KP localhost:5000
+  fetch('http://localhost:5000/api/dragon_bonus',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  }).then(r=>{
+    if(r.ok) toast('🐲→⚡','Dragon bonus enviado: +'+S.dragonPvBonus+' PV','#ffd700');
+  }).catch(()=>{
+    // Sin Flask → guardar pendiente en localStorage para sync futuro
+    const p=JSON.parse(localStorage.getItem('piki_pending_bonus')||'[]');
+    p.push(payload); localStorage.setItem('piki_pending_bonus',JSON.stringify(p));
+  });
+  const sent = S.dragonPvBonus;
+  S.dragonPvBonus=0;
+  console.log('[Pikitipu→KP] DragonBonus enviado:',sent,'PV');
+}
 
 // ══════════════════════════════════════════════════════════════
 function _checkEvolutionReady(){
@@ -1428,6 +1852,11 @@ function _setWSStatus(online, source){
     lbl.textContent = source==='relay' ? '🌐 Relay conectado' : '⚡ KP local conectado';
     _wsRetryMs=5000;
     if(piki) piki.onKPStatus(true);
+    // Eclosión si el dropmask sigue visible (primera conexión desde botón)
+    const dm = document.getElementById('dropmask');
+    if(dm && !dm.classList.contains('hidden') && window._onWSFirstConnect){
+      window._onWSFirstConnect();
+    }
   } else {
     dot.classList.remove('on');
     dot.style.boxShadow='';
@@ -1508,10 +1937,21 @@ window.toggleHud=()=>{
 // ══════════════════════════════════════════════════════════════
 window.triggerEvolution=triggerEvolution;
 window.returnToPikitipu=returnToPikitipu;
+window.startKPConnection=startKPConnection;
+window.hatchAndStart=hatchAndStart;
+window.S=S;
+window.Cam=Cam;    // popup PiP accede a Cam para drag
+window.drg=null;   // se asigna tras inicializar
+
+// Click en canvas: si dragón visible → aleteo
+canvas.addEventListener('click', ()=>{
+  if(S.form==='dragon' && drg) drg.flapWings();
+});
 
 const piki    = new Pikitipu();
 const drg     = new DragonaHakuryu();
 const evoPart = new EvoParticles();
+window.drg = drg; // expuesto para PiP click
 
 connectWS();
 animate();
