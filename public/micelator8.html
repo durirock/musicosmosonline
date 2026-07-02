@@ -1190,7 +1190,7 @@ function init() {
 
     webglRenderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     webglRenderer.setSize(window.innerWidth, window.innerHeight);
-    webglRenderer.setPixelRatio(1); // Performance: fuerza 1:1, evita 4x trabajo GPU en pantallas HiDPI
+    webglRenderer.setPixelRatio(1); // perf: fuerza 1:1
     document.getElementById('webgl-container').appendChild(webglRenderer.domElement);
 
     // --- CSS3D ESTÉREO: dos renderers + StereoCamera ---
@@ -3198,7 +3198,6 @@ function onTouchEnd() {
 // ==========================================
 // 16. BUCLE DE RENDERIZADO PRINCIPAL
 // ==========================================
-// Performance: cap a 30fps — mitad de carga CPU/GPU, imperceptible visualmente
 var _FPS_INTERVAL = 1000 / 30;
 var _lastFrameTime = 0;
 
@@ -3436,13 +3435,13 @@ function updateCamera() {
         DragManager.originalPosition = node.position.clone();
         DragManager.ghostWorldPos = node.position.clone(); // posición destino actualizada
 
-        // Mostrar ghost escalado según distancia cámara→nodo
+        // Ghost escalado según distancia cámara→nodo
         ghost.textContent = node.text;
-        const _camDist = camera.position.distanceTo(node.position);
-        const _ghostScale = Math.max(0.35, Math.min(1.0, 10 / _camDist));
-        ghost.style.fontSize   = Math.round(13 * _ghostScale) + 'px';
-        ghost.style.padding    = Math.round(8  * _ghostScale) + 'px ' + Math.round(12 * _ghostScale) + 'px';
-        ghost.style.maxWidth   = Math.round(380 * _ghostScale) + 'px';
+        var _cd = camera.position.distanceTo(node.position);
+        var _gs = Math.max(0.35, Math.min(1.0, 10 / _cd));
+        ghost.style.fontSize  = Math.round(13 * _gs) + 'px';
+        ghost.style.padding   = Math.round(8  * _gs) + 'px ' + Math.round(12 * _gs) + 'px';
+        ghost.style.maxWidth  = Math.round(380 * _gs) + 'px';
         ghost.style.display = 'block';
         ghost.classList.remove('over-target');
 
@@ -3662,314 +3661,169 @@ window.addEventListener('load', () => {
         if (e.clientY > window.innerHeight - 55) revive();
     });
 })();
-
-
-// ═══════════════════════════════════════════════════════════════
-// ⚡ KP BRIDGE — Micelator → Killer Pendiente via HTTP (Flask)
-// Botón ⚡ en cada nodo → popup usuario+PV → KP pide contraseña
-// Doble-click conserva su función original: zoom al nodo
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// ⚡ KP BRIDGE  Micelator → KP via HTTP Flask
+// Click en botón ⚡ del nodo → popup usuario+PV → timer
+// ═══════════════════════════════════════════════════════
 (function() {
-
 var KP_URL = 'http://localhost:5000';
-var _ceggData = null;
-var _pendingNode = null;
+var _cegg  = null;
+var _pnode = null;
 
-// ── Inyectar estilos ─────────────────────────────────────────
-var _css = document.createElement('style');
-_css.textContent = `
-.kp-send-btn {
-    position: absolute;
-    top: 4px; right: 4px;
-    width: 22px; height: 22px;
-    background: rgba(255,215,0,0.15);
-    border: 1px solid rgba(255,215,0,0.45);
-    border-radius: 5px;
-    color: #FFD700;
-    font-size: 12px;
-    cursor: pointer;
-    z-index: 20;
-    padding: 0;
-    line-height: 22px;
-    text-align: center;
-    transition: background 0.2s, transform 0.15s;
-    pointer-events: all;
-}
-.kp-send-btn:hover {
-    background: rgba(255,215,0,0.35);
-    transform: scale(1.15);
-}
-#kp-micelator-overlay {
-    display: none;
-    position: fixed; inset: 0; z-index: 19999;
-    background: rgba(0,0,0,0.55);
-    backdrop-filter: blur(3px);
-    align-items: center; justify-content: center;
-}
-#kp-micelator-overlay.visible { display: flex; }
-#kp-micelator-popup {
-    background: rgba(8,12,22,0.97);
-    border: 1px solid rgba(255,215,0,0.35);
-    border-radius: 14px;
-    padding: 26px 30px 22px;
-    width: 360px;
-    box-shadow: 0 0 40px rgba(255,215,0,0.18), 0 8px 32px rgba(0,0,0,0.7);
-    font-family: 'Fira Code', monospace;
-    color: #e0e0e0;
-    position: relative;
-}
-#kp-micelator-popup h3 {
-    margin: 0 0 6px;
-    color: #FFD700;
-    font-size: 15px;
-    letter-spacing: 0.04em;
-}
-#kp-micelator-popup .kp-task-preview {
-    background: rgba(255,215,0,0.07);
-    border-left: 3px solid #FFD700;
-    border-radius: 4px;
-    padding: 7px 10px;
-    margin: 10px 0 16px;
-    font-size: 12px;
-    color: #FFD700;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 70px;
-    overflow-y: auto;
-}
-#kp-micelator-popup label {
-    display: block;
-    font-size: 11px;
-    color: #888;
-    margin-bottom: 4px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-}
-#kp-micelator-popup select,
-#kp-micelator-popup input[type=number] {
-    width: 100%;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,215,0,0.25);
-    border-radius: 7px;
-    color: #e0e0e0;
-    font-family: 'Fira Code', monospace;
-    font-size: 13px;
-    padding: 7px 10px;
-    margin-bottom: 14px;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.2s;
-}
-#kp-micelator-popup select:focus,
-#kp-micelator-popup input[type=number]:focus {
-    border-color: rgba(255,215,0,0.6);
-}
-#kp-micelator-popup select option { background: #0d1117; }
-.kp-popup-btns {
-    display: flex; gap: 10px; margin-top: 4px;
-}
-.kp-popup-btns button {
-    flex: 1; padding: 9px 0;
-    border-radius: 8px;
-    font-family: 'Fira Code', monospace;
-    font-size: 13px;
-    cursor: pointer;
-    border: 1px solid;
-    transition: all 0.2s;
-}
-.kp-btn-cancel {
-    background: transparent;
-    border-color: #444 !important;
-    color: #666;
-}
-.kp-btn-cancel:hover { border-color: #888 !important; color: #aaa; }
-.kp-btn-start {
-    background: rgba(255,215,0,0.15);
-    border-color: #FFD700 !important;
-    color: #FFD700;
-    font-weight: bold;
-}
-.kp-btn-start:hover { background: rgba(255,215,0,0.28); }
-.kp-btn-start:disabled { opacity: 0.4; cursor: not-allowed; }
-#kp-micelator-popup .kp-status-msg {
-    font-size: 11px; color: #4DFF88;
-    text-align: center; margin-top: 8px;
-    min-height: 16px;
-}
-#kp-popup-close {
-    position: absolute; top: 12px; right: 14px;
-    color: #444; font-size: 18px; cursor: pointer;
-    line-height: 1; padding: 2px 5px; border-radius: 4px;
-    transition: color 0.2s;
-}
-#kp-popup-close:hover { color: #aaa; }
-`;
-document.head.appendChild(_css);
+/* ── Estilos ── */
+var _st = document.createElement('style');
+_st.textContent =
+  '.kp-sb{position:absolute;top:3px;right:3px;width:20px;height:20px;' +
+  'background:rgba(255,215,0,.15);border:1px solid rgba(255,215,0,.5);' +
+  'border-radius:4px;color:#FFD700;font-size:11px;cursor:pointer;' +
+  'z-index:20;padding:0;line-height:20px;text-align:center;' +
+  'transition:background .2s;pointer-events:all;}' +
+  '.kp-sb:hover{background:rgba(255,215,0,.35);}' +
+  '#kp-ov{position:fixed;inset:0;z-index:19999;background:rgba(0,0,0,.6);' +
+  'display:none;align-items:center;justify-content:center;}' +
+  '#kp-ov.vis{display:flex;}' +
+  '#kp-box{background:#080c16;border:1px solid rgba(255,215,0,.4);' +
+  'border-radius:14px;padding:24px 28px 20px;width:340px;' +
+  'font-family:Fira Code,monospace;color:#e0e0e0;position:relative;' +
+  'box-shadow:0 0 40px rgba(255,215,0,.15),0 8px 32px rgba(0,0,0,.7);}' +
+  '#kp-box h3{margin:0 0 6px;color:#FFD700;font-size:14px;}' +
+  '#kp-prev{background:rgba(255,215,0,.07);border-left:3px solid #FFD700;' +
+  'border-radius:4px;padding:6px 9px;margin:8px 0 14px;font-size:11px;' +
+  'color:#FFD700;white-space:pre-wrap;max-height:60px;overflow-y:auto;}' +
+  '#kp-box label{display:block;font-size:10px;color:#666;' +
+  'margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em;}' +
+  '#kp-box select,#kp-box input[type=number]{width:100%;box-sizing:border-box;' +
+  'background:rgba(255,255,255,.06);border:1px solid rgba(255,215,0,.25);' +
+  'border-radius:6px;color:#e0e0e0;font-family:Fira Code,monospace;' +
+  'font-size:12px;padding:6px 9px;margin-bottom:12px;outline:none;}' +
+  '#kp-box select option{background:#0d1117;}' +
+  '.kp-btns{display:flex;gap:8px;margin-top:2px;}' +
+  '.kp-btns button{flex:1;padding:8px 0;border-radius:7px;' +
+  'font-family:Fira Code,monospace;font-size:12px;cursor:pointer;border:1px solid;}' +
+  '#kp-cancel{background:transparent;border-color:#333;color:#555;}' +
+  '#kp-cancel:hover{border-color:#777;color:#999;}' +
+  '#kp-start{background:rgba(255,215,0,.15);border-color:#FFD700;color:#FFD700;font-weight:bold;}' +
+  '#kp-start:hover{background:rgba(255,215,0,.28);}' +
+  '#kp-start:disabled{opacity:.4;cursor:not-allowed;}' +
+  '#kp-stat{font-size:10px;text-align:center;margin-top:7px;min-height:14px;}' +
+  '#kp-x{position:absolute;top:10px;right:12px;color:#444;' +
+  'font-size:17px;cursor:pointer;border-radius:3px;padding:1px 4px;}' +
+  '#kp-x:hover{color:#aaa;}';
+document.head.appendChild(_st);
 
-// ── Popup HTML ───────────────────────────────────────────────
-var _overlay = document.createElement('div');
-_overlay.id = 'kp-micelator-overlay';
-_overlay.innerHTML = `
-<div id="kp-micelator-popup">
-  <span id="kp-popup-close">×</span>
-  <h3>⚡ Killer Pendiente</h3>
-  <div class="kp-task-preview" id="kp-popup-task-text">—</div>
-  <label>Usuario / Aspecto</label>
-  <select id="kp-popup-user"><option value="">Cargando...</option></select>
-  <label>Puntos de Voluntad (PV)</label>
-  <input type="number" id="kp-popup-pv" value="25" min="1" max="200" step="5">
-  <div class="kp-popup-btns">
-    <button class="kp-btn-cancel" id="kp-btn-cancel">Cancelar</button>
-    <button class="kp-btn-start" id="kp-btn-start">⚡ Iniciar Timer</button>
-  </div>
-  <div class="kp-status-msg" id="kp-popup-status"></div>
-</div>`;
-document.body.appendChild(_overlay);
+/* ── Overlay HTML ── */
+var _ov = document.createElement('div');
+_ov.id = 'kp-ov';
+_ov.innerHTML =
+  '<div id="kp-box">' +
+  '<span id="kp-x">\u00d7</span>' +
+  '<h3>\u26a1 Killer Pendiente</h3>' +
+  '<div id="kp-prev">\u2014</div>' +
+  '<label>Usuario / Aspecto</label>' +
+  '<select id="kp-usr"><option value="">Cargando...</option></select>' +
+  '<label>Puntos de Voluntad (PV)</label>' +
+  '<input type="number" id="kp-pv" value="25" min="1" max="200" step="5">' +
+  '<label>Duración del Timer (minutos)</label>' +
+  '<input type="number" id="kp-min" value="25" min="1" max="180" step="5">' +
+  '<div class="kp-btns">' +
+  '<button id="kp-cancel">Cancelar</button>' +
+  '<button id="kp-start">\u26a1 Iniciar Timer</button>' +
+  '</div><div id="kp-stat"></div></div>';
+document.body.appendChild(_ov);
 
-// ── Cargar CEGG ──────────────────────────────────────────────
+function _close() { _ov.classList.remove('vis'); _pnode = null; }
+function _open(node) {
+  _pnode = node;
+  document.getElementById('kp-prev').textContent = _clean(node.text);
+  document.getElementById('kp-stat').textContent = '';
+  document.getElementById('kp-start').disabled = false;
+  _fillUsers();
+  _ov.classList.add('vis');
+}
+document.getElementById('kp-x').addEventListener('click', _close);
+document.getElementById('kp-cancel').addEventListener('click', _close);
+_ov.addEventListener('click', function(e){ if(e.target===_ov) _close(); });
+
+function _clean(raw) {
+  var lines = (raw||'').split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var sep = -1;
+  for(var i=0;i<lines.length;i++){if(/^\u2500/.test(lines[i])){sep=i;break;}}
+  var t = sep>0 ? lines[0] : lines[0];
+  return t.replace(/^[\s\S\u0000-\u002F]+?([A-Za-z\u00C0-\u024F])/, '$1').trim() || t.trim();
+}
+
+function _fillUsers() {
+  var sel = document.getElementById('kp-usr');
+  sel.innerHTML = '';
+  var users = [];
+  try { users = (_cegg.perfil_global||{}).lista_usuarios||[]; } catch(e){}
+  if (!users.length) {
+    sel.innerHTML = '<option value="">Sin usuarios (KP offline?)</option>';
+    return;
+  }
+  users.forEach(function(u){
+    var o=document.createElement('option'); o.value=u; o.textContent=u; sel.appendChild(o);
+  });
+}
+
 function _loadCEGG() {
-    fetch(KP_URL + '/api/egg')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            _ceggData = d;
-            _populateUsers();
-        })
-        .catch(function() {});
+  fetch(KP_URL+'/api/egg').then(function(r){return r.json();})
+    .then(function(d){_cegg=d;}).catch(function(){});
 }
-
-function _populateUsers() {
-    var sel = document.getElementById('kp-popup-user');
-    if (!sel) return;
-    var users = [];
-    try {
-        users = (_ceggData.perfil_global || {}).lista_usuarios || [];
-    } catch(e) {}
-    sel.innerHTML = '';
-    if (!users.length) {
-        sel.innerHTML = '<option value="">Sin usuarios (KP offline?)</option>';
-        return;
-    }
-    users.forEach(function(u) {
-        var opt = document.createElement('option');
-        opt.value = u; opt.textContent = u;
-        sel.appendChild(opt);
-    });
-}
-
 _loadCEGG();
-setInterval(_loadCEGG, 30000); // refresh cada 30s
+setInterval(_loadCEGG, 30000);
 
-// ── Abrir / Cerrar popup ──────────────────────────────────────
-function _openPopup(node) {
-    _pendingNode = node;
-    var taskText = _extractTask(node.text);
-    document.getElementById('kp-popup-task-text').textContent = taskText;
-    document.getElementById('kp-popup-status').textContent = '';
-    document.getElementById('kp-btn-start').disabled = false;
-    _populateUsers();
-    _overlay.classList.add('visible');
+function _flash(node) {
+  var el=node.element, orig=el.style.boxShadow;
+  el.style.transition='box-shadow .2s';
+  el.style.boxShadow='0 0 28px #FFD700,0 0 55px rgba(255,215,0,.4)';
+  setTimeout(function(){
+    el.style.boxShadow='0 0 8px rgba(255,215,0,.2)';
+    setTimeout(function(){el.style.boxShadow=orig;},400);
+  },350);
 }
 
-function _closePopup() {
-    _overlay.classList.remove('visible');
-    _pendingNode = null;
-}
-
-document.getElementById('kp-popup-close').addEventListener('click', _closePopup);
-document.getElementById('kp-btn-cancel').addEventListener('click', _closePopup);
-_overlay.addEventListener('click', function(e) {
-    if (e.target === _overlay) _closePopup();
+document.getElementById('kp-start').addEventListener('click', function() {
+  var user = document.getElementById('kp-usr').value;
+  var pv   = parseInt(document.getElementById('kp-pv').value)||25;
+  var mins = parseInt(document.getElementById('kp-min').value)||25;
+  var task = _pnode ? _clean(_pnode.text) : '';
+  var stat = document.getElementById('kp-stat');
+  if(!user){stat.style.color='#FF6B4D';stat.textContent='Selecciona un usuario';return;}
+  if(!task){stat.style.color='#FF6B4D';stat.textContent='Tarea vacía';return;}
+  document.getElementById('kp-start').disabled=true;
+  stat.style.color='#FFD700'; stat.textContent='Contactando KP...';
+  if(_pnode) _flash(_pnode);
+  fetch(KP_URL+'/api/micelator-task',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({user:user,task_name:task,pv_points:pv,timer_minutes:mins})
+  }).then(function(r){return r.json();})
+  .then(function(d){
+    if(d.ok){stat.style.color='#4DFF88';stat.textContent='\u2705 KP abrirá contraseña';
+      setTimeout(_close,1800);}
+    else{stat.style.color='#FF6B4D';stat.textContent='\u26a0\ufe0f '+(d.error||'Error');
+      document.getElementById('kp-start').disabled=false;}
+  }).catch(function(){
+    stat.style.color='#FF6B4D';stat.textContent='\u26a0\ufe0f KP Offline';
+    document.getElementById('kp-start').disabled=false;
+  });
 });
 
-// ── Extraer texto limpio de tarea ────────────────────────────
-function _extractTask(raw) {
-    var lines = (raw || '').split('\n').map(function(l){ return l.trim(); }).filter(Boolean);
-    // Si es nodo-resumen (tiene separador ────), usar solo el título
-    var sepIdx = -1;
-    for (var i = 0; i < lines.length; i++) {
-        if (/^─/.test(lines[i])) { sepIdx = i; break; }
-    }
-    var title = sepIdx > 0 ? lines[0] : lines[0];
-    // Quitar emojis de prioridad del inicio
-    return title.replace(/^[\u{1F534}\u{1F7E0}\u{1F7E1}⚡💞🌿🏥🌙💻💸🔧🤝💰🏠🧘\s]+/u, '').trim();
-}
-
-// ── Flash visual ─────────────────────────────────────────────
-function _flashNode(node) {
-    var el = node.element;
-    var orig = el.style.boxShadow;
-    el.style.transition = 'box-shadow 0.2s';
-    el.style.boxShadow = '0 0 30px #FFD700, 0 0 60px rgba(255,215,0,0.4)';
-    setTimeout(function() {
-        el.style.boxShadow = '0 0 10px rgba(255,215,0,0.25)';
-        setTimeout(function() { el.style.boxShadow = orig; }, 500);
-    }, 400);
-}
-
-// ── Enviar a KP ─────────────────────────────────────────────
-document.getElementById('kp-btn-start').addEventListener('click', function() {
-    var user = document.getElementById('kp-popup-user').value;
-    var pv   = parseInt(document.getElementById('kp-popup-pv').value) || 25;
-    var task = _pendingNode ? _extractTask(_pendingNode.text) : '';
-    var statusEl = document.getElementById('kp-popup-status');
-
-    if (!user) { statusEl.style.color = '#FF6B4D'; statusEl.textContent = '⚠️ Selecciona un usuario'; return; }
-    if (!task) { statusEl.style.color = '#FF6B4D'; statusEl.textContent = '⚠️ Tarea vacía'; return; }
-
-    document.getElementById('kp-btn-start').disabled = true;
-    statusEl.style.color = '#FFD700';
-    statusEl.textContent = 'Contactando KP...';
-
-    if (_pendingNode) _flashNode(_pendingNode);
-
-    fetch(KP_URL + '/api/micelator-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: user, task_name: task, pv_points: pv })
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-        if (d.ok) {
-            statusEl.style.color = '#4DFF88';
-            statusEl.textContent = '✅ KP abrirá diálogo de contraseña';
-            setTimeout(_closePopup, 1800);
-        } else {
-            statusEl.style.color = '#FF6B4D';
-            statusEl.textContent = '⚠️ ' + (d.error || 'Error KP');
-            document.getElementById('kp-btn-start').disabled = false;
-        }
-    })
-    .catch(function() {
-        statusEl.style.color = '#FF6B4D';
-        statusEl.textContent = '⚠️ KP Offline (¿está corriendo?)';
-        document.getElementById('kp-btn-start').disabled = false;
-    });
-});
-
-// ── Inyectar botón ⚡ en cada nodo (override createNode) ─────
-// Se ejecuta después de que el script principal define createNode
-setTimeout(function() {
-    if (typeof createNode !== 'function') return;
-    var _orig = createNode;
-    window.createNode = function(text, position, colorCategory, number) {
-        var node = _orig(text, position, colorCategory, number);
-        var btn = document.createElement('button');
-        btn.className = 'kp-send-btn';
-        btn.textContent = '⚡';
-        btn.title = 'Enviar a Killer Pendiente';
-        // Evitar que el mousedown propague al sistema de drag/select
-        btn.addEventListener('mousedown', function(e) { e.stopPropagation(); });
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            _openPopup(node);
-        });
-        node.element.style.position = 'relative'; // asegurar para absolute del btn
-        node.element.appendChild(btn);
-        return node;
-    };
-    console.log('⚡ KP Bridge: createNode patched');
-}, 0);
+/* ── Patch createNode para agregar botón ⚡ ── */
+setTimeout(function(){
+  if(typeof createNode!=='function')return;
+  var _orig=createNode;
+  window.createNode=function(text,position,colorCategory,number){
+    var node=_orig(text,position,colorCategory,number);
+    var b=document.createElement('button');
+    b.className='kp-sb'; b.textContent='\u26a1';
+    b.title='Enviar a Killer Pendiente';
+    b.addEventListener('mousedown',function(e){e.stopPropagation();});
+    b.addEventListener('click',function(e){e.stopPropagation();e.preventDefault();_open(node);});
+    node.element.appendChild(b);
+    return node;
+  };
+},0);
 
 })();
 </script>
