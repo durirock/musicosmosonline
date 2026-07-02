@@ -620,50 +620,53 @@ class Pikitipu {
     this.body=new THREE.Mesh(geo,this.mat); this.g.add(this.body);
   }
   _eyes(){
-    // Ojos con depthTest:false para superponer sobre el shader transparente del cuerpo.
-    // El LID (párpado negro) fue eliminado — era la fuente de los "bloques negros"
+    // FIX PUPILA: depthTest:false en todas las capas del ojo para evitar
+    // el artefacto de bounding-box cuadrado que emerge con depthWrite:false en el cuerpo
     const makeEye=(x)=>{
       const eg=new THREE.Group();
+      eg.renderOrder=2; // renderizar ojos DESPUÉS del cuerpo transparente
 
-      // Esclera oscura
       const base=new THREE.Mesh(
         new THREE.SphereGeometry(.38,32,32),
         new THREE.MeshStandardMaterial({color:0x0c0c22,roughness:.05,depthTest:false})
       );
       base.scale.set(1.0,1.15,.8); base.renderOrder=2; eg.add(base);
 
-      // Iris — color ciclante arcoíris (se actualiza en _eyeAnim cada frame)
       const iMat=new THREE.MeshStandardMaterial({
         color:0x3ae0d6,emissive:0x137880,emissiveIntensity:.8,roughness:0,depthTest:false
       });
-      const iris=new THREE.Mesh(new THREE.SphereGeometry(.24,24,24),iMat);
-      iris.position.set(x>0?-.03:.03,-.02,.12); iris.renderOrder=3; eg.add(iris);
-      eg.userData.irisMat=iMat;
+      const iris=new THREE.Mesh(new THREE.SphereGeometry(.24,32,32),iMat);
+      iris.position.set(x>0?-.03:.03,-.02,.12); iris.renderOrder=3; eg.add(iris); eg.userData.irisMat=iMat;
 
-      // Pupila — sin lid = sin bloques negros
+      // PUPILA: círculo perfecto — SphereGeometry con más segmentos + depthTest:false
       const pup=new THREE.Mesh(
-        new THREE.SphereGeometry(.135,32,32),
-        new THREE.MeshBasicMaterial({color:0x010106,depthTest:false})
+        new THREE.SphereGeometry(.135,48,48),                        // 48 seg → círculo suave
+        new THREE.MeshBasicMaterial({color:0x010106,depthTest:false}) // depthTest:false → sin caja
       );
       pup.position.set(x>0?-.03:.03,-.02,.205); pup.renderOrder=4; eg.add(pup);
 
-      // Brillos de ternura (estrellita)
+      // Brillo 1 — destello principal (ternura clave)
       const s1=new THREE.Mesh(
-        new THREE.SphereGeometry(.072,12,12),
+        new THREE.SphereGeometry(.072,20,20),
         new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false})
       );
       s1.position.set(.085,.115,.265); s1.renderOrder=5; eg.add(s1);
+
+      // Brillo 2 — mini destello secundario
       const s2=new THREE.Mesh(
-        new THREE.SphereGeometry(.036,8,8),
+        new THREE.SphereGeometry(.036,14,14),
         new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false})
       );
       s2.position.set(-.08,-.08,.265); s2.renderOrder=5; eg.add(s2);
 
-      // NO hay lid — era el origen de los bloques negros parpadeantes
-      eg.userData.lid = null; // mantener compatibilidad con _eyeAnim
+      // Párpado
+      const lid=new THREE.Mesh(
+        new THREE.CylinderGeometry(.40,.40,.40,32,1,false,Math.PI,Math.PI),
+        new THREE.MeshBasicMaterial({color:0x0b1326,transparent:true,opacity:0,side:THREE.DoubleSide,depthTest:false})
+      );
+      lid.rotation.z=Math.PI/2; lid.position.z=.14; lid.renderOrder=6; eg.add(lid); eg.userData.lid=lid;
 
-      eg.position.set(x,.15,1.82);
-      this.g.add(eg); return eg;
+      eg.position.set(x,.15,1.82); this.g.add(eg); return eg;
     };
     this.eyeL=makeEye(-.82); this.eyeR=makeEye(.82);
   }
@@ -727,16 +730,13 @@ class Pikitipu {
   }
 
   // ── Catarsis proporcional a días de resistencia ────────────
-  _catharsis(days, pvDelta=0){
+  _catharsis(days){
     const tier = days>=61 ? 'mega' : days>=15 ? 'alta' : days>=4 ? 'media' : 'leve';
-    const energyBase = {leve:12, media:20, alta:30, mega:42}[tier];
-    // +1 energía por cada 30 PV ganados (proporcional a voluntad invertida)
-    const energyFromPV = Math.min(20, Math.floor(pvDelta / 30));
-    const energyGain   = energyBase + energyFromPV;
-    const hearts       = {leve:3,  media:6,  alta:10, mega:15}[tier];
-    const msg          = days===0
+    const energyGain = {leve:15, media:22, alta:32, mega:45}[tier];
+    const hearts     = {leve:3,  media:6,  alta:10, mega:15}[tier];
+    const msg        = days===0
       ? '✨ ¡Tarea completada!'
-      : `✨ ¡${days} días liberados!`;
+      : `✨ ¡${days} días de resistencia liberados!`;
 
     S.energy    = Math.min(100, S.energy+energyGain);
     S.happiness = Math.min(100, S.happiness+14);
@@ -746,6 +746,7 @@ class Pikitipu {
     showMood(msg);
 
     if(tier==='alta'||tier==='mega'){
+      // Temblor rápido
       let shakes=0; const shakeInt=setInterval(()=>{
         this.g.position.x=Math.sin(shakes*8)*.18;
         if(++shakes>8){this.g.position.x=0;clearInterval(shakeInt);}
@@ -753,45 +754,45 @@ class Pikitipu {
       setTimeout(()=>this.flash(0xffffff,.9,.3), 160);
     }
     if(tier==='mega'){
+      // Scale bounce
       this.g.scale.set(1.3,1.3,1.3);
       setTimeout(()=>this.g.scale.set(1,1,1), 400);
       toast('🌟 ¡Resistencia épica!',`${days} días superados. ¡Pikitipu explota de alegría!`,'#ffd700');
+      // Desbloquear evolución si stats altos
       if(S.energy>70) _checkEvolutionReady();
     }
   }
 
   // ── Reacciones a eventos KP ───────────────────────────────
   onTaskComplete(msg={}){
-    const pvNew      = msg.pv          || 0;
+    const pv         = msg.pv          || 0;
     const mu         = msg.mu          || 0;
     const days       = msg.days_delayed|| 0;
     const priority   = msg.priority    || 'B';
     const userColor  = msg.user_color  || '#5ce6ff';
-
-    // Delta de PV: cuántos PV ganó esta tarea específica
-    const pvDelta    = pvNew > S.pv ? pvNew - S.pv : 0;
+    const taskName   = msg.task_name   || '';
 
     S.lastUserColor = userColor;
     S.lastPriority  = priority;
     S.lastTaskTime  = _elapsed;
-    if(pvNew) S.pv=pvNew; if(mu) S.mu=mu;
+    if(pv) S.pv=pv; if(mu) S.mu=mu;
     S.tasks++;
     this.squish=.25;
 
+    // Flash mezclado con firma del aspecto
     this.flashMixed(userColor, priority, .88, .7);
-    // Catarsis proporcional a días + PV
-    this._catharsis(days, pvDelta);
 
+    // Catarsis proporcional a días de resistencia
+    this._catharsis(days);
+
+    // MODO DRAGÓN: multiplicador 1.5x + recarga energía
     if(S.form==='dragon'){
-      const bonus=Math.round((pvNew||0)*.5);
+      const bonus=Math.round(pv*.5);
       S.dragonPvBonus+=bonus;
-      // Recarga energía dragón también proporcional a PV delta
-      const drgBase = days>=61?80:days>=15?55:days>=4?30:20;
-      const drgPVBonus = Math.min(20, Math.floor(pvDelta / 50)); // +1 por cada 50 PV
-      const drgGain = drgBase + drgPVBonus;
+      const drgGain = days>=61?80:days>=15?55:days>=4?30:20;
       S.dragonEnergy=Math.min(100,S.dragonEnergy+drgGain);
       updateDragonEnergyBar();
-      showMood(`🔥 PV x1.5 +${bonus} · 🐲+${drgGain}`);
+      showMood(`🔥 PV x1.5 +${bonus} · Dragon +${drgGain}`);
     }
 
     this._syncHUDStats();
@@ -886,13 +887,16 @@ class Pikitipu {
     this._updateHUD();
   }
   _eyeAnim(t,dt){
+    this.blinkTimer+=dt;
+    const forceSleep=(S.energy<=0);
+    if(!forceSleep&&!this.isBlinking&&this.blinkTimer>3.5+Math.random()*3){this.isBlinking=true;this.blinkTimer=0;}
     const readyToEvolve=(S.love>=95&&S.bond>=95&&S.energy>=95);
     [this.eyeL,this.eyeR].forEach(eg=>{
-      // Lid eliminado — era la fuente de los bloques negros parpadeantes
-      // Expresión via escala vertical del grupo de ojo completo
-      const forceSleep=(S.energy<=0);
-      const tScaleY = forceSleep?0.10:S.mood==='sleepy'?0.24:S.mood==='sad'?0.62:1.0;
-      eg.scale.y += (tScaleY - eg.scale.y) * 0.1;
+      const lid=eg.userData.lid;
+      if(forceSleep) lid.material.opacity=THREE.MathUtils.lerp(lid.material.opacity,1.0,dt*5);
+      else if(this.isBlinking){ lid.material.opacity=Math.min(1,lid.material.opacity+dt*10); if(lid.material.opacity>=.95)this.isBlinking=false; }
+      else lid.material.opacity=Math.max(0,lid.material.opacity-dt*8);
+      eg.scale.y+=((S.mood==='sleepy'?.25:S.mood==='sad'?.6:1.0)-eg.scale.y)*.1;
       if(readyToEvolve){
         eg.userData.irisMat.color.setRGB(2.5,2.5,2.5);
         eg.userData.irisMat.emissive.setRGB(2.0,2.0,2.0);
@@ -1032,27 +1036,29 @@ class DragonaHakuryu {
     this.breathPhase+=dt*.4;
 
     // ── DRAGON ENERGY DECAY ───────────────────────────────────
-    // Timer activo (tarea corriendo): ~3%/min — se sostiene
-    // Sin timer + pendientes: ~70%/min (~1.4min desde 100%)
-    // Sin timer + sin pendientes: ~100%/min (~1min desde 100%) — máxima urgencia
-    // Extra si inactivo >30s: x1.5
+    // Timer activo (tarea en curso): 2%/min → muy lento, el dragón se sostiene trabajando
+    // Timer inactivo + pendientes:  15%/min → urgencia: ¡inicia una tarea!
+    // Timer inactivo + sin pendientes: 22%/min → crítico: ¡crea tareas!
+    // Inactivo >60s extra: x1.4 adicional
     const inactiveTime = t - S.lastTaskTime;
     const noPendientes = (S.pendientes===0);
     let decayRate;
     if(S.timerActive){
-      decayRate = 0.0005;                               // ~3%/min — trabajando
+      decayRate = 0.00033;                           // ~2%/min — trabajando
     } else if(noPendientes){
-      decayRate = 0.017 * (inactiveTime>30?1.5:1.0);   // ~100-150%/min
+      decayRate = 0.0067 * (inactiveTime>45?1.5:1.0); // ~40-60%/min — sin propósito
     } else {
-      decayRate = 0.012 * (inactiveTime>30?1.5:1.0);   // ~70-105%/min
+      decayRate = 0.0042 * (inactiveTime>45?1.5:1.0); // ~25-37%/min — tiene tareas pero no actúa
     }
     S.dragonEnergy = Math.max(0, S.dragonEnergy - decayRate * dt * 60);
     updateDragonEnergyBar();
 
-    // Feedback visual proporcional a la energía
+    // Feedback visual proporcional a la energía del dragón
     const eRatio = S.dragonEnergy / 100;
-    sharedU.uOpacityBase.value    = 0.15 * (0.4 + eRatio * 0.6);
+    // Opacidad del shader: a menos energía más translúcida la dragona
+    sharedU.uOpacityBase.value = 0.15 * (0.4 + eRatio * 0.6);
     sharedU.uFresnelIntensity.value = 0.55 * (0.5 + eRatio * 0.5);
+    // Movimiento más lento al debilitarse
     const moveScale = 0.4 + eRatio * 0.6;
 
     this.g.scale.setScalar((1.0+Math.sin(this.breathPhase)*.015) * (0.85 + eRatio * 0.15));
@@ -1060,33 +1066,22 @@ class DragonaHakuryu {
     this.g.rotation.z=Math.sin(t*1.2*moveScale)*.02;
     this.g.rotation.y=Math.sin(t*.2*moveScale)*.03;
 
-    // ── ALERTAS VISUALES POR UMBRAL ──────────────────────────
-    if(S.dragonEnergy < 8 && S.dragonEnergy > 0){
-      // <8%: rojo intenso pulsante rápido — involución inminente
-      drgL.color.setRGB(1,0.1,0);
-      drgL.intensity = 5 + Math.abs(Math.sin(t*8)) * 4;
-      bloom.strength = S.bloomBase + 1.2 + Math.abs(Math.sin(t*8)) * 0.8;
-    } else if(S.dragonEnergy < 20){
-      // <20%: rojo suave pulsante — alerta
-      drgL.color.setRGB(1, 0.25 + eRatio*0.5, 0);
-      drgL.intensity = 3.5 + Math.abs(Math.sin(t*4)) * 2.5;
-      bloom.strength = S.bloomBase + 0.5;
+    // Alerta crítica < 30%
+    if(S.dragonEnergy < 30 && S.dragonEnergy > 0){
+      drgL.intensity = 3 + Math.abs(Math.sin(t*3)) * 2; // parpadeo urgente
     } else {
-      // Normal: luz celeste
-      drgL.color.setRGB(0.8, 0.9, 1.0);
       drgL.intensity = 4 + Math.sin(t*.7)*.8;
-      bloom.strength = S.bloomBase + 0.3;
     }
 
-    // ── AUTO-RETORNO: involución al llegar a 8% ───────────────
-    if(S.dragonEnergy <= 8 && S.evoPhase === 'dragon'){
-      _triggerDragonReturn('depletion');
+    // ── AUTO-RETORNO AL LLEGAR A 0 ───────────────────────────
+    if(S.dragonEnergy <= 0 && S.evoPhase === 'dragon'){
+      _triggerDragonReturn('depletion'); // retorno narrativo: "semilla de luz"
     }
 
     if(this.wings){
       // Aleteo idle suave + aleteo fuerte al hacer click (_wflap timer)
       const flapExtra = (this._wflap > 0)
-        ? Math.sin((1-(this._wflap/2.8)) * Math.PI * 3) * 0.55  // 3 aleteos rápidos
+        ? Math.sin((1-(this._wflap/1.2)) * Math.PI * 3) * 0.55  // 3 aleteos rápidos
         : 0;
       if(this._wflap > 0) this._wflap -= dt;
 
@@ -1109,7 +1104,7 @@ class DragonaHakuryu {
   }
 
   flapWings(){
-    this._wflap = 2.8; // duración más larga — el dragón te reconoce con calma
+    this._wflap = 1.2; // duración animación de aleteo
     // Flash dorado al aletear — el dragón te reconoce
     sharedU.flashCol.value.set(0xffd700);
     sharedU.flashInt.value = 0.38;
@@ -1196,17 +1191,7 @@ function animate(){
   }
   // Cariño desde ventana PiP — window._pipPetting es escrito por el pip window
   if(window._pipPetting && _pipActive && S.evoPhase==='idle'){
-    isPetting=true;
-    if(S.form==='piki') piki.pet(dt);
-    // En modo dragón: cariño aumenta felicidad (y el dragón reacciona)
-    if(S.form==='dragon'){
-      S.happiness = Math.min(100, S.happiness + 20*dt);
-      S.love      = Math.min(100, S.love + 8*dt);
-    }
-  }
-  // Cariño al dragón desde canvas principal (click en canvas ya llama flapWings, esto da felicidad continua)
-  if(isDown && S.form==='dragon' && S.evoPhase==='dragon'){
-    S.happiness = Math.min(100, S.happiness + 15*dt);
+    isPetting=true; piki.pet(dt);
   }
   if(!isPetting) document.body.classList.remove('petting');
 
@@ -1306,7 +1291,6 @@ function updateEvolution(dt){
       document.getElementById('settings-btn').style.opacity='1';
       S.form='piki'; S.evoPhase='idle'; S.evoTimer=0;
       bloom.strength=S.bloomBase;
-      sendDragonBonusToKP(); // ← enviar bonus acumulado de vuelta a KP
       showMood('💚 Pikitipu regresó');
     }
   }
@@ -1592,6 +1576,21 @@ function _buildPipOverlay(pipWin, btn){
       <div id="pb-love" style="height:100%;width:${S.love}%;background:linear-gradient(90deg,#ffd700,#ffec6e);border-radius:3px;transition:width .6s"></div></div>`;
   body.appendChild(statsBar);
 
+  // ── Botón evolución dorado (se muestra solo cuando stats>80%) ──
+  const evoBtn = doc.createElement('div');
+  evoBtn.id='pip-evo-btn';
+  evoBtn.style.cssText=`position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+    width:46px;height:46px;border-radius:50%;
+    background:radial-gradient(circle,#ffe566,#ffd700);
+    box-shadow:0 0 18px rgba(255,215,0,.7),0 0 40px rgba(255,215,0,.3);
+    opacity:0;transition:opacity .5s;pointer-events:auto;cursor:pointer;z-index:50;
+    animation:pipEvoPulse 1.2s ease-in-out infinite;display:flex;align-items:center;justify-content:center;`;
+  evoBtn.innerHTML='<span style="font-size:1.4rem;pointer-events:none">🐲</span>';
+
+  const evoStyle = doc.createElement('style');
+  evoStyle.textContent=`@keyframes pipEvoPulse{0%,100%{box-shadow:0 0 18px rgba(255,215,0,.7),0 0 40px rgba(255,215,0,.3)}50%{box-shadow:0 0 30px rgba(255,215,0,1),0 0 70px rgba(255,215,0,.6)}}`;
+  doc.head.appendChild(evoStyle);
+  body.appendChild(evoBtn);
   evoBtn.addEventListener('click', ()=>{ if(window.opener) window.opener.triggerEvolution(); });
 
   // ── Overlay táctil: drag = rotar cámara · click sin drag = acariciar ──
@@ -1668,6 +1667,7 @@ function _buildPipOverlay(pipWin, btn){
 
   pipWin._mainBtn  = btn;
   pipWin._statsBar = statsBar;
+  pipWin._evoBtn   = evoBtn;  // referencia para mostrar/ocultar desde main
   pipWin.addEventListener('pagehide', ()=>{ window._pipPetting=false; window._pipDragging=false; _pipClose(btn); });
 }
 
@@ -1802,36 +1802,6 @@ window._pipPetting = false; // leído por el animate loop desde el pip window
 
 
 // ══════════════════════════════════════════════════════════════
-// CANAL INVERSO — Bonus dragón de vuelta al ecosistema KP
-// KP necesita: POST /api/dragon_bonus {pv_bonus, user, timestamp}
-// ══════════════════════════════════════════════════════════════
-function sendDragonBonusToKP(){
-  if(S.dragonPvBonus <= 0) return;
-  const payload = {
-    type:'DRAGON_BONUS', pv_bonus:S.dragonPvBonus,
-    user:S.lastUser||'unknown', timestamp:Date.now()
-  };
-  // Canal 1: WS local directo
-  if(ws && ws.readyState===1 && _wsSource==='local'){
-    try{ ws.send(JSON.stringify(payload)); }catch(e){}
-  }
-  // Canal 2: HTTP Flask KP localhost:5000
-  fetch('http://localhost:5000/api/dragon_bonus',{
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(payload)
-  }).then(r=>{
-    if(r.ok) toast('🐲→⚡','Dragon bonus enviado: +'+S.dragonPvBonus+' PV','#ffd700');
-  }).catch(()=>{
-    // Sin Flask → guardar pendiente en localStorage para sync futuro
-    const p=JSON.parse(localStorage.getItem('piki_pending_bonus')||'[]');
-    p.push(payload); localStorage.setItem('piki_pending_bonus',JSON.stringify(p));
-  });
-  const sent = S.dragonPvBonus;
-  S.dragonPvBonus=0;
-  console.log('[Pikitipu→KP] DragonBonus enviado:',sent,'PV');
-}
-
-// ══════════════════════════════════════════════════════════════
 function _checkEvolutionReady(){
   const ready = S.energy>80 && S.happiness>80 && S.bond>80 && S.love>80;
   const btn = document.getElementById('btn-evo');
@@ -1839,6 +1809,11 @@ function _checkEvolutionReady(){
   btn.disabled = !(ready && S.form==='piki');
   btn.classList.toggle('pulsing', ready && S.form==='piki');
   if(ready && S.form==='piki') showMood('🐲 ¡Pikitipu listo para evolucionar!');
+  // Botón dorado en PiP
+  if(_pipWin && !_pipWin.closed && _pipWin._evoBtn){
+    _pipWin._evoBtn.style.opacity = (ready && S.form==='piki') ? '1' : '0';
+    _pipWin._evoBtn.style.pointerEvents = (ready && S.form==='piki') ? 'auto' : 'none';
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
