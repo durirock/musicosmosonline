@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroCosmos - Simulador de Parapente & Núcleo Funk</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050515; font-family: 'Segoe UI', sans-serif; user-select: none; }
+        canvas { display: block; cursor: crosshair; }
+        
+        /* UI SUPERPUESTA */
+        .ui-overlay {
+            position: absolute; top: 20px; left: 20px; color: white; pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.9); z-index: 10;
+        }
+        .controls-hint {
+            position: absolute; bottom: 20px; right: 20px; background: rgba(0,0,0,0.6);
+            color: #4ade80; padding: 15px; border-radius: 12px; font-size: 0.85rem;
+            backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.1); z-index: 10;
+        }
+        
+        /* INSTRUMENTOS PARAPENTE */
+        .flight-instruments {
+            position: absolute; bottom: 20px; left: 20px; background: rgba(0,0,0,0.85);
+            color: #fff; padding: 15px; border-radius: 12px; font-family: monospace;
+            border: 1px solid rgba(100, 200, 255, 0.4); z-index: 10; display: none;
+            box-shadow: 0 0 20px rgba(0, 150, 255, 0.3);
+        }
+        .instrument-value { font-size: 1.5rem; font-weight: bold; color: #60a5fa; }
+        .vario-positive { color: #4ade80; }
+        .vario-negative { color: #f87171; }
+        
+        /* BOTÓN PARAPENTE */
+        #paraglider-btn {
+            position: absolute; top: 20px; right: 20px; background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white; width: 44px; height: 44px; border-radius: 50%; font-size: 22px; cursor: pointer;
+            border: none; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4); z-index: 20; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; padding: 0;
+        }
+        #paraglider-btn:hover { transform: scale(1.1); }
+        #paraglider-btn.active { background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
+
+        /* UI RADIO FUNK */
+        #btn-start-audio {
+            position: absolute; top: 75px; right: 20px;
+            background: #ff4400; color: white; border: none; width: 40px; height: 40px;
+            border-radius: 50%; font-size: 18px; cursor: pointer; z-index: 20;
+            box-shadow: 0 0 15px rgba(255, 68, 0, 0.6); display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s;
+        }
+        #btn-start-audio:hover { transform: scale(1.1); }
+        #radio-funk-panel {
+            position: absolute; top: 120px; right: 20px; background: rgba(10, 5, 0, 0.85);
+            padding: 15px; border-radius: 8px; border: 1px solid #ff4400;
+            box-shadow: 0 0 20px rgba(255, 68, 0, 0.3); width: 280px; z-index: 20;
+            color: white; font-family: 'Courier New', Courier, monospace; display: none;
+        }
+        .panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ffaa00; padding-bottom: 5px; margin-bottom: 15px; }
+        .panel-header h3 { margin: 0; font-size: 14px; color: #ffaa00; letter-spacing: 1px; }
+        #btn-minimize { background: none; border: none; color: #ffaa00; cursor: pointer; font-weight: bold; font-size: 16px;}
+        .control-group { margin-bottom: 15px; font-size: 12px;}
+        .control-group label { display: block; margin-bottom: 5px; color: #ddd;}
+        input[type=range] { width: 100%; accent-color: #ff4400; }
+
+        /* PANTALLA DE CARGA */
+        #loading {
+            position: fixed; inset: 0; background: #000; display: flex;
+            justify-content: center; align-items: center; z-index: 1000; color: #3b82f6; transition: opacity 1s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="text-center">
+            <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4 mx-auto"></div>
+            <p class="animate-pulse text-lg font-bold uppercase tracking-widest">Generando Topografía Suave...</p>
+        </div>
+    </div>
+
+    <div class="ui-overlay">
+        <h1 class="text-3xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-200">AeroCosmos</h1>
+        <p class="text-xs opacity-80 mt-1 font-mono" id="coords">Lat: 0 | Lon: 0</p>
+        <p class="text-[11px] uppercase tracking-widest text-cyan-400 mt-2 font-bold" id="mode-status">Modo: Dios (Vuelo Libre)</p>
+        <p class="text-[10px] uppercase tracking-widest text-orange-400 mt-1" id="time-status">Amanecer</p>
+    </div>
+
+    <button id="paraglider-btn" title="Modo Parapente">🪂</button>
+
+    <button id="btn-start-audio">🎵</button>
+    
+    <div id="radio-funk-panel">
+        <div class="panel-header">
+            <h3>NÚCLEO FUNK IA</h3>
+            <button id="btn-minimize">[-]</button>
+        </div>
+        <div class="control-group">
+            <label>TEMPO GLOBAL: <span id="bpm-val">90</span> BPM</label>
+            <input type="range" id="tempo-slider" min="70" max="110" value="90">
+        </div>
+        <div class="control-group">
+            <label>VOLUMEN MAESTRO</label>
+            <input type="range" id="vol-master" min="0" max="1" step="0.05" value="0.75">
+        </div>
+        <div class="control-group" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 10px;">
+            <span style="color: #4ade80; font-size: 10px;">► Orquestación Dinámica Activada</span><br>
+            <span style="color: #aaa; font-size: 9px;">El Sol reacciona a los sintetizadores</span>
+        </div>
+    </div>
+
+    <div class="flight-instruments" id="instruments">
+        <div class="mb-2">SPD: <span class="instrument-value" id="inst-spd">0</span> km/h</div>
+        <div class="mb-2">ALT: <span class="instrument-value" id="inst-alt">0</span> m</div>
+        <div>VAR: <span class="instrument-value" id="inst-var">0.0</span> m/s</div>
+    </div>
+
+    <div class="controls-hint" id="controls">
+        <p><strong>Click + Arrastrar:</strong> Mirar alrededor</p>
+        <p><strong>WASD:</strong> Vuelo libre</p>
+        <p><strong>Z / X:</strong> Subir / Bajar Altitud</p>
+    </div>
+
+    <script>
+        const CHUNK_SIZE = 160; 
+        const CHUNK_RES = 48; // Suavidad óptima
+        const VIEW_DISTANCE = 10; // Aumentado para ver más lejos
+        const CURVATURE = 0.00004; // Curvatura más sutil para alejar el horizonte
+        const SEA_LEVEL = -2.0;
+        
+        // Niebla empujada fuertemente hacia atrás para despejar la vista
+        const FOG_NEAR = 7 * CHUNK_SIZE; 
+        const FOG_FAR = 9.5 * CHUNK_SIZE; 
+
+        let scene, camera, renderer, clock;
+        let chunks = new Map();
+        let chunkQueue = [];
+        let sunLight, moonLight, ambientLight;
+        let sunMesh, sunBaseScale = 80, sunCurrentScale = 80;
+        let currentSunColor = new THREE.Color(0xffdd44);
+        let baseSunColor = new THREE.Color(0xffdd44);
+        let cosmosGroup, starsMat;
+        let keys = {};
+        
+        let isMouseDown = false;
+        let lastMousePos = { x: 0, y: 0 };
+        let cameraRotY = 0;
+        let cameraRotX = 0;
+
+        // Atmósfera
+        let dayTime = 40; 
+        const dayDuration = 120; // 2 minutos por ciclo completo para ver transiciones rápido
+
+        // Estado
+        let isParagliding = false;
+
+        // Físicas del Parapente
+        const pg = {
+            velocity: new THREE.Vector3(0, 0, 0),
+            speed: 15,          
+            sinkRate: -1.2,     
+            turnSpeed: 1.5,     
+            pitchAngle: 0,
+            rollAngle: 0,
+            targetRoll: 0,
+            targetPitch: 0,
+            liftForce: 0,
+            windDir: new THREE.Vector3(1, 0, 0.5).normalize(), 
+            windStrength: 6     
+        };
+
+        // VFX
+        let windVFXGroup;
+        const windParticles = [];
+
+        // Geometrías Globales
+        const globalWaterGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 1, 1);
+        globalWaterGeo.rotateX(-Math.PI / 2);
+        const globalTrunkGeo = new THREE.CylinderGeometry(0.2, 0.6, 4, 5);
+        const globalLeafGeo = new THREE.ConeGeometry(2.5, 9, 6);
+
+        // Curvatura del mundo en Shader
+        const worldCurvatureShader = {
+            onBeforeCompile: (shader) => {
+                shader.uniforms.uCurvature = { value: CURVATURE };
+                shader.vertexShader = `uniform float uCurvature;\n` + shader.vertexShader;
+                shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', 
+                    `#include <begin_vertex>
+                    #ifdef USE_INSTANCING
+                        vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+                    #else
+                        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                    #endif
+                    float dist = distance(worldPos.xz, cameraPosition.xz);
+                    transformed.y -= pow(dist, 2.0) * uCurvature;`
+                );
+            }
+        };
+
+        const globalTerrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
+        globalTerrainMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+        const globalWaterMat = new THREE.MeshStandardMaterial({ color: 0x0066cc, roughness: 0.1, metalness: 0.1 });
+        globalWaterMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+        const globalTrunkMat = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 1.0 });
+        globalTrunkMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+        const globalLeafMat = new THREE.MeshStandardMaterial({ color: 0x0f3b0f, roughness: 0.9 });
+        globalLeafMat.onBeforeCompile = worldCurvatureShader.onBeforeCompile;
+
+        const noise = {
+            seed: 1234.5,
+            get: function(x, z) {
+                let h = Math.sin(x * 0.004 + this.seed) * Math.cos(z * 0.003 + this.seed) * 90; 
+                h += Math.sin(x * 0.015) * Math.cos(z * 0.02) * 25;
+                h += Math.sin(x * 0.05) * 6;
+                if (h > 20) h += Math.pow(h - 20, 1.3);
+                if (h < 0) h *= 0.5;
+                return h;
+            }
+        };
+
+        function getTerrainNormal(x, z) {
+            const epsilon = 1.0;
+            const hL = noise.get(x - epsilon, z);
+            const hR = noise.get(x + epsilon, z);
+            const hD = noise.get(x, z - epsilon);
+            const hU = noise.get(x, z + epsilon);
+            const normal = new THREE.Vector3(hL - hR, 2.0 * epsilon, hD - hU);
+            return normal.normalize();
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // Fondo inicial explícito (evita el error 'copy' of null)
+            scene.fog = new THREE.Fog(0x87ceeb, FOG_NEAR, FOG_FAR); 
+
+            // Plano lejano (far plane) aumentado a 15000 para que no recorte las estrellas y galaxias
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 15000);
+            camera.position.set(0, 100, 0);
+            camera.rotation.order = 'YXZ';
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+            document.body.appendChild(renderer.domElement);
+
+            clock = new THREE.Clock();
+
+            // Iluminación
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+            
+            sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+            scene.add(sunLight);
+            
+            moonLight = new THREE.DirectionalLight(0x8899ff, 0.0);
+            scene.add(moonLight);
+
+            // Núcleo Visual (Sol Reactivo al Audio)
+            const sunGeo = new THREE.IcosahedronGeometry(1, 2);
+            const sunMat = new THREE.MeshStandardMaterial({ color: baseSunColor, emissive: baseSunColor, emissiveIntensity: 0.8, wireframe: true });
+            sunMesh = new THREE.Mesh(sunGeo, sunMat);
+            sunMesh.scale.set(sunBaseScale, sunBaseScale, sunBaseScale);
+            scene.add(sunMesh);
+
+            createCosmos();
+            createWindVFX();
+
+            // Eventos del Mouse y Teclado
+            window.addEventListener('keydown', e => keys[e.code] = true);
+            window.addEventListener('keyup', e => keys[e.code] = false);
+            window.addEventListener('mousedown', e => { isMouseDown = true; lastMousePos = { x: e.clientX, y: e.clientY }; });
+            window.addEventListener('mouseup', () => { isMouseDown = false; });
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onResize);
+
+            document.getElementById('paraglider-btn').addEventListener('click', toggleParagliderMode);
+
+            // Ocultar loader
+            setTimeout(() => {
+                const loader = document.getElementById('loading');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.style.display = 'none', 1000);
+            }, 800);
+
+            animate();
+        }
+
+        function createCosmos() {
+            cosmosGroup = new THREE.Group();
+            scene.add(cosmosGroup);
+
+            // Estrellas
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 8000;
+            const starPos = new Float32Array(starCount * 3);
+            for(let i=0; i<starCount; i++) {
+                const r = 3000 + Math.random() * 2000;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                starPos[i*3] = r * Math.sin(phi) * Math.cos(theta);
+                starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                starPos[i*3+2] = r * Math.cos(phi);
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            // IMPORTANTÍSIMO: fog: false para que las estrellas brillen sin la niebla terrestre
+            starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2.5, transparent: true, opacity: 0, fog: false });
+            cosmosGroup.add(new THREE.Points(starGeo, starsMat));
+
+            // Galaxias / Púlsares
+            const colors = [0xff00ff, 0x00ffff, 0xffaa00, 0x44ffaa, 0x9944ff];
+            for(let i=0; i<15; i++) {
+                const cHex = colors[i % colors.length];
+                const pGeo = new THREE.BufferGeometry();
+                const pPos = new Float32Array(500 * 3);
+                const pCol = new Float32Array(500 * 3);
+                const colorBase = new THREE.Color(cHex);
+                
+                const distance = 4000 + Math.random() * 2000;
+                const group = new THREE.Group();
+                group.position.setFromSphericalCoords(distance, Math.random() * Math.PI, Math.random() * Math.PI * 2);
+
+                for(let j=0; j<500; j++) {
+                    const r = Math.pow(Math.random(), 2.5) * 500;
+                    const theta = Math.random() * Math.PI * 2;
+                    const phi = Math.random() * Math.PI;
+                    pPos[j*3] = r * Math.sin(phi) * Math.cos(theta);
+                    pPos[j*3+1] = r * Math.sin(phi) * Math.sin(theta);
+                    pPos[j*3+2] = r * Math.cos(phi);
+                    const c = colorBase.clone().offsetHSL((Math.random()-0.5)*0.1, 0, (Math.random()-0.5)*0.2);
+                    pCol[j*3] = c.r; pCol[j*3+1] = c.g; pCol[j*3+2] = c.b;
+                }
+                pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+                pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3));
+                const pMat = new THREE.PointsMaterial({ size: 15, vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+                
+                const points = new THREE.Points(pGeo, pMat);
+                points.userData = { rotSpeed: (Math.random() - 0.5) * 0.005 };
+                group.add(points);
+                cosmosGroup.add(group);
+            }
+        }
+
+        function createWindVFX() {
+            windVFXGroup = new THREE.Group();
+            scene.add(windVFXGroup);
+            const lineGeo = new THREE.PlaneGeometry(0.05, 4);
+            const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.0, depthWrite: false });
+            
+            for(let i = 0; i < 80; i++) {
+                const line = new THREE.Mesh(lineGeo, lineMat);
+                line.userData = {
+                    offsetX: (Math.random() - 0.5) * 30, offsetY: (Math.random() - 0.5) * 15, offsetZ: (Math.random() - 0.5) * 30,
+                    speed: 10 + Math.random() * 15
+                };
+                windVFXGroup.add(line);
+                windParticles.push(line);
+            }
+        }
+
+        function createChunk(cx, cz) {
+            const group = new THREE.Group();
+            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, CHUNK_RES, CHUNK_RES);
+            terrainGeo.rotateX(-Math.PI / 2);
+
+            const vertices = terrainGeo.attributes.position.array;
+            const colors = new Float32Array(vertices.length);
+            const treePositions = [];
+
+            for (let i = 0; i < vertices.length; i += 3) {
+                const vx = vertices[i] + cx * CHUNK_SIZE;
+                const vz = vertices[i + 2] + cz * CHUNK_SIZE;
+                const h = noise.get(vx, vz);
+                vertices[i + 1] = h;
+
+                let r, g, b;
+                if (h > 80) { [r, g, b] = [0.95, 0.95, 1]; } 
+                else if (h > 40) { [r, g, b] = [0.45, 0.4, 0.35]; } 
+                else if (h > SEA_LEVEL + 5) { [r, g, b] = [0.2, 0.5, 0.2]; } 
+                else if (h > SEA_LEVEL) { [r, g, b] = [0.8, 0.75, 0.55]; } 
+                else { [r, g, b] = [0.1, 0.2, 0.35]; }
+                colors[i] = r; colors[i+1] = g; colors[i+2] = b;
+
+                if (h > SEA_LEVEL + 2 && h < 45 && Math.random() > 0.985) {
+                    treePositions.push({x: vertices[i], y: h, z: vertices[i+2]});
+                }
+            }
+
+            terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            terrainGeo.computeVertexNormals();
+
+            const terrainMesh = new THREE.Mesh(terrainGeo, globalTerrainMat);
+            group.add(terrainMesh);
+
+            const waterMesh = new THREE.Mesh(globalWaterGeo, globalWaterMat);
+            waterMesh.position.y = SEA_LEVEL;
+            group.add(waterMesh);
+
+            if (treePositions.length > 0) {
+                const trunkInst = new THREE.InstancedMesh(globalTrunkGeo, globalTrunkMat, treePositions.length);
+                const leafInst = new THREE.InstancedMesh(globalLeafGeo, globalLeafMat, treePositions.length);
+                const dummy = new THREE.Object3D();
+                for (let i = 0; i < treePositions.length; i++) {
+                    const pos = treePositions[i];
+                    const scale = 0.8 + Math.random() * 0.5;
+                    dummy.position.set(pos.x, pos.y + 2*scale, pos.z);
+                    dummy.scale.set(scale, scale, scale);
+                    dummy.updateMatrix();
+                    trunkInst.setMatrixAt(i, dummy.matrix);
+                    dummy.position.set(pos.x, pos.y + 7.5*scale, pos.z);
+                    dummy.updateMatrix();
+                    leafInst.setMatrixAt(i, dummy.matrix);
+                }
+                group.add(trunkInst);
+                group.add(leafInst);
+            }
+
+            group.position.set(cx * CHUNK_SIZE, -150, cz * CHUNK_SIZE);
+            scene.add(group);
+            
+            return { mesh: group, terrainGeo: terrainGeo, ready: false };
+        }
+
+        function updateChunks() {
+            const px = Math.round(camera.position.x / CHUNK_SIZE);
+            const pz = Math.round(camera.position.z / CHUNK_SIZE);
+            
+            for (let x = px - VIEW_DISTANCE; x <= px + VIEW_DISTANCE; x++) {
+                for (let z = pz - VIEW_DISTANCE; z <= pz + VIEW_DISTANCE; z++) {
+                    const key = `${x},${z}`;
+                    const dist = Math.sqrt(Math.pow(x-px, 2) + Math.pow(z-pz, 2));
+                    if (dist > VIEW_DISTANCE) continue; 
+
+                    if (!chunks.has(key) && !chunkQueue.some(q => q.key === key)) {
+                        chunkQueue.push({ key, x, z, dist: dist });
+                    }
+                }
+            }
+            chunkQueue.sort((a, b) => a.dist - b.dist);
+            
+            for (const [key, chunk] of chunks) {
+                const [cx, cz] = key.split(',').map(Number);
+                const dist = Math.sqrt(Math.pow(cx-px, 2) + Math.pow(cz-pz, 2));
+                
+                if (dist > VIEW_DISTANCE + 1) {
+                    scene.remove(chunk.mesh);
+                    chunk.terrainGeo.dispose(); 
+                    chunks.delete(key);
+                } else {
+                    if (!chunk.ready) {
+                        chunk.mesh.position.y += (0 - chunk.mesh.position.y) * 0.08;
+                        if (chunk.mesh.position.y > -0.5) {
+                            chunk.mesh.position.y = 0;
+                            chunk.ready = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        function processChunkQueue() {
+            if (chunkQueue.length === 0) return;
+            const next = chunkQueue.shift();
+            if (!chunks.has(next.key)) chunks.set(next.key, createChunk(next.x, next.z));
+        }
+
+        function updateAtmosphere(dt) {
+            if(!scene.background) return;
+
+            dayTime += dt;
+            let cycle = (dayTime % dayDuration) / dayDuration; 
+            
+            const dayColor = new THREE.Color(0x60a5fa);
+            const sunsetColor = new THREE.Color(0xf97316);
+            const nightColor = new THREE.Color(0x050515);
+
+            let skyColor = new THREE.Color();
+            let sunP = 0, moonP = 0, starOpacity = 0;
+            let timeLabel = "";
+
+            if (cycle < 0.2) { 
+                let t = cycle / 0.2;
+                skyColor.copy(nightColor).lerp(sunsetColor, t).lerp(dayColor, t);
+                sunP = t; starOpacity = 1.0 - t; timeLabel = "Amanecer";
+            } else if (cycle < 0.5) { 
+                skyColor.copy(dayColor);
+                sunP = 1.0; starOpacity = 0.0; timeLabel = "Día";
+            } else if (cycle < 0.7) { 
+                let t = (cycle - 0.5) / 0.2;
+                skyColor.copy(dayColor).lerp(sunsetColor, t);
+                sunP = 1.0 - t; starOpacity = t * 0.8; timeLabel = "Atardecer";
+            } else { 
+                let t = (cycle - 0.7) / 0.3;
+                skyColor.copy(sunsetColor).lerp(nightColor, Math.min(1, t * 4));
+                moonP = 1.0; starOpacity = 1.0; timeLabel = "Noche";
+            }
+
+            scene.background.copy(skyColor);
+            scene.fog.color.copy(skyColor); 
+
+            const angle = cycle * Math.PI * 2;
+            const orbit = 1200;
+            sunMesh.position.set(Math.cos(angle)*orbit, Math.sin(angle)*orbit, -orbit);
+            sunLight.position.copy(sunMesh.position);
+            moonLight.position.set(Math.cos(angle + Math.PI)*orbit, Math.sin(angle + Math.PI)*orbit, -orbit);
+
+            sunLight.intensity = sunP * 1.5;
+            moonLight.intensity = moonP * 0.3;
+            ambientLight.intensity = 0.15 + (sunP * 0.4);
+
+            starsMat.opacity = starOpacity;
+            if(cosmosGroup) {
+                cosmosGroup.position.copy(camera.position);
+                cosmosGroup.children.forEach(child => {
+                    if (child.children[0] && child.children[0].material.transparent) {
+                        child.children[0].material.opacity = starOpacity;
+                        child.children[0].rotation.y += child.children[0].userData.rotSpeed || 0;
+                    }
+                });
+            }
+
+            const timeEl = document.getElementById('time-status');
+            timeEl.innerText = timeLabel;
+            timeEl.style.color = starOpacity > 0.5 ? "#c084fc" : "#fbbf24";
+        }
+
+        function toggleParagliderMode() {
+            isParagliding = !isParagliding;
+            const btn = document.getElementById('paraglider-btn');
+            const inst = document.getElementById('instruments');
+            const ctrls = document.getElementById('controls');
+            const status = document.getElementById('mode-status');
+
+            if (isParagliding) {
+                btn.classList.add('active');
+                inst.style.display = 'block';
+                
+                ctrls.innerHTML = `
+                    <p><strong>Click + Arrastrar:</strong> Mirar libremente</p>
+                    <p><strong>Shift + Arrastrar:</strong> Dirigir vuelo</p>
+                    <p><strong>WASD:</strong> Control clásico</p>
+                `;
+                status.innerText = "Modo: Piloto de Parapente";
+                
+                pg.velocity.set(0, 0, 0);
+                pg.pitchAngle = 0; pg.rollAngle = 0; pg.targetRoll = 0; pg.targetPitch = 0;
+                cameraRotY = camera.rotation.y; cameraRotX = 0; 
+                
+                const groundY = noise.get(camera.position.x, camera.position.z);
+                if (camera.position.y < groundY + 50) camera.position.y = groundY + 200;
+
+            } else {
+                btn.classList.remove('active');
+                inst.style.display = 'none';
+                ctrls.innerHTML = `
+                    <p><strong>Click + Arrastrar:</strong> Mirar alrededor</p>
+                    <p><strong>WASD:</strong> Vuelo libre</p>
+                    <p><strong>Z / X:</strong> Subir / Bajar Altitud</p>
+                `;
+                status.innerText = "Modo: Dios (Vuelo Libre)";
+                camera.rotation.z = 0;
+                windParticles.forEach(p => p.material.opacity = 0);
+            }
+        }
+
+        function updateParaglider(dt) {
+            // Decaer controles del mouse si soltamos Shift
+            if (!keys['ShiftLeft'] && !keys['ShiftRight']) {
+                pg.targetRoll = THREE.MathUtils.lerp(pg.targetRoll, 0, dt * 2);
+                pg.targetPitch = THREE.MathUtils.lerp(pg.targetPitch, 0, dt * 2);
+            }
+
+            let finalRoll = pg.targetRoll;
+            let finalPitch = pg.targetPitch;
+
+            if (keys['KeyA']) finalRoll = 1; 
+            if (keys['KeyD']) finalRoll = -1; 
+            if (keys['KeyW']) finalPitch = 1;  
+            if (keys['KeyS']) finalPitch = -0.5;
+
+            pg.rollAngle = THREE.MathUtils.lerp(pg.rollAngle, finalRoll * 0.4, dt * 2);
+            pg.pitchAngle = THREE.MathUtils.lerp(pg.pitchAngle, finalPitch * 0.3, dt * 2);
+
+            cameraRotY += pg.rollAngle * pg.turnSpeed * dt;
+            camera.rotation.z = pg.rollAngle * 0.8;
+            // Interpolar combinando el cabeceo (pitch) del parapente y la mirada libre (cameraRotX)
+            camera.rotation.x = THREE.MathUtils.lerp(camera.rotation.x, pg.pitchAngle + cameraRotX, dt * 6);
+            camera.rotation.y = cameraRotY;
+
+            const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0,1,0), cameraRotY);
+            const currentSpeed = pg.speed + (pg.pitchAngle * 12);
+            const currentSink = pg.sinkRate - (pg.pitchAngle * 2) - (Math.abs(pg.rollAngle) * 0.5); 
+
+            pg.liftForce = 0;
+            const groundY = noise.get(camera.position.x, camera.position.z);
+            const agl = camera.position.y - groundY;
+            
+            const lookAheadPos = camera.position.clone().add(forward.clone().multiplyScalar(40));
+            const aheadGroundY = noise.get(lookAheadPos.x, lookAheadPos.z);
+            const aheadNormal = getTerrainNormal(lookAheadPos.x, lookAheadPos.z);
+            
+            if (agl < 250) { 
+                const windAlignment = pg.windDir.dot(aheadNormal); 
+                if (aheadGroundY > groundY && windAlignment < -0.2) { 
+                    const steepness = Math.max(0, aheadGroundY - groundY);
+                    const heightFactor = Math.max(0, 1 - (agl / 250)); 
+                    pg.liftForce += steepness * Math.abs(windAlignment) * pg.windStrength * 0.15 * heightFactor;
+                }
+                const distToGroundAhead = camera.position.y - aheadGroundY;
+                if (distToGroundAhead < 25 && distToGroundAhead > -10) {
+                    pg.liftForce += (25 - distToGroundAhead) * 0.4;
+                }
+            }
+
+            const verticalVelocity = currentSink + pg.liftForce; 
+            pg.velocity.copy(forward).multiplyScalar(currentSpeed);
+            pg.velocity.y = verticalVelocity;
+            pg.velocity.addScaledVector(pg.windDir, pg.windStrength * 0.2);
+
+            camera.position.addScaledVector(pg.velocity, dt);
+
+            if (camera.position.y < groundY + 2) {
+                camera.position.y = groundY + 2;
+                pg.velocity.y = 0;
+                pg.velocity.x *= 0.9; pg.velocity.z *= 0.9;
+                if (currentSpeed < 2) toggleParagliderMode();
+            }
+
+            document.getElementById('inst-spd').innerText = (currentSpeed * 3.6).toFixed(0);
+            document.getElementById('inst-alt').innerText = camera.position.y.toFixed(0);
+            const varioEl = document.getElementById('inst-var');
+            varioEl.innerText = (verticalVelocity > 0 ? "+" : "") + verticalVelocity.toFixed(1);
+            varioEl.className = "instrument-value " + (verticalVelocity > 0.5 ? 'vario-positive' : (verticalVelocity < -1.5 ? 'vario-negative' : ''));
+
+            updateWindVFX(dt, verticalVelocity);
+        }
+
+        function updateWindVFX(dt, vario) {
+            windVFXGroup.position.copy(camera.position);
+            windVFXGroup.rotation.y = cameraRotY;
+            const targetOpacity = vario > 2.0 ? Math.min(0.6, (vario - 2.0) * 0.2) : 0.0;
+            windParticles.forEach(p => {
+                p.material.opacity = THREE.MathUtils.lerp(p.material.opacity, targetOpacity, dt * 2);
+                if (p.material.opacity > 0.01) {
+                    p.position.set(p.userData.offsetX, p.userData.offsetY, p.userData.offsetZ);
+                    p.userData.offsetY += p.userData.speed * dt;
+                    p.userData.offsetZ += (pg.speed * 0.5) * dt;
+                    if (p.userData.offsetY > 15) p.userData.offsetY = -15;
+                    if (p.userData.offsetZ > 20) p.userData.offsetZ = -30;
+                }
+            });
+        }
+
+        function onMouseMove(e) {
+            if (!isMouseDown) return;
+            if (isParagliding && (keys['ShiftLeft'] || keys['ShiftRight'])) {
+                pg.targetRoll = THREE.MathUtils.clamp(pg.targetRoll - (e.clientX - lastMousePos.x) * 0.005, -1, 1);
+                pg.targetPitch = THREE.MathUtils.clamp(pg.targetPitch - (e.clientY - lastMousePos.y) * 0.005, -1, 1);
+            } else if (!isParagliding || (isParagliding && !keys['ShiftLeft'] && !keys['ShiftRight'])) {
+                cameraRotY -= (e.clientX - lastMousePos.x) * 0.003;
+                cameraRotX = THREE.MathUtils.clamp(cameraRotX - (e.clientY - lastMousePos.y) * 0.003, -1.5, 1.5);
+            }
+            lastMousePos = { x: e.clientX, y: e.clientY };
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        let frameCounter = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.1); 
+
+            updateAtmosphere(dt);
+
+            if (isParagliding) {
+                updateParaglider(dt);
+            } else {
+                const speed = (keys['ShiftLeft'] ? 300 : 100) * dt;
+                camera.rotation.y = cameraRotY;
+                camera.rotation.x = cameraRotX;
+
+                const dir = new THREE.Vector3();
+                if (keys['KeyW']) dir.z -= 1; if (keys['KeyS']) dir.z += 1;
+                if (keys['KeyA']) dir.x -= 1; if (keys['KeyD']) dir.x += 1;
+                dir.applyQuaternion(camera.quaternion);
+                
+                const hDir = new THREE.Vector3(dir.x, 0, dir.z).normalize();
+                if (hDir.length() > 0) camera.position.addScaledVector(hDir, speed);
+                if (keys['KeyZ']) camera.position.y += speed;
+                if (keys['KeyX']) camera.position.y -= speed;
+
+                const groundH = Math.max(SEA_LEVEL - 5, noise.get(camera.position.x, camera.position.z) + 2);
+                if (camera.position.y < groundH) camera.position.y = THREE.MathUtils.lerp(camera.position.y, groundH, 0.2);
+            }
+
+            // Animación del Sol Reactivo
+            sunMesh.rotation.x += 0.002;
+            sunMesh.rotation.y += 0.003;
+            sunCurrentScale = THREE.MathUtils.lerp(sunCurrentScale, sunBaseScale, 0.05);
+            sunMesh.scale.set(sunCurrentScale, sunCurrentScale, sunCurrentScale);
+            currentSunColor.lerp(baseSunColor, 0.05);
+            sunMesh.material.color.copy(currentSunColor);
+            sunMesh.material.emissive.copy(currentSunColor).multiplyScalar(0.8);
+
+            updateChunks();
+            processChunkQueue();
+
+            frameCounter++;
+            if (frameCounter % 10 === 0) {
+                document.getElementById('coords').innerText = `Lat: ${Math.round(camera.position.x)} | Lon: ${Math.round(camera.position.z)}`;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        let audioCtx, masterGain, compressor, noiseBuffer;
+        let isAudioPlaying = false;
+        
+        const params = { tempo: 90, swing: 0.6, filterMod: 0.3 };
+        const mixer = {
+            bass: { mute: false, vol: 1.0 }, kick: { mute: false, vol: 0.85 }, snare: { mute: false, vol: 0.7 },
+            scratch: { mute: false, vol: 0.4 }, keys: { mute: false, vol: 0.5 }, horns: { mute: false, vol: 0.4 }
+        };
+
+        const FASES = [
+            { id: 'INTRO', length: 4 }, { id: 'VERSE', length: 8 }, { id: 'RISE', length: 4 },
+            { id: 'CHORUS', length: 8 }, { id: 'BREAK', length: 4 }, { id: 'VAMP', length: 8 }
+        ];
+        
+        let currentPhaseIndex = 0, barsInPhase = 0, step = 0;
+
+        let activePatterns = {
+            kick:    [1.0, 0.0, 0.0, 0.2, 0.0, 0.0, 0.8, 0.0, 1.0, 0.0, 0.0, 0.4, 0.0, 0.8, 0.0, 0.0],
+            snare:   [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.4, 0.0],
+            scratch: [0.0, 0.6, 0.0, 0.8, 0.0, 0.0, 0.0, 0.6, 0.0, 0.8, 0.0, 0.0, 0.5, 0.0, 0.7, 0.0],
+            bass:    [1.0, 0.0, 0.4, 0.8, 0.0, 1.0, 0.3, 0.0, 0.9, 0.0, 0.8, 0.3, 0.0, 0.7, 0.4, 0.0] 
+        };
+        const scaleBase = [41.20, 48.99, 55.00, 61.74, 73.42, 82.41, 97.99]; 
+        const chords = [ [164.81, 196.00, 246.94], [146.83, 174.61, 220.00], [174.61, 220.00, 261.63] ];
+        let bassMelody = [0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 1, 0, 0, 4, 2, 0];
+
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain(); 
+            masterGain.gain.value = document.getElementById('vol-master').value;
+            
+            compressor = audioCtx.createDynamicsCompressor();
+            compressor.threshold.setValueAtTime(-12, audioCtx.currentTime); 
+            compressor.knee.setValueAtTime(10, audioCtx.currentTime);
+            compressor.ratio.setValueAtTime(6, audioCtx.currentTime); 
+            compressor.attack.setValueAtTime(0.003, audioCtx.currentTime); 
+            compressor.release.setValueAtTime(0.2, audioCtx.currentTime);
+            
+            masterGain.connect(compressor); compressor.connect(audioCtx.destination);
+
+            const bufferSize = audioCtx.sampleRate * 2; 
+            noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) output[i] = Math.random() * 2 - 1;
+        }
+
+        // Conecta el Audio al Sol 3D
+        function pulseSunVisuals(inst, force) {
+            sunCurrentScale = sunBaseScale + (force * sunBaseScale * (inst === 'bass' ? 0.3 : 0.8)); 
+            if(inst === 'kick') currentSunColor.setHex(0xcc00ff); 
+            if(inst === 'snare') currentSunColor.setHex(0x00ffff); 
+            if(inst === 'bass') currentSunColor.setHex(0xff0000); 
+            if(inst === 'scratch') currentSunColor.setHex(0xffcc00);
+            if(inst === 'keys') currentSunColor.setHex(0x00ff66);
+            if(inst === 'horns') currentSunColor.setHex(0xffffff);
+        }
+
+        function playKick(time, vel) {
+            pulseSunVisuals('kick', vel);
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.frequency.setValueAtTime(120 * vel, time); osc.frequency.exponentialRampToValueAtTime(45, time + 0.08); 
+            gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(1.0 * vel * mixer.kick.vol, time + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3); 
+            osc.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + 0.4);
+        }
+
+        function playSnare(time, vel) {
+            pulseSunVisuals('snare', vel);
+            const osc = audioCtx.createOscillator(), oscGain = audioCtx.createGain();
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(220, time);
+            oscGain.gain.setValueAtTime(0, time); oscGain.gain.linearRampToValueAtTime(0.5 * vel * mixer.snare.vol, time + 0.01);
+            oscGain.gain.exponentialRampToValueAtTime(0.01, time + 0.15); 
+            osc.connect(oscGain); oscGain.connect(masterGain); osc.start(time); osc.stop(time + 0.2);
+            
+            const noise = audioCtx.createBufferSource(), noiseFilter = audioCtx.createBiquadFilter(), noiseGain = audioCtx.createGain();
+            noise.buffer = noiseBuffer; noiseFilter.type = 'highpass'; noiseFilter.frequency.value = 2500;
+            noiseGain.gain.setValueAtTime(0, time); noiseGain.gain.linearRampToValueAtTime(0.6 * vel * mixer.snare.vol, time + 0.01);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.25); 
+            noise.connect(noiseFilter); noiseFilter.connect(noiseGain); noiseGain.connect(masterGain); noise.start(time); noise.stop(time + 0.3);
+        }
+
+        function playDJScratch(time, vel) {
+            pulseSunVisuals('scratch', vel);
+            const osc = audioCtx.createOscillator(), filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
+            osc.type = 'sawtooth'; const baseF = Math.random() > 0.5 ? 800 : 400; 
+            osc.frequency.setValueAtTime(baseF, time); osc.frequency.exponentialRampToValueAtTime(baseF * 2, time + 0.03); 
+            osc.frequency.exponentialRampToValueAtTime(baseF * 0.5, time + 0.08); 
+            filter.type = 'bandpass'; filter.Q.value = 5; filter.frequency.setValueAtTime(2000, time); filter.frequency.linearRampToValueAtTime(500, time + 0.08);
+            gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(1.0 * vel * mixer.scratch.vol, time + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1); 
+            osc.connect(filter); filter.connect(gain); gain.connect(masterGain); osc.start(time); osc.stop(time + 0.12);
+        }
+
+        function playBass(time, freq, vel) {
+            pulseSunVisuals('bass', vel);
+            const sub = audioCtx.createOscillator(), mid = audioCtx.createOscillator(), filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
+            sub.type = 'sine'; sub.frequency.value = freq; mid.type = 'triangle'; mid.frequency.value = freq * 1.002; 
+            filter.type = 'lowpass'; filter.Q.value = 1.0; 
+            const baseFreq = 60 + (params.filterMod * 150); const peakFreq = baseFreq + (vel * params.filterMod * 800); 
+            filter.frequency.setValueAtTime(baseFreq, time); filter.frequency.exponentialRampToValueAtTime(peakFreq, time + 0.04); 
+            filter.frequency.exponentialRampToValueAtTime(baseFreq, time + 0.3);
+            gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.8 * vel * mixer.bass.vol, time + 0.02); 
+            gain.gain.exponentialRampToValueAtTime(0.4 * vel * mixer.bass.vol, time + 0.2); gain.gain.linearRampToValueAtTime(0.001, time + 0.4); 
+            const subGain = audioCtx.createGain(); subGain.gain.value = 0.8; const midGain = audioCtx.createGain(); midGain.gain.value = 1.2;
+            sub.connect(subGain); mid.connect(midGain); subGain.connect(filter); midGain.connect(filter);
+            filter.connect(gain); gain.connect(masterGain); sub.start(time); mid.start(time); sub.stop(time + 0.5); mid.stop(time + 0.5);
+        }
+
+        function playKeys(time, vel) {
+            pulseSunVisuals('keys', vel);
+            const chord = chords[Math.floor(Math.random() * chords.length)];
+            chord.forEach(freq => {
+                const osc = audioCtx.createOscillator(), filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.value = freq;
+                filter.type = 'lowpass'; filter.frequency.setValueAtTime(1200, time); filter.frequency.exponentialRampToValueAtTime(200, time + 0.4);
+                gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.15 * vel * mixer.keys.vol, time + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, time + 0.6);
+                osc.connect(filter); filter.connect(gain); gain.connect(masterGain);
+                osc.start(time); osc.stop(time + 0.7);
+            });
+        }
+
+        function playSoftHorns(time, vel) {
+            pulseSunVisuals('horns', vel);
+            const root = scaleBase[0] * 2; const frequencies = [root, root * 1.5, root * 2]; 
+            frequencies.forEach(freq => {
+                const osc = audioCtx.createOscillator(), filter = audioCtx.createBiquadFilter(), gain = audioCtx.createGain();
+                osc.type = 'sawtooth'; osc.frequency.value = freq * (1 + (Math.random() * 0.006 - 0.003)); 
+                filter.type = 'lowpass'; filter.Q.value = 1; filter.frequency.setValueAtTime(300, time);
+                filter.frequency.linearRampToValueAtTime(1500, time + 0.8); filter.frequency.exponentialRampToValueAtTime(200, time + 2.0);
+                gain.gain.setValueAtTime(0, time); gain.gain.linearRampToValueAtTime(0.2 * vel * mixer.horns.vol, time + 0.5); 
+                gain.gain.exponentialRampToValueAtTime(0.001, time + 2.5); 
+                osc.connect(filter); filter.connect(gain); gain.connect(masterGain);
+                osc.start(time); osc.stop(time + 2.6);
+            });
+        }
+
+        function runDirectorLogic() {
+            const phase = FASES[currentPhaseIndex].id;
+            Object.keys(mixer).forEach(k => mixer[k].mute = true);
+
+            switch(phase) {
+                case 'INTRO': mixer.kick.mute = false; mixer.bass.mute = false; params.filterMod = 0.2; break;
+                case 'VERSE':
+                    mixer.kick.mute = false; mixer.bass.mute = false; mixer.snare.mute = false;
+                    mixer.scratch.mute = Math.random() > 0.4; mixer.keys.mute = Math.random() > 0.7; 
+                    params.filterMod = 0.4; break;
+                case 'RISE':
+                    mixer.kick.mute = false; mixer.bass.mute = false; mixer.snare.mute = false; mixer.scratch.mute = false; mixer.keys.mute = false;
+                    params.filterMod = 0.6; break;
+                case 'CHORUS':
+                    mixer.kick.mute = false; mixer.bass.mute = false; mixer.snare.mute = false; mixer.keys.mute = false; mixer.horns.mute = false; 
+                    mixer.scratch.mute = Math.random() > 0.8; params.filterMod = 0.9; break;
+                case 'BREAK':
+                    mixer.kick.mute = false; mixer.bass.mute = Math.random() > 0.5; mixer.snare.mute = Math.random() > 0.2; 
+                    params.filterMod = 0.1; break;
+                case 'VAMP':
+                    Object.keys(mixer).forEach(k => mixer[k].mute = false); params.filterMod = 1.0; break;
+            }
+        }
+
+        function mutateSequence() {
+            for(let i = 0; i < 16; i++) {
+                if (i !== 0 && Math.random() < 0.2) { 
+                    activePatterns.bass[i] = activePatterns.bass[i] > 0 ? 0 : (Math.random() * 0.5 + 0.4);
+                    bassMelody[i] = Math.floor(Math.random() * scaleBase.length);
+                }
+            }
+        }
+
+        function scheduler() {
+            if (step > 0 && step % 16 === 0) {
+                barsInPhase++; mutateSequence();
+                if (barsInPhase >= FASES[currentPhaseIndex].length) {
+                    barsInPhase = 0; currentPhaseIndex = (currentPhaseIndex + 1) % FASES.length;
+                }
+                runDirectorLogic(); 
+            }
+
+            const stepTime = (60 / params.tempo) / 4; 
+            const swingAmount = (step % 2 !== 0) ? stepTime * (params.swing * 0.5) : 0;
+            const playTime = audioCtx.currentTime + 0.05 + swingAmount;
+            const currentStep = step % 16;
+
+            let currentKickVel = activePatterns.kick[currentStep];
+            if ((FASES[currentPhaseIndex].id === 'CHORUS' || FASES[currentPhaseIndex].id === 'VAMP') && currentStep % 4 === 0) currentKickVel = 1.0; 
+
+            if (!mixer.kick.mute && currentKickVel > 0) playKick(playTime, currentKickVel);
+            if (!mixer.snare.mute && activePatterns.snare[currentStep] > 0) playSnare(playTime, activePatterns.snare[currentStep]);
+            if (!mixer.scratch.mute && activePatterns.scratch[currentStep] > 0) playDJScratch(playTime, activePatterns.scratch[currentStep]);
+            
+            if (!mixer.bass.mute && activePatterns.bass[currentStep] > 0) {
+                const noteIndex = currentStep === 0 ? 0 : bassMelody[currentStep];
+                playBass(playTime, scaleBase[noteIndex], activePatterns.bass[currentStep]);
+            }
+
+            if (!mixer.keys.mute && (currentStep === 2 || currentStep === 10) && Math.random() > 0.3) playKeys(playTime, 0.7);
+            if (!mixer.horns.mute && currentStep === 0 && barsInPhase % 2 === 0 && Math.random() > 0.2) playSoftHorns(playTime, 1.0);
+
+            step++; setTimeout(scheduler, stepTime * 1000); 
+        }
+
+        // Eventos Panel de Audio
+        document.getElementById('btn-start-audio').addEventListener('click', function() {
+            if (!isAudioPlaying) {
+                initAudio();
+                runDirectorLogic();
+                scheduler();
+                isAudioPlaying = true;
+                this.style.background = '#4ade80'; // Verde indicando ON
+                document.getElementById('radio-funk-panel').style.display = 'block';
+            } else {
+                // Toggle display del panel si ya está sonando
+                const panel = document.getElementById('radio-funk-panel');
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            }
+        });
+
+        document.getElementById('btn-minimize').addEventListener('click', () => {
+            document.getElementById('radio-funk-panel').style.display = 'none';
+        });
+
+        document.getElementById('vol-master').addEventListener('input', e => {
+            if(masterGain) masterGain.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
+        });
+
+        document.getElementById('tempo-slider').addEventListener('input', e => { 
+            params.tempo = parseFloat(e.target.value); document.getElementById('bpm-val').innerText = e.target.value; 
+        });
+
+        // Iniciar
+        window.onload = init;
+    </script>
+</body>
+</html>
