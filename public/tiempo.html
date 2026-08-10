@@ -201,6 +201,13 @@
     pointer-events:none;white-space:nowrap;}
   #toast.show{opacity:1;}
 
+  #zoom-close-btn{position:fixed;top:22px;left:50%;transform:translateX(-50%) scale(0.7);
+    z-index:80;width:42px;height:42px;border-radius:50%;border:1px solid var(--calipso);
+    background:rgba(4,14,18,0.55);color:var(--calipso-bright);font-size:17px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;
+    transition:opacity .25s ease, transform .25s ease;}
+  #zoom-close-btn.show{opacity:1;pointer-events:auto;transform:translateX(-50%) scale(1);}
+
   @media(max-width:600px){
     .brand{font-size:11px;}
     #hud-top{padding:14px;}
@@ -270,9 +277,9 @@
 </div>
 
 <div id="toast"></div>
+<button id="zoom-close-btn">✕</button>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js" crossorigin="anonymous"></script>
@@ -404,20 +411,121 @@ renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.setClearColor(0x00030a, 1);
 
+/* --------- Cámara orbital propia: Pointer Events unificados (mouse + touch + pen),
+   sin el código legado de "touch events" que traía el bug del pageX --------- */
+function SimpleOrbitControls(cam, dom){
+  const self=this;
+  this.target=new THREE.Vector3(0,46,-230);
+  this.enabled=true;
+  this.autoRotate=true;
+  this.autoRotateSpeed=0.12;
+  this.minDistance=45;
+  this.maxDistance=700;
+  this.maxPolarAngle=Math.PI*0.49;
+  this.dampingFactor=0.08;
+
+  const offset=cam.position.clone().sub(this.target);
+  let radius=Math.max(offset.length(),0.001);
+  let theta=Math.atan2(offset.x, offset.z);
+  let phi=Math.acos(THREE.MathUtils.clamp(offset.y/radius,-1,1));
+  let tRadius=radius, tTheta=theta, tPhi=phi;
+
+  const pointers=new Map(); // pointerId -> {x,y}
+  let pinchStartDist=null;
+  let lastActivity=performance.now();
+
+  function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+  function onDown(e){
+    if(!self.enabled) return;
+    lastActivity=performance.now();
+    pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(pointers.size===2){
+      const pts=[...pointers.values()];
+      pinchStartDist=dist(pts[0], pts[1]);
+    }
+  }
+  function onMove(e){
+    if(!self.enabled || !pointers.has(e.pointerId)) return;
+    lastActivity=performance.now();
+    const prev=pointers.get(e.pointerId);
+    const cur={x:e.clientX, y:e.clientY};
+    pointers.set(e.pointerId, cur);
+
+    if(pointers.size>=2){
+      const pts=[...pointers.values()];
+      const d=dist(pts[0], pts[1]);
+      if(pinchStartDist!=null){
+        const delta=pinchStartDist-d;
+        tRadius=THREE.MathUtils.clamp(tRadius+delta*0.28, self.minDistance, self.maxDistance);
+      }
+      pinchStartDist=d;
+      return;
+    }
+    const dx=cur.x-prev.x, dy=cur.y-prev.y;
+    tTheta -= dx*0.0055;
+    tPhi -= dy*0.0055;
+    tPhi=THREE.MathUtils.clamp(tPhi, 0.12, self.maxPolarAngle);
+  }
+  function onUp(e){
+    lastActivity=performance.now();
+    pointers.delete(e.pointerId);
+    if(pointers.size<2) pinchStartDist=null;
+  }
+  function onWheel(e){
+    if(!self.enabled) return;
+    e.preventDefault();
+    tRadius=THREE.MathUtils.clamp(tRadius+e.deltaY*0.15, self.minDistance, self.maxDistance);
+  }
+
+  dom.addEventListener('pointerdown', onDown);
+  dom.addEventListener('pointermove', onMove);
+  dom.addEventListener('pointerup', onUp);
+  dom.addEventListener('pointercancel', onUp);
+  dom.addEventListener('pointerleave', onUp);
+  dom.addEventListener('wheel', onWheel, {passive:false});
+
+  /* auto-sanación: si quedó un dedo fantasma pegado (el navegador nunca mandó su
+     pointerup/pointercancel), lo limpiamos solos para que los próximos toques respondan */
+  setInterval(()=>{
+    if(pointers.size>0 && performance.now()-lastActivity>3500){
+      pointers.clear();
+      pinchStartDist=null;
+    }
+  }, 2000);
+
+  /* recalcula theta/phi/radius desde la posición actual de la cámara —
+     se usa después de mover la cámara "a mano" (por ejemplo el zoom a una tarjeta) */
+  this.syncFromCamera=function(){
+    const off=cam.position.clone().sub(self.target);
+    radius=tRadius=Math.max(off.length(),0.001);
+    theta=tTheta=Math.atan2(off.x, off.z);
+    phi=tPhi=Math.acos(THREE.MathUtils.clamp(off.y/radius,-1,1));
+  };
+
+  this.update=function(){
+    if(!self.enabled) return; // congelado: no pisa animaciones manuales de cámara
+    if(self.autoRotate && pointers.size===0){ tTheta += self.autoRotateSpeed*0.012; }
+    theta += (tTheta-theta)*self.dampingFactor;
+    phi += (tPhi-phi)*self.dampingFactor;
+    radius += (tRadius-radius)*self.dampingFactor;
+    const sinPhiR=Math.sin(phi)*radius;
+    cam.position.set(
+      self.target.x + sinPhiR*Math.sin(theta),
+      self.target.y + Math.cos(phi)*radius,
+      self.target.z + sinPhiR*Math.cos(theta)
+    );
+    cam.lookAt(self.target);
+  };
+}
+
 let controls;
 try{
-  controls=new THREE.OrbitControls(camera, renderer.domElement);
-  controls.enableDamping=true;
-  controls.dampingFactor=0.05;
-  controls.autoRotate=true;
-  controls.autoRotateSpeed=0.12;
-  controls.minDistance=45;
-  controls.maxDistance=700;
-  controls.maxPolarAngle=Math.PI*0.49;
+  controls=new SimpleOrbitControls(camera, renderer.domElement);
   controls.target.set(0, 46, -230);
 }catch(e){
-  console.warn('OrbitControls no cargó, sigo sin rotación de cámara interactiva:', e);
-  controls={ update(){}, enabled:true, autoRotate:false, target:new THREE.Vector3(0,46,-230) };
+  console.warn('La cámara orbital no pudo iniciarse, sigo sin rotación interactiva:', e);
+  controls={ update(){}, enabled:true, autoRotate:false, target:new THREE.Vector3(0,46,-230), syncFromCamera(){} };
 }
 
 /* --------- Bloom, para que la nebulosa realmente respire luz --------- */
@@ -477,6 +585,17 @@ const texStreak=streakTexture();
 
 /* ----------------- EL PULSAR KAIRÓS ----------------- */
 const PULSAR_POS=new THREE.Vector3(0, 46, -230);
+
+/* ruido orgánico: suma de senos en frecuencias no relacionadas entre sí,
+   evita el efecto "metrónomo" de una sola onda sinusoidal */
+function organicNoise(t, seed){
+  return (
+    Math.sin(t*0.37+seed)*0.5 +
+    Math.sin(t*0.71+seed*1.37)*0.3 +
+    Math.sin(t*1.23+seed*2.11)*0.15 +
+    Math.sin(t*0.19+seed*0.53)*0.25
+  );
+}
 
 class KairosPulsar{
   constructor(){
@@ -577,42 +696,48 @@ class KairosPulsar{
   flash(){ this.flashEnergy=1.0; }
   feed(){ this.feedEnergy=1.0; this.flashEnergy=Math.max(this.flashEnergy,0.7); }
 
-  update(t){
-    const breathe=1 + Math.sin(t*0.6)*0.06 + Math.sin(t*1.7)*0.025;
+  update(t, audioLevel){
+    audioLevel = audioLevel||0;
+    /* respiración orgánica: suma de ondas en frecuencias no relacionadas,
+       para que nunca se sienta como un metrónomo mecánico */
+    const breathe = 1 + organicNoise(t, 0)*0.055;
     const spike=this.flashEnergy;
     const feed=this.feedEnergy;
     if(this.flashEnergy>0) this.flashEnergy=Math.max(0,this.flashEnergy-0.012);
     if(this.feedEnergy>0) this.feedEnergy=Math.max(0,this.feedEnergy-0.006);
 
-    const s=this.baseScale*breathe*(1+spike*0.6);
-    this.core.scale.set(14*s*(1+spike*0.9+feed*0.4),14*s*(1+spike*0.9+feed*0.4),1);
-    this.boilA.scale.set(20*s*(1+Math.sin(t*1.1)*0.08), 20*s*(1+Math.sin(t*1.1)*0.08),1);
-    this.boilA.material.rotation=t*0.4;
-    this.boilB.scale.set(24*s*(1+Math.cos(t*0.9)*0.07), 24*s*(1+Math.cos(t*0.9)*0.07),1);
-    this.boilB.material.rotation=-t*0.3;
-    this.plasma.scale.set(36*s,36*s,1);
-    this.halo.scale.set(82*s*(1+spike*0.4),82*s*(1+spike*0.4),1);
+    /* pulso de audio real: crece con el volumen de lo que se está grabando o reproduciendo */
+    const audioPulse=audioLevel*0.42;
 
-    /* saturación calipso extra durante el "procesamiento" de un nuevo mensaje */
-    const hueShift=0.475 - feed*0.02;
-    this.plasma.material.color.setHSL(hueShift, 0.85, 0.55+feed*0.15);
-    this.plasma.material.opacity=0.75+Math.sin(t*0.9)*0.1+spike*0.2;
-    this.halo.material.opacity=0.28+Math.sin(t*0.5)*0.07+spike*0.25+feed*0.15;
+    const s=this.baseScale*breathe*(1+spike*0.6)*(1+audioPulse);
+    this.core.scale.set(14*s*(1+spike*0.9+feed*0.4+audioLevel*0.5),14*s*(1+spike*0.9+feed*0.4+audioLevel*0.5),1);
+    this.boilA.scale.set(20*s*(1+organicNoise(t,1.7)*0.1), 20*s*(1+organicNoise(t,1.7)*0.1),1);
+    this.boilA.material.rotation=t*0.4;
+    this.boilB.scale.set(24*s*(1+organicNoise(t,3.4)*0.09), 24*s*(1+organicNoise(t,3.4)*0.09),1);
+    this.boilB.material.rotation=-t*0.3;
+    this.plasma.scale.set(36*s*(1+audioLevel*0.18),36*s*(1+audioLevel*0.18),1);
+    this.halo.scale.set(82*s*(1+spike*0.4+audioLevel*0.22),82*s*(1+spike*0.4+audioLevel*0.22),1);
+
+    /* saturación calipso extra durante el "procesamiento" de un nuevo mensaje o al sonar audio */
+    const hueShift=0.475 - feed*0.02 - audioLevel*0.01;
+    this.plasma.material.color.setHSL(hueShift, 0.85, 0.55+feed*0.15+audioLevel*0.1);
+    this.plasma.material.opacity=0.75+organicNoise(t,5.1)*0.1+spike*0.2+audioLevel*0.22;
+    this.halo.material.opacity=0.28+organicNoise(t,7.2)*0.07+spike*0.25+feed*0.15+audioLevel*0.28;
 
     this.filaments.forEach(sp=>{
       const a=sp.userData.baseAngle + t*sp.userData.speed;
       const r=sp.userData.radius*s;
       sp.position.set(Math.cos(a)*r, Math.sin(t*0.5+sp.userData.baseAngle)*4, Math.sin(a)*r);
       sp.material.rotation=a*1.3;
-      sp.material.opacity=0.4+Math.sin(t*1.3+sp.userData.baseAngle)*0.15+spike*0.3;
-      sp.scale.x=(46+feed*20)*s*0.5;
+      sp.material.opacity=0.4+organicNoise(t,sp.userData.baseAngle)*0.15+spike*0.3+audioLevel*0.25;
+      sp.scale.x=(46+feed*20+audioLevel*22)*s*0.5;
     });
 
     this.coronaInner.rotation.y=t*0.09;
     this.coronaInner.rotation.x=Math.sin(t*0.15)*0.08;
-    this.coronaInner.material.size=1.9+spike*1.2+feed*0.8;
+    this.coronaInner.material.size=1.9+spike*1.2+feed*0.8+audioLevel*1.8;
     this.coronaOuter.rotation.y=-t*0.045;
-    this.coronaOuter.material.size=2.6+spike*1.4;
+    this.coronaOuter.material.size=2.6+spike*1.4+audioLevel*1.1;
 
     /* pulso periódico tipo "latido" del arc reactor, cada ~3.2s */
     if(t-this.lastPulseWave>3.2){
@@ -709,6 +834,7 @@ async function syncTextCards(){
 }
 function updateTextCards(t){
   textCards.forEach(sp=>{
+    if(sp.userData.frozen) return;
     const a=sp.userData.baseAngle + t*sp.userData.speed;
     const r=sp.userData.radius;
     sp.position.set(Math.cos(a)*r, sp.userData.height+Math.sin(t*0.35+sp.userData.baseAngle)*4, Math.sin(a)*r);
@@ -725,11 +851,11 @@ function addAudioCard(msg){
   const core=new THREE.Sprite(new THREE.SpriteMaterial({
     map:texWhiteHot, color:0xffffff, blending:THREE.AdditiveBlending, transparent:true, depthWrite:false
   }));
-  core.scale.set(6,6,1);
+  core.scale.set(1.6,1.6,1);
   const halo=new THREE.Sprite(new THREE.SpriteMaterial({
-    map:texViolet, color:0x9b6bff, blending:THREE.AdditiveBlending, transparent:true, depthWrite:false, opacity:0.65
+    map:texViolet, color:0x9b6bff, blending:THREE.AdditiveBlending, transparent:true, depthWrite:false, opacity:0.7
   }));
-  halo.scale.set(13,13,1);
+  halo.scale.set(3.4,3.4,1);
   halo.add(core);
   halo.userData.msgId=msg.id;
 
@@ -756,20 +882,64 @@ function updateAudioCards(t){
     const r=sp.userData.radius;
     sp.position.set(Math.cos(a)*r, sp.userData.height+Math.sin(t*0.5+sp.userData.phase)*3, Math.sin(a)*r);
     const pulse=1+Math.sin(t*1.8+sp.userData.phase)*0.15;
-    sp.scale.set(13*pulse,13*pulse,1);
+    sp.scale.set(3.4*pulse,3.4*pulse,1);
   });
 }
 
-async function openTextCardZoom(msgId){
-  const msg=await dbGet('messages', msgId);
-  if(!msg) return;
-  showOverlay(`
-    <div class="o-label">Palabras suspendidas · ${new Date(msg.createdAt).toLocaleDateString('es-CL')}</div>
-    <div class="o-body">${(msg.text||'').replace(/</g,'&lt;')}</div>
-    <button class="btn-ghost" id="close-zoom">cerrar</button>
-  `, 'zoom');
-  document.getElementById('close-zoom').addEventListener('click', closeOverlay);
+let zoomedCard=null, zoomSavedState=null;
+
+function animateCameraTo(fromPos, toPos, fromTarget, toTarget, duration){
+  return new Promise(resolve=>{
+    const t0=performance.now();
+    function step(now){
+      const t=Math.min(1,(now-t0)/duration);
+      const ease = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+      camera.position.lerpVectors(fromPos, toPos, ease);
+      controls.target.lerpVectors(fromTarget, toTarget, ease);
+      if(t<1) requestAnimationFrame(step); else resolve();
+    }
+    requestAnimationFrame(step);
+  });
 }
+
+function zoomToCard(sprite){
+  if(zoomedCard) return;
+  zoomedCard=sprite;
+  sprite.userData.frozen=true;
+  zoomSavedState={
+    camPos: camera.position.clone(),
+    target: controls.target.clone(),
+    autoRotate: controls.autoRotate,
+    enabled: controls.enabled
+  };
+  controls.autoRotate=false;
+  controls.enabled=false;
+
+  const dir=camera.position.clone().sub(sprite.getWorldPosition(new THREE.Vector3())).normalize();
+  const spread=Math.max(sprite.scale.x, sprite.scale.y);
+  const desiredDist=THREE.MathUtils.clamp(spread*2.1, 20, 55);
+  const worldPos=sprite.getWorldPosition(new THREE.Vector3());
+  const toPos=worldPos.clone().add(dir.multiplyScalar(desiredDist));
+
+  animateCameraTo(camera.position.clone(), toPos, controls.target.clone(), worldPos, 650);
+  document.getElementById('zoom-close-btn').classList.add('show');
+}
+
+function unzoomCard(){
+  if(!zoomedCard || !zoomSavedState) return;
+  const sprite=zoomedCard;
+  document.getElementById('zoom-close-btn').classList.remove('show');
+  animateCameraTo(camera.position.clone(), zoomSavedState.camPos, controls.target.clone(), zoomSavedState.target, 600)
+    .then(()=>{
+      controls.syncFromCamera();
+      controls.autoRotate=zoomSavedState.autoRotate;
+      controls.enabled=zoomSavedState.enabled;
+      sprite.userData.frozen=false;
+      zoomedCard=null;
+      zoomSavedState=null;
+    });
+}
+document.getElementById('zoom-close-btn').addEventListener('click', (e)=>{ e.stopPropagation(); unzoomCard(); });
 
 /* ----------------- EL LAGO ESPEJO ----------------- */
 function gridTexture(){
@@ -908,9 +1078,13 @@ function shakeCamera(intensity){
   },40);
 }
 let actx=null;
+function ensureAudioCtx(){
+  if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+  return actx;
+}
 function plunk(freq=440, dur=0.18){
   try{
-    if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+    ensureAudioCtx();
     const o=actx.createOscillator(), g=actx.createGain();
     o.type='sine'; o.frequency.value=freq;
     g.gain.setValueAtTime(0.0001, actx.currentTime);
@@ -919,6 +1093,52 @@ function plunk(freq=440, dur=0.18){
     o.connect(g); g.connect(actx.destination);
     o.start(); o.stop(actx.currentTime+dur+0.02);
   }catch(e){}
+}
+
+/* ----------------- ANÁLISIS DE AUDIO EN VIVO: el pulsar reacciona al sonido real ----------------- */
+let audioAnalyser=null, audioDataArray=null;
+let recordingSourceNode=null, playbackSourceNode=null;
+
+function ensureAnalyser(){
+  const ctx=ensureAudioCtx();
+  if(!audioAnalyser){
+    audioAnalyser=ctx.createAnalyser();
+    audioAnalyser.fftSize=128;
+    audioAnalyser.smoothingTimeConstant=0.75;
+    audioDataArray=new Uint8Array(audioAnalyser.frequencyBinCount);
+  }
+  return audioAnalyser;
+}
+function attachAnalyserToStream(stream){
+  try{
+    const ctx=ensureAudioCtx();
+    const analyser=ensureAnalyser();
+    if(recordingSourceNode){ try{ recordingSourceNode.disconnect(); }catch(e){} }
+    recordingSourceNode=ctx.createMediaStreamSource(stream);
+    recordingSourceNode.connect(analyser); // sin conectar a destination: no hay eco al grabar
+  }catch(e){ console.warn('No pude analizar el audio del micrófono:', e); }
+}
+function detachRecordingAnalyser(){
+  if(recordingSourceNode){ try{ recordingSourceNode.disconnect(); }catch(e){} recordingSourceNode=null; }
+}
+function attachAnalyserToPlayback(audioEl){
+  try{
+    const ctx=ensureAudioCtx();
+    const analyser=ensureAnalyser();
+    if(!playbackSourceNode){
+      playbackSourceNode=ctx.createMediaElementSource(audioEl);
+      playbackSourceNode.connect(analyser);
+      analyser.connect(ctx.destination);
+    }
+    if(ctx.state==='suspended') ctx.resume();
+  }catch(e){ console.warn('No pude analizar el audio de reproducción:', e); }
+}
+function getAudioLevel(){
+  if(!audioAnalyser || !audioDataArray) return 0;
+  audioAnalyser.getByteFrequencyData(audioDataArray);
+  let sum=0;
+  for(let i=0;i<audioDataArray.length;i++) sum+=audioDataArray[i];
+  return (sum/audioDataArray.length)/255;
 }
 function animateArc(mesh, start, end, duration, arcHeight){
   return new Promise(resolve=>{
@@ -982,11 +1202,12 @@ renderer.domElement.addEventListener('pointerup', e=>{
   const dx=e.clientX-downPos.x, dy=e.clientY-downPos.y;
   downPos=null;
   if(Math.sqrt(dx*dx+dy*dy)>8) return; // fue un arrastre de cámara, no un toque
+  if(zoomedCard) return; // mientras está enfocada una tarjeta, solo el botón ✕ hace algo
   toNDC(e.clientX, e.clientY);
   raycaster.setFromCamera(pointerNDC, camera);
 
   const cardHits=raycaster.intersectObjects(textCardMeshes);
-  if(cardHits.length>0){ openTextCardZoom(cardHits[0].object.userData.msgId); return; }
+  if(cardHits.length>0){ zoomToCard(cardHits[0].object); return; }
 
   const audioHits=raycaster.intersectObjects(audioCardMeshes);
   if(audioHits.length>0){
@@ -1049,12 +1270,14 @@ async function startRecording(){
     const stream=await navigator.mediaDevices.getUserMedia({audio:true});
     chosenMime=pickMimeType();
     mediaRecorder = chosenMime ? new MediaRecorder(stream,{mimeType:chosenMime}) : new MediaRecorder(stream);
+    attachAnalyserToStream(stream);
     audioChunks=[];
     mediaRecorder.ondataavailable=e=>{ if(e.data && e.data.size>0) audioChunks.push(e.data); };
     mediaRecorder.onerror=e=>{ setRecStatus('⚠️ Error al grabar: '+(e.error?e.error.name:'desconocido')); };
     mediaRecorder.onstop=()=>{
       recordedBlob=new Blob(audioChunks,{type:chosenMime||'audio/webm'});
       stream.getTracks().forEach(t=>t.stop());
+      detachRecordingAnalyser();
       if(audioChunks.length===0 || recordedBlob.size===0){
         setRecStatus('⚠️ No se grabó audio (0 bytes). El navegador cortó el acceso al micrófono a mitad de camino — probá en una pestaña propia, fuera de cualquier vista previa.');
         return;
@@ -1604,6 +1827,7 @@ async function playPick(msgId){
     const rec=await dbGet('audio', msg.id);
     if(rec){
       nowPlaying.textContent='🎙️ '+new Date(msg.createdAt).toLocaleDateString('es-CL');
+      attachAnalyserToPlayback(nowPlayingAudio);
       nowPlayingAudio.src=URL.createObjectURL(rec.blob);
       nowPlayingAudio.play().catch(()=>{});
       /* pausa de 2 segundos de silencio entre un audio y el siguiente */
@@ -1705,7 +1929,7 @@ function animate(){
   requestAnimationFrame(animate);
   try{
     const t=clock.getElapsedTime();
-    pulsar.update(t);
+    pulsar.update(t, getAudioLevel());
     updateTextCards(t);
     updateAudioCards(t);
     reflection.material.opacity=0.16+Math.sin(t*0.9)*0.05;
