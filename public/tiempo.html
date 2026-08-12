@@ -51,13 +51,14 @@
     text-transform:uppercase;pointer-events:none;transition:opacity .5s;}
 
   /* ---------- DOCK ---------- */
-  #dock{position:fixed;bottom:0;left:0;right:0;z-index:20;display:flex;flex-direction:column;align-items:center;}
+  #dock{position:fixed;bottom:0;left:0;right:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;pointer-events:none;}
   #dock-panel{width:100%;max-width:640px;max-height:52vh;overflow:hidden;
     transform:translateY(12px);opacity:0;pointer-events:none;transition:transform .28s ease, opacity .22s ease;}
   #dock-panel.open{transform:translateY(0);opacity:1;pointer-events:auto;}
   #dock-toggle{margin:0 0 14px;padding:10px 22px;border-radius:22px;border:1px solid var(--line);
     background:rgba(4,14,18,0.4);color:var(--calipso-bright);font-family:'Orbitron',sans-serif;
-    font-size:11px;letter-spacing:2px;cursor:pointer;position:relative;}
+    font-size:11px;letter-spacing:2px;cursor:pointer;position:relative;pointer-events:auto;}
   #dock-toggle .badge{position:absolute;top:-6px;right:-6px;}
 
   #pulsar-actions{position:fixed;left:50%;top:62%;transform:translate(-50%,-50%) translateY(10px);
@@ -137,6 +138,16 @@
     font-size:13px;letter-spacing:0.5px;white-space:nowrap;transition:background .2s;}
   .pill-btn:hover{background:rgba(0,232,200,0.16);}
 
+  .icon-pill{width:52px;height:52px;border-radius:50%;border:1px solid var(--calipso);
+    background:rgba(0,232,200,0.08);color:var(--calipso-bright);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:19px;font-weight:700;
+    font-family:'Share Tech Mono',monospace;transition:background .2s, color .2s, border-color .2s;}
+  .icon-pill:hover{background:rgba(0,232,200,0.16);}
+  .icon-pill.icon-record{border-color:#ff4d5e;color:#ff4d5e;background:rgba(255,77,94,0.08);}
+  .icon-pill.icon-record:hover{background:rgba(255,77,94,0.16);}
+  .icon-pill.recording{border-color:#ff4d5e;color:#ff8d8d;background:rgba(255,77,94,0.2);
+    animation:pulseRec 1s infinite;}
+
   /* zoom al abrir una tarjeta de texto orbitante */
   @keyframes zoomIn{from{transform:scale(0.7);opacity:0;}to{transform:scale(1);opacity:1;}}
   #overlay-box.zoom{animation:zoomIn .32s cubic-bezier(.2,.8,.3,1.2);}
@@ -185,6 +196,7 @@
   .mini-btn{background:transparent;border:1px solid var(--calipso-dim);color:var(--calipso-bright);
     font-size:10px;letter-spacing:1px;padding:7px 12px;border-radius:5px;cursor:pointer;text-transform:uppercase;}
   .mini-btn:hover{border-color:var(--calipso);}
+  .mini-btn.tag-on{background:rgba(0,232,200,0.18);border-color:var(--calipso);color:var(--calipso-bright);}
 
   .repeat-row{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:11px;color:var(--text-dim);}
   .repeat-details{display:none;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;}
@@ -249,6 +261,7 @@
     <div id="view-audios" style="display:none;"></div>
     <div id="view-reproducir" style="display:none;">
       <div id="reproducir-wrap">
+        <div id="playback-tag-filter" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:12px;"></div>
         <div style="display:flex;gap:14px;align-items:center;justify-content:center;">
           <button id="prev-btn" class="icon-btn">⏮</button>
           <button id="play-big-btn">▶</button>
@@ -268,8 +281,9 @@
 </div>
 
 <div id="pulsar-actions">
-  <div class="pill-btn" id="pa-voz">🎙️ Grabar</div>
-  <div class="pill-btn" id="pa-texto">✎ Texto</div>
+  <div class="icon-pill icon-record" id="pa-voz" title="grabar">●</div>
+  <div class="icon-pill" id="pa-play" title="reproducir">▶</div>
+  <div class="icon-pill" id="pa-texto" title="texto">T</div>
 </div>
 
 <div id="overlay-bg">
@@ -344,6 +358,15 @@ async function dbGet(store,id){
     const req=tx.objectStore(store).get(id);
     req.onsuccess=()=>resolve(req.result||null);
     req.onerror=e=>reject(e);
+  });
+}
+async function dbDelete(store,id){
+  const db=await openDB();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(store,'readwrite');
+    tx.objectStore(store).delete(id);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=e=>reject(e);
   });
 }
 
@@ -659,8 +682,11 @@ class KairosPulsar{
     this.group.add(this.coronaOuter);
 
     this.flashEnergy=0;
+    this.flashTarget=0;
     this.feedEnergy=0;
+    this.feedTarget=0;
     this.baseScale=1;
+    this.baseScaleTarget=1;
     this.lastPulseWave=0;
   }
 
@@ -690,21 +716,26 @@ class KairosPulsar{
   }
 
   setResonancia(res){
-    this.baseScale=1 + Math.min(res,80)*0.007;
+    this.baseScaleTarget=1 + Math.min(res,80)*0.007;
   }
 
-  flash(){ this.flashEnergy=1.0; }
-  feed(){ this.feedEnergy=1.0; this.flashEnergy=Math.max(this.flashEnergy,0.7); }
+  flash(){ this.flashTarget=1.0; }
+  feed(){ this.feedTarget=1.0; this.flashTarget=Math.max(this.flashTarget,0.7); }
 
   update(t, audioLevel){
     audioLevel = audioLevel||0;
     /* respiración orgánica: suma de ondas en frecuencias no relacionadas,
        para que nunca se sienta como un metrónomo mecánico */
     const breathe = 1 + organicNoise(t, 0)*0.055;
+
+    /* todo sube y baja suave (ease), nunca de un salto — esto evita el "pop" abrupto */
+    this.flashEnergy += (this.flashTarget-this.flashEnergy)*0.1;
+    this.feedEnergy += (this.feedTarget-this.feedEnergy)*0.06;
+    this.baseScale += (this.baseScaleTarget-this.baseScale)*0.04;
+    if(this.flashTarget>0) this.flashTarget=Math.max(0,this.flashTarget-0.02);
+    if(this.feedTarget>0) this.feedTarget=Math.max(0,this.feedTarget-0.01);
     const spike=this.flashEnergy;
     const feed=this.feedEnergy;
-    if(this.flashEnergy>0) this.flashEnergy=Math.max(0,this.flashEnergy-0.012);
-    if(this.feedEnergy>0) this.feedEnergy=Math.max(0,this.feedEnergy-0.006);
 
     /* pulso de audio real: crece con el volumen de lo que se está grabando o reproduciendo */
     const audioPulse=audioLevel*0.42;
@@ -752,7 +783,7 @@ document.getElementById('res-count').textContent=getResonancia();
 
 /* superficie invisible más grande, para que sea fácil tocar el pulsar */
 const hitTarget=new THREE.Mesh(
-  new THREE.SphereGeometry(70,16,16),
+  new THREE.SphereGeometry(26,16,16),
   new THREE.MeshBasicMaterial({visible:false})
 );
 hitTarget.position.copy(PULSAR_POS);
@@ -876,13 +907,19 @@ async function syncAudioCards(){
   const all=await dbGetAll('messages');
   all.forEach(msg=>{ if(msg.hasAudio) addAudioCard(msg); });
 }
-function updateAudioCards(t){
+let currentlyPlayingId=null;
+
+function updateAudioCards(t, audioLevel){
+  audioLevel=audioLevel||0;
   audioCards.forEach(sp=>{
     const a=sp.userData.baseAngle + t*sp.userData.speed;
     const r=sp.userData.radius;
     sp.position.set(Math.cos(a)*r, sp.userData.height+Math.sin(t*0.5+sp.userData.phase)*3, Math.sin(a)*r);
-    const pulse=1+Math.sin(t*1.8+sp.userData.phase)*0.15;
+    const isPlaying = sp.userData.msgId===currentlyPlayingId;
+    const audioPulse = isPlaying ? audioLevel*1.1 : 0;
+    const pulse=1+Math.sin(t*1.8+sp.userData.phase)*0.15+audioPulse;
     sp.scale.set(3.4*pulse,3.4*pulse,1);
+    sp.material.opacity = isPlaying ? Math.min(1, 0.65+audioLevel*0.5) : 0.7;
   });
 }
 
@@ -892,11 +929,20 @@ function animateCameraTo(fromPos, toPos, fromTarget, toTarget, duration){
   return new Promise(resolve=>{
     const t0=performance.now();
     function step(now){
-      const t=Math.min(1,(now-t0)/duration);
-      const ease = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
-      camera.position.lerpVectors(fromPos, toPos, ease);
-      controls.target.lerpVectors(fromTarget, toTarget, ease);
-      if(t<1) requestAnimationFrame(step); else resolve();
+      try{
+        const t=Math.min(1,(now-t0)/duration);
+        const ease = t<0.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+        camera.position.lerpVectors(fromPos, toPos, ease);
+        controls.target.lerpVectors(fromTarget, toTarget, ease);
+        camera.lookAt(controls.target); // clave: sin esto la cámara se movía sin re-encuadrar
+        if(t<1){ requestAnimationFrame(step); return; }
+      }catch(e){
+        console.warn('Zoom de cámara interrumpido, se resuelve igual:', e);
+        camera.position.copy(toPos);
+        controls.target.copy(toTarget);
+        camera.lookAt(controls.target);
+      }
+      resolve();
     }
     requestAnimationFrame(step);
   });
@@ -923,6 +969,11 @@ function zoomToCard(sprite){
 
   animateCameraTo(camera.position.clone(), toPos, controls.target.clone(), worldPos, 650);
   document.getElementById('zoom-close-btn').classList.add('show');
+
+  /* cerrojo de seguridad: si por lo que sea nunca se cierra el zoom, se fuerza solo
+     a los 25s para que la app nunca quede completamente bloqueada al tacto */
+  clearTimeout(zoomToCard._watchdog);
+  zoomToCard._watchdog=setTimeout(()=>{ if(zoomedCard===sprite) unzoomCard(); }, 25000);
 }
 
 function unzoomCard(){
@@ -1202,7 +1253,7 @@ renderer.domElement.addEventListener('pointerup', e=>{
   const dx=e.clientX-downPos.x, dy=e.clientY-downPos.y;
   downPos=null;
   if(Math.sqrt(dx*dx+dy*dy)>8) return; // fue un arrastre de cámara, no un toque
-  if(zoomedCard) return; // mientras está enfocada una tarjeta, solo el botón ✕ hace algo
+  if(zoomedCard){ unzoomCard(); return; }
   toNDC(e.clientX, e.clientY);
   raycaster.setFromCamera(pointerNDC, camera);
 
@@ -1334,36 +1385,21 @@ function openActionSheet(){
   document.getElementById('top-toggle-wrap').classList.add('show');
 }
 
-function openVoiceCompose(){
-  recordedBlob=null; audioChunks=[];
-  showOverlay(`
-    <div class="o-label">Mensaje de voz</div>
-    <div id="rec-stage">
-      <div class="rec-btn-big" id="rec-toggle-btn"><div class="dot"></div></div>
-      <div id="rec-status">tocá para empezar a grabar</div>
-    </div>
-    <button class="btn-ghost" id="cancel-voice">cancelar</button>
-  `, 'compact');
-  const toggleBtn=document.getElementById('rec-toggle-btn');
-  const status=document.getElementById('rec-status');
-  toggleBtn.addEventListener('click', async ()=>{
-    if(!isRecording){
-      const ok=await startRecording();
-      if(ok){ toggleBtn.classList.add('recording'); status.textContent='grabando... tocá para detener'; }
-    } else {
-      stopRecording();
-      toggleBtn.classList.remove('recording');
-      toggleBtn.style.opacity='0.4';
-      toggleBtn.style.pointerEvents='none';
-      status.textContent='procesando...';
-      document.getElementById('cancel-voice').style.display='none';
-      /* commitMessage() se dispara solo, desde mediaRecorder.onstop */
-    }
-  });
-  document.getElementById('cancel-voice').addEventListener('click', ()=>{
-    if(isRecording) stopRecording();
-    closeOverlay();
-  });
+async function toggleQuickRecord(){
+  const btn=document.getElementById('pa-voz');
+  if(!isRecording){
+    recordedBlob=null; audioChunks=[];
+    const ok=await startRecording();
+    if(ok){ btn.textContent='■'; btn.classList.add('recording'); }
+  } else {
+    stopRecording();
+    btn.textContent='●';
+    btn.classList.remove('recording');
+    btn.style.opacity='0.4';
+    btn.style.pointerEvents='none';
+    /* commitMessage() se dispara solo, desde mediaRecorder.onstop */
+    setTimeout(()=>{ btn.style.opacity='1'; btn.style.pointerEvents='auto'; }, 1400);
+  }
 }
 
 function openTextCompose(){
@@ -1391,7 +1427,7 @@ function openTextCompose(){
 /* el mensaje se guarda EN EL MOMENTO en que se termina de grabar o escribir */
 async function commitMessage({type, text, hasAudio, blob}){
   const id=uid();
-  const msg={ id, type, text, hasAudio, createdAt:Date.now(), bounces:[] };
+  const msg={ id, type, text, hasAudio, createdAt:Date.now(), bounces:[], tags:[] };
   await dbPut('messages', msg);
   if(hasAudio && blob) await dbPut('audio', {id, blob});
 
@@ -1579,9 +1615,16 @@ const pulsarActions=document.getElementById('pulsar-actions');
 const topToggleWrap=document.getElementById('top-toggle-wrap');
 document.getElementById('pa-voz').addEventListener('click', (e)=>{
   e.stopPropagation();
+  toggleQuickRecord();
+  /* la ficha de acciones se queda visible mientras graba, para poder tocar "detener" ahí mismo */
+});
+document.getElementById('pa-play').addEventListener('click', (e)=>{
+  e.stopPropagation();
   pulsarActions.classList.remove('show');
   topToggleWrap.classList.remove('show');
-  openVoiceCompose();
+  switchTab('reproducir');
+  dockPanel.classList.add('open');
+  playNext();
 });
 document.getElementById('pa-texto').addEventListener('click', (e)=>{
   e.stopPropagation();
@@ -1606,34 +1649,139 @@ document.addEventListener('pointerdown', (e)=>{
   }
 });
 
+async function deleteMessageCompletely(id){
+  await dbDelete('messages', id);
+  try{ await dbDelete('audio', id); }catch(e){}
+
+  const aidx=audioCards.findIndex(sp=>sp.userData.msgId===id);
+  if(aidx>=0){
+    const sp=audioCards[aidx];
+    pulsar.group.remove(sp);
+    audioCards.splice(aidx,1);
+    const mi=audioCardMeshes.indexOf(sp);
+    if(mi>=0) audioCardMeshes.splice(mi,1);
+    cardedAudioIds.delete(id);
+  }
+  const tidx=textCards.findIndex(sp=>sp.userData.msgId===id);
+  if(tidx>=0){
+    const sp=textCards[tidx];
+    if(zoomedCard===sp) unzoomCard();
+    pulsar.group.remove(sp);
+    textCards.splice(tidx,1);
+    const mi=textCardMeshes.indexOf(sp);
+    if(mi>=0) textCardMeshes.splice(mi,1);
+    cardedIds.delete(id);
+  }
+  refreshLists();
+}
+
+/* ----------------- ETIQUETAS DEFINIDAS POR EL USUARIO (sin emoji) ----------------- */
+function getTagDefs(){
+  try{ return JSON.parse(localStorage.getItem('kairos_tagdefs')||'[]'); }catch(e){ return []; }
+}
+function setTagDefs(arr){ localStorage.setItem('kairos_tagdefs', JSON.stringify(arr)); }
+async function addTagDef(name){
+  name=(name||'').trim();
+  if(!name) return;
+  const defs=getTagDefs();
+  if(!defs.includes(name)){ defs.push(name); setTagDefs(defs); }
+}
+async function removeTagDef(name){
+  setTagDefs(getTagDefs().filter(t=>t!==name));
+  /* también se saca de todos los audios que la tenían */
+  const all=await dbGetAll('messages');
+  for(const msg of all){
+    if(msg.tags && msg.tags.includes(name)){
+      msg.tags=msg.tags.filter(t=>t!==name);
+      await dbPut('messages', msg);
+    }
+  }
+}
+
 async function renderAudios(){
   const all=await dbGetAll('messages');
   const audios=all.filter(m=>m.hasAudio).sort((a,b)=>b.createdAt-a.createdAt);
   const wrap=document.getElementById('view-audios');
+  const tagDefs=getTagDefs();
+
+  const managerHtml=`
+    <h3 class="section-label">Etiquetas</h3>
+    <div class="custom-date-row" style="margin-bottom:8px;">
+      <input type="text" id="new-tagdef-input" placeholder="nombre de etiqueta" style="flex:1;min-width:110px;">
+      <button class="mini-btn" id="new-tagdef-btn">crear</button>
+    </div>
+    <div id="tagdef-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+      ${tagDefs.length===0
+        ? '<span style="font-size:10.5px;color:var(--text-dim);">todavía no definiste ninguna</span>'
+        : tagDefs.map(t=>`<span class="bounce-chip">${t.replace(/</g,'&lt;')}<span class="x" data-deltag="${t.replace(/"/g,'&quot;')}">✕</span></span>`).join('')}
+    </div>
+  `;
+
   if(audios.length===0){
-    wrap.innerHTML='<div class="empty-state">Todavía no grabaste ningún audio.<br>Tocá el pulsar para dejar tu voz.</div>';
-    return;
+    wrap.innerHTML=managerHtml+'<div class="empty-state">Todavía no grabaste ningún audio.</div>';
+  } else {
+    let cardsHtml='';
+    for(const msg of audios){
+      const rec=await dbGet('audio', msg.id);
+      const src=rec ? URL.createObjectURL(rec.blob) : '';
+      const tags=msg.tags||[];
+      const scheduleHtml = msg.bounces.length===0
+        ? `<div class="bounce-line"><span>sin programar</span><span class="cal-link" data-schedule="${msg.id}">programar</span></div>`
+        : msg.bounces.map(b=>`<div class="bounce-line${b.arrived?' arrived':''}"><span>${b.arrived?'llegó':formatEta(b.timestamp)}</span></div>`).join('');
+      const tagToggleHtml = tagDefs.length===0
+        ? ''
+        : tagDefs.map(t=>{
+            const on=tags.includes(t);
+            return `<span class="mini-btn${on?' tag-on':''}" data-toggletag="${msg.id}" data-tag="${t.replace(/"/g,'&quot;')}" style="margin:3px 4px 0 0;display:inline-block;">${t.replace(/</g,'&lt;')}</span>`;
+          }).join('');
+      cardsHtml+=`
+        <div class="msg-card">
+          <div class="m-top"><span>${new Date(msg.createdAt).toLocaleDateString('es-CL')}</span>
+          <span><span class="cal-link" data-delete="${msg.id}" style="color:#ff8d8d;">eliminar</span></span></div>
+          <audio controls style="width:100%;margin-bottom:8px;" src="${src}"></audio>
+          <div>${tagToggleHtml}</div>
+          ${scheduleHtml}
+        </div>
+      `;
+    }
+    wrap.innerHTML=managerHtml+cardsHtml;
   }
-  wrap.innerHTML='';
-  for(const msg of audios){
-    const rec=await dbGet('audio', msg.id);
-    const src=rec ? URL.createObjectURL(rec.blob) : '';
-    const scheduleHtml = msg.bounces.length===0
-      ? `<div class="bounce-line"><span>sin programar</span><span class="cal-link" data-schedule="${msg.id}">programar</span></div>`
-      : msg.bounces.map(b=>`<div class="bounce-line${b.arrived?' arrived':''}"><span>${b.arrived?'✓ llegó':formatEta(b.timestamp)}</span></div>`).join('');
-    const card=document.createElement('div');
-    card.className='msg-card';
-    card.innerHTML=`
-      <div class="m-top"><span>${new Date(msg.createdAt).toLocaleDateString('es-CL')}</span><span>🎙️</span></div>
-      <audio controls style="width:100%;margin-bottom:8px;" src="${src}"></audio>
-      ${scheduleHtml}
-    `;
-    wrap.appendChild(card);
-  }
+
+  document.getElementById('new-tagdef-btn').addEventListener('click', async ()=>{
+    const input=document.getElementById('new-tagdef-input');
+    await addTagDef(input.value);
+    input.value='';
+    renderAudios();
+  });
+  wrap.querySelectorAll('[data-deltag]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      await removeTagDef(el.dataset.deltag);
+      renderAudios();
+    });
+  });
   wrap.querySelectorAll('.cal-link[data-schedule]').forEach(el=>{
     el.addEventListener('click', async ()=>{
       pendingMessage=await dbGet('messages', el.dataset.schedule);
       openScheduleStep();
+    });
+  });
+  wrap.querySelectorAll('.cal-link[data-delete]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      if(confirm('¿Eliminar este audio para siempre? No se puede deshacer.')){
+        await deleteMessageCompletely(el.dataset.delete);
+      }
+    });
+  });
+  wrap.querySelectorAll('[data-toggletag]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const id=el.dataset.toggletag, tag=el.dataset.tag;
+      const msg=await dbGet('messages', id);
+      if(!msg) return;
+      msg.tags=msg.tags||[];
+      if(msg.tags.includes(tag)) msg.tags=msg.tags.filter(t=>t!==tag);
+      else msg.tags.push(tag);
+      await dbPut('messages', msg);
+      renderAudios();
     });
   });
 }
@@ -1646,6 +1794,7 @@ async function refreshLists(){
   let transitoCount=0, llegadosCount=0;
   syncTextCards();
   syncAudioCards();
+  renderPlaybackTagFilter();
   renderAudios();
 
   all.sort((a,b)=>b.createdAt-a.createdAt).forEach(msg=>{
@@ -1804,9 +1953,39 @@ const nowPlayingAudio=document.getElementById('now-playing-audio');
 
 function clearAdvanceTimer(){ if(advanceTimer){ clearTimeout(advanceTimer); advanceTimer=null; } }
 
+let selectedPlaybackTags=new Set();
+
+function messagePassesTagFilter(msg){
+  if(!msg.hasAudio) return true; // el filtro de etiquetas rige solo para audios
+  if(selectedPlaybackTags.size===0) return true; // sin selección = suena todo
+  const tags=msg.tags||[];
+  return tags.some(t=>selectedPlaybackTags.has(t));
+}
+
 async function getPlaybackPool(){
   const all=await dbGetAll('messages');
-  return all.filter(m=>m.hasAudio || m.text).map(m=>m.id);
+  return all.filter(m=>(m.hasAudio||m.text) && messagePassesTagFilter(m)).map(m=>m.id);
+}
+
+function renderPlaybackTagFilter(){
+  const defs=getTagDefs();
+  const wrap=document.getElementById('playback-tag-filter');
+  if(!wrap) return;
+  /* limpia de la selección cualquier etiqueta que ya no exista */
+  selectedPlaybackTags.forEach(t=>{ if(!defs.includes(t)) selectedPlaybackTags.delete(t); });
+  if(defs.length===0){ wrap.innerHTML=''; return; }
+  wrap.innerHTML=defs.map(t=>{
+    const on=selectedPlaybackTags.has(t);
+    return `<span class="mini-btn${on?' tag-on':''}" data-playtag="${t.replace(/"/g,'&quot;')}">${t.replace(/</g,'&lt;')}</span>`;
+  }).join('');
+  wrap.querySelectorAll('[data-playtag]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const t=el.dataset.playtag;
+      if(selectedPlaybackTags.has(t)) selectedPlaybackTags.delete(t);
+      else selectedPlaybackTags.add(t);
+      renderPlaybackTagFilter();
+    });
+  });
 }
 
 async function playPick(msgId){
@@ -1822,10 +2001,12 @@ async function playPick(msgId){
   nowPlayingAudio.pause();
 
   let willAutoAdvanceAfter=4200;
+  currentlyPlayingId=null;
 
   if(msg.hasAudio){
     const rec=await dbGet('audio', msg.id);
     if(rec){
+      currentlyPlayingId=msg.id;
       nowPlaying.textContent='🎙️ '+new Date(msg.createdAt).toLocaleDateString('es-CL');
       attachAnalyserToPlayback(nowPlayingAudio);
       nowPlayingAudio.src=URL.createObjectURL(rec.blob);
@@ -1876,6 +2057,7 @@ function stopShuffle(){
   playBtn.textContent='▶';
   nowPlayingAudio.onended=null;
   nowPlayingAudio.pause();
+  currentlyPlayingId=null;
 }
 
 playBtn.addEventListener('click', async ()=>{
@@ -1929,9 +2111,10 @@ function animate(){
   requestAnimationFrame(animate);
   try{
     const t=clock.getElapsedTime();
-    pulsar.update(t, getAudioLevel());
+    const level=getAudioLevel();
+    pulsar.update(t, level);
     updateTextCards(t);
-    updateAudioCards(t);
+    updateAudioCards(t, level);
     reflection.material.opacity=0.16+Math.sin(t*0.9)*0.05;
     controls.update();
     if(useBloom && composer) composer.render(); else renderer.render(scene, camera);
