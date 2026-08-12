@@ -61,11 +61,11 @@
     font-size:11px;letter-spacing:2px;cursor:pointer;position:relative;pointer-events:auto;}
   #dock-toggle .badge{position:absolute;top:-6px;right:-6px;}
 
-  #pulsar-actions{position:fixed;left:50%;top:62%;transform:translate(-50%,-50%) translateY(10px);
+  #pulsar-actions{position:fixed;left:50%;top:78%;transform:translate(-50%,-50%) translateY(10px);
     z-index:55;display:flex;gap:10px;opacity:0;pointer-events:none;transition:opacity .22s ease, transform .22s ease;}
   #pulsar-actions.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) translateY(0);}
 
-  #top-toggle-wrap{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%) translateY(-8px);
+  #top-toggle-wrap{position:fixed;left:50%;top:20%;transform:translate(-50%,-50%) translateY(-8px);
     z-index:55;opacity:0;pointer-events:none;transition:opacity .22s ease, transform .22s ease;}
   #top-toggle-wrap.show{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) translateY(0);}
   #tabs{display:flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-bottom:none;
@@ -908,6 +908,7 @@ async function syncAudioCards(){
   all.forEach(msg=>{ if(msg.hasAudio) addAudioCard(msg); });
 }
 let currentlyPlayingId=null;
+let audioReactSource='central'; // 'central' = reacciona el sol | 'orb' = reacciona el planeta tocado
 
 function updateAudioCards(t, audioLevel){
   audioLevel=audioLevel||0;
@@ -1266,6 +1267,7 @@ renderer.domElement.addEventListener('pointerup', e=>{
     playHistory=playHistory.slice(0,historyIndex+1);
     playHistory.push(msgId);
     historyIndex=playHistory.length-1;
+    audioReactSource='orb';
     playPick(msgId);
     return;
   }
@@ -1296,6 +1298,42 @@ function pickMimeType(){
   return '';
 }
 
+/* ----------------- TRANSCRIPCIÓN EN VIVO MIENTRAS SE GRABA ----------------- */
+let liveRecognition=null, liveTranscript='';
+function startLiveTranscription(){
+  liveTranscript='';
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR) return; // sin soporte: el audio se guarda igual, solo sin título/etiqueta automática
+  try{
+    liveRecognition=new SR();
+    liveRecognition.lang=navigator.language||'es-ES';
+    liveRecognition.continuous=true;
+    liveRecognition.interimResults=true;
+    liveRecognition.onresult=(e)=>{
+      let finalText='';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal) finalText+=e.results[i][0].transcript;
+      }
+      if(finalText) liveTranscript=(liveTranscript+' '+finalText).trim();
+    };
+    liveRecognition.onerror=()=>{};
+    liveRecognition.onend=()=>{ if(liveRecognition && liveRecognition._keepAlive){ try{ liveRecognition.start(); }catch(e){} } };
+    liveRecognition._keepAlive=true;
+    liveRecognition.start();
+  }catch(e){ liveRecognition=null; }
+}
+function stopLiveTranscription(){
+  if(liveRecognition){
+    liveRecognition._keepAlive=false;
+    try{ liveRecognition.stop(); }catch(e){}
+  }
+  return liveTranscript.trim();
+}
+function guessTagsFromText(text){
+  const low=text.toLowerCase();
+  return getTagDefs().filter(t=>low.includes(t.toLowerCase()));
+}
+
 function setRecStatus(msg){
   const el=document.getElementById('rec-status');
   if(el){
@@ -1323,19 +1361,23 @@ async function startRecording(){
     mediaRecorder = chosenMime ? new MediaRecorder(stream,{mimeType:chosenMime}) : new MediaRecorder(stream);
     attachAnalyserToStream(stream);
     audioChunks=[];
+    startLiveTranscription();
     mediaRecorder.ondataavailable=e=>{ if(e.data && e.data.size>0) audioChunks.push(e.data); };
     mediaRecorder.onerror=e=>{ setRecStatus('⚠️ Error al grabar: '+(e.error?e.error.name:'desconocido')); };
     mediaRecorder.onstop=()=>{
       recordedBlob=new Blob(audioChunks,{type:chosenMime||'audio/webm'});
       stream.getTracks().forEach(t=>t.stop());
       detachRecordingAnalyser();
+      const transcript=stopLiveTranscription();
       if(audioChunks.length===0 || recordedBlob.size===0){
         setRecStatus('⚠️ No se grabó audio (0 bytes). El navegador cortó el acceso al micrófono a mitad de camino — probá en una pestaña propia, fuera de cualquier vista previa.');
         return;
       }
       setRecStatus('integrando el audio al núcleo...');
       setTimeout(()=>{
-        commitMessage({type:'voice', text:'', hasAudio:true, blob:recordedBlob});
+        const title=transcript ? transcript.trim().slice(0,42) : '';
+        const autoTags=transcript ? guessTagsFromText(transcript) : [];
+        commitMessage({type:'voice', text:'', hasAudio:true, blob:recordedBlob, title, transcript, autoTags});
       }, 650);
     };
     mediaRecorder.start();
@@ -1403,9 +1445,13 @@ async function toggleQuickRecord(){
 }
 
 function openTextCompose(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   showOverlay(`
     <div class="o-label">Mensaje de texto</div>
-    <textarea id="msg-text" placeholder="Escribile a quien vas a ser..."></textarea>
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;">
+      <textarea id="msg-text" placeholder="Escribile a quien vas a ser..." style="flex:1;"></textarea>
+      ${SR?'<button class="icon-pill icon-record" id="dictate-btn" style="width:44px;height:44px;font-size:15px;flex-shrink:0;" title="dictar">●</button>':''}
+    </div>
     <button class="btn-ghost" id="done-text-btn">listo — se guarda solo</button>
   `);
   const ta=document.getElementById('msg-text');
@@ -1416,6 +1462,40 @@ function openTextCompose(){
     committed=true;
     await commitMessage({type:'text', text:val, hasAudio:false, blob:null});
   };
+
+  let dictating=false, dictateRecognition=null;
+  const dictateBtn=document.getElementById('dictate-btn');
+  if(dictateBtn){
+    dictateBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); }); // no le robe el foco al textarea
+    dictateBtn.addEventListener('click', ()=>{
+      if(!dictating){
+        try{
+          dictateRecognition=new SR();
+          dictateRecognition.lang=navigator.language||'es-ES';
+          dictateRecognition.continuous=true;
+          dictateRecognition.interimResults=true;
+          const base=ta.value;
+          dictateRecognition.onresult=(e)=>{
+            let finalText='';
+            for(let i=e.resultIndex;i<e.results.length;i++){
+              if(e.results[i].isFinal) finalText+=e.results[i][0].transcript;
+            }
+            if(finalText) ta.value=(base+' '+finalText).trim();
+          };
+          dictateRecognition.onend=()=>{ if(dictating){ try{ dictateRecognition.start(); }catch(e){} } };
+          dictateRecognition.start();
+          dictating=true;
+          dictateBtn.classList.add('recording');
+        }catch(e){ showToast('No pude iniciar el dictado por voz.'); }
+      } else {
+        dictating=false;
+        if(dictateRecognition){ dictateRecognition.onend=null; try{ dictateRecognition.stop(); }catch(e){} }
+        dictateBtn.classList.remove('recording');
+        ta.focus();
+      }
+    });
+  }
+
   ta.addEventListener('blur', doCommit);
   document.getElementById('done-text-btn').addEventListener('click', async ()=>{
     if(!ta.value.trim()){ closeOverlay(); return; }
@@ -1425,9 +1505,14 @@ function openTextCompose(){
 }
 
 /* el mensaje se guarda EN EL MOMENTO en que se termina de grabar o escribir */
-async function commitMessage({type, text, hasAudio, blob}){
+async function commitMessage({type, text, hasAudio, blob, title, transcript, autoTags}){
   const id=uid();
-  const msg={ id, type, text, hasAudio, createdAt:Date.now(), bounces:[], tags:[] };
+  const msg={
+    id, type, text, hasAudio, createdAt:Date.now(), bounces:[],
+    tags: autoTags||[],
+    title: title||'',
+    transcript: transcript||''
+  };
   await dbPut('messages', msg);
   if(hasAudio && blob) await dbPut('audio', {id, blob});
 
@@ -1624,6 +1709,7 @@ document.getElementById('pa-play').addEventListener('click', (e)=>{
   topToggleWrap.classList.remove('show');
   switchTab('reproducir');
   dockPanel.classList.add('open');
+  audioReactSource='central';
   playNext();
 });
 document.getElementById('pa-texto').addEventListener('click', (e)=>{
@@ -1738,6 +1824,10 @@ async function renderAudios(){
         <div class="msg-card">
           <div class="m-top"><span>${new Date(msg.createdAt).toLocaleDateString('es-CL')}</span>
           <span><span class="cal-link" data-delete="${msg.id}" style="color:#ff8d8d;">eliminar</span></span></div>
+          <div class="custom-date-row" style="margin-bottom:8px;">
+            <input type="text" data-titleinput="${msg.id}" value="${(msg.title||'').replace(/"/g,'&quot;')}" placeholder="ponele nombre..." style="flex:1;min-width:110px;">
+            <button class="mini-btn" data-savetitle="${msg.id}">guardar</button>
+          </div>
           <audio controls style="width:100%;margin-bottom:8px;" src="${src}"></audio>
           <div>${tagToggleHtml}</div>
           ${scheduleHtml}
@@ -1784,6 +1874,17 @@ async function renderAudios(){
       renderAudios();
     });
   });
+  wrap.querySelectorAll('[data-savetitle]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const id=el.dataset.savetitle;
+      const input=wrap.querySelector(`[data-titleinput="${id}"]`);
+      const msg=await dbGet('messages', id);
+      if(!msg) return;
+      msg.title=(input.value||'').trim();
+      await dbPut('messages', msg);
+      showToast('Nombre guardado.');
+    });
+  });
 }
 
 async function refreshLists(){
@@ -1796,6 +1897,7 @@ async function refreshLists(){
   syncAudioCards();
   renderPlaybackTagFilter();
   renderAudios();
+  const tagDefs=getTagDefs();
 
   all.sort((a,b)=>b.createdAt-a.createdAt).forEach(msg=>{
     const pendientes=msg.bounces.filter(b=>!b.arrived);
@@ -1806,10 +1908,17 @@ async function refreshLists(){
       const card=document.createElement('div');
       card.className='msg-card';
       const preview=msg.text ? (msg.text.length>90?msg.text.slice(0,90)+'…':msg.text) : '(mensaje de voz)';
+      const tagToggleHtml = (msg.text && tagDefs.length>0)
+        ? '<div style="margin-bottom:6px;">'+tagDefs.map(t=>{
+            const on=(msg.tags||[]).includes(t);
+            return `<span class="mini-btn${on?' tag-on':''}" data-toggletxttag="${msg.id}" data-tag="${t.replace(/"/g,'&quot;')}" style="margin:3px 4px 0 0;display:inline-block;">${t.replace(/</g,'&lt;')}</span>`;
+          }).join('')+'</div>'
+        : '';
       card.innerHTML=`
         <div class="m-top"><span>${new Date(msg.createdAt).toLocaleDateString('es-CL')}</span>
         <span>${msg.hasAudio?'🎙️':''} ${msg.text?'✎':''}</span></div>
         <div class="m-preview">${preview}</div>
+        ${tagToggleHtml}
       `;
       if(msg.bounces.length===0){
         const line=document.createElement('div');
@@ -1861,6 +1970,18 @@ async function refreshLists(){
     el.addEventListener('click', async ()=>{
       pendingMessage=await dbGet('messages', el.dataset.schedule);
       openScheduleStep();
+    });
+  });
+  transito.querySelectorAll('[data-toggletxttag]').forEach(el=>{
+    el.addEventListener('click', async ()=>{
+      const id=el.dataset.toggletxttag, tag=el.dataset.tag;
+      const msg=await dbGet('messages', id);
+      if(!msg) return;
+      msg.tags=msg.tags||[];
+      if(msg.tags.includes(tag)) msg.tags=msg.tags.filter(t=>t!==tag);
+      else msg.tags.push(tag);
+      await dbPut('messages', msg);
+      refreshLists();
     });
   });
   llegados.querySelectorAll('.arrived-btn').forEach(el=>{
@@ -1956,7 +2077,6 @@ function clearAdvanceTimer(){ if(advanceTimer){ clearTimeout(advanceTimer); adva
 let selectedPlaybackTags=new Set();
 
 function messagePassesTagFilter(msg){
-  if(!msg.hasAudio) return true; // el filtro de etiquetas rige solo para audios
   if(selectedPlaybackTags.size===0) return true; // sin selección = suena todo
   const tags=msg.tags||[];
   return tags.some(t=>selectedPlaybackTags.has(t));
@@ -2025,6 +2145,29 @@ async function playPick(msgId){
   }
 }
 
+let shuffleBag=[];
+function shuffleArray(arr){
+  const a=arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+async function pickNextFromBag(){
+  const pool=await getPlaybackPool();
+  if(pool.length===0) return null;
+  shuffleBag=shuffleBag.filter(id=>pool.includes(id)); // por si algo se borró o el filtro cambió
+  if(shuffleBag.length===0){
+    shuffleBag=shuffleArray(pool);
+    /* que la vuelta nueva no arranque justo con lo último que sonó */
+    if(shuffleBag.length>1 && shuffleBag[shuffleBag.length-1]===currentlyPlayingId){
+      [shuffleBag[shuffleBag.length-1], shuffleBag[shuffleBag.length-2]]=[shuffleBag[shuffleBag.length-2], shuffleBag[shuffleBag.length-1]];
+    }
+  }
+  return shuffleBag.pop();
+}
+
 async function playNext(){
   clearAdvanceTimer();
   if(historyIndex < playHistory.length-1){
@@ -2032,13 +2175,12 @@ async function playNext(){
     await playPick(playHistory[historyIndex]);
     return;
   }
-  const pool=await getPlaybackPool();
-  if(pool.length===0){
+  const msgId=await pickNextFromBag();
+  if(!msgId){
     showToast('Todavía no grabaste ni escribiste nada para reproducir.');
     stopShuffle();
     return;
   }
-  const msgId=pool[Math.floor(Math.random()*pool.length)];
   playHistory.push(msgId);
   historyIndex=playHistory.length-1;
   await playPick(msgId);
@@ -2062,10 +2204,11 @@ function stopShuffle(){
 
 playBtn.addEventListener('click', async ()=>{
   if(shuffling){ stopShuffle(); return; }
+  audioReactSource='central';
   await playNext();
 });
-skipBtn.addEventListener('click', ()=>{ playNext(); });
-prevBtn.addEventListener('click', ()=>{ playPrevious(); });
+skipBtn.addEventListener('click', ()=>{ audioReactSource='central'; playNext(); });
+prevBtn.addEventListener('click', ()=>{ audioReactSource='central'; playPrevious(); });
 
 /* ---------------------------------------------------------------------
    12. ARRANQUE DIRECTO
@@ -2112,9 +2255,9 @@ function animate(){
   try{
     const t=clock.getElapsedTime();
     const level=getAudioLevel();
-    pulsar.update(t, level);
+    pulsar.update(t, audioReactSource==='central' ? level : 0);
     updateTextCards(t);
-    updateAudioCards(t, level);
+    updateAudioCards(t, audioReactSource==='orb' ? level : 0);
     reflection.material.opacity=0.16+Math.sin(t*0.9)*0.05;
     controls.update();
     if(useBloom && composer) composer.render(); else renderer.render(scene, camera);
