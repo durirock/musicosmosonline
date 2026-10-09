@@ -5086,7 +5086,7 @@
                     // Ejemplo basado en tu código `index - copia.html` (cameraOffset.z o cameraOffset.y):
                     if (currentViewMode === 'thirdPerson') {
                         cameraOffset.z -= deltaDistance * pinchZoomSensitivity;
-                        cameraOffset.z = Math.max(5, Math.min(30, cameraOffset.z)); // Usa tus límites
+                        cameraOffset.z = Math.max(5, Math.min(100, cameraOffset.z)); // Usa tus límites
                     } else if (currentViewMode === 'birdEye') {
                         cameraOffset.y -= deltaDistance * pinchZoomSensitivity; // En vista de pájaro, el zoom puede afectar la altura
                         cameraOffset.y = Math.max(10, Math.min(50, cameraOffset.y)); // Usa tus límites
@@ -5786,10 +5786,10 @@
                 // Lógica de VUELO LIBRE (tu código original)
                 if (currentViewMode === 'thirdPerson') {
                     cameraOffset.z += delta;
-                    cameraOffset.z = Math.max(5, Math.min(30, cameraOffset.z));
+                    cameraOffset.z = Math.max(5, Math.min(80, cameraOffset.z));
                 } else if (currentViewMode === 'birdEye') {
                     cameraOffset.y += delta;
-                    cameraOffset.y = Math.max(10, Math.min(50, cameraOffset.y));
+                    cameraOffset.y = Math.max(10, Math.min(80, cameraOffset.y));
                 }
             }
 
@@ -8168,7 +8168,1150 @@
     }
 
 // ── FIN COSMOS BRIDGE ──────────────────────────────────────────────
+/*
+╔══════════════════════════════════════════════════════════════════╗
+║  MUSIC FLIGHT v1.0 — la música ES el piloto de Musicosmos        ║
+║  Pegar al FINAL del script principal, justo después de         ║
+║  "// ── FIN COSMOS BRIDGE" y antes del cierre del script.                ║
+║  No requiere modificar animate() ni ninguna otra función.        ║
+║                                                                  ║
+║  Teclas: F = activar/desactivar vuelo musical                    ║
+╚══════════════════════════════════════════════════════════════════╝
 
+MAPEO MÚSICA → MOVIMIENTO
+  Registro (centro de gravedad de las notas) → ascenso / descenso
+  Contorno melódico (subir/bajar de la melodía) → cabeceo extra
+  Saltos melódicos grandes                    → "latigazo" lateral
+  Tonalidad (círculo de quintas)              → rumbo (brújula tonal)
+  Modo menor / mayor                          → espiral izq. / der.
+  Densidad de notas + dinámica (velocity)     → velocidad + FOV
+  Cada ataque (grave pesa más que agudo)      → impulso rítmico
+  Disonancia (2das menores, tritonos)         → turbulencia
+  Pedal de sustain                            → planeo (inercia larga)
+  Pitch bend                                  → viraje directo
+  Silencio                                    → deriva de respiración
+*/
+;(function () {
+  'use strict';
+
+  // ── Configuración ajustable en caliente: MusicFlight.config.speedMax = 150 ──
+  const CFG = {
+    enabled: true,
+    // Sensibilidad (slider del HUD): divide TODOS los tiempos de respuesta.
+    // Baja = vuelo planeado y perezoso; alta = sube y gira apenas tocas.
+    intensity: 1.0,
+    speedIdle: 3,        // u/s de deriva en silencio
+    speedMax: 95,        // u/s en pasaje fortissimo/presto
+    climbMax: 0.95,      // rad (~54°) de ángulo de ascenso máximo
+    // Giro: lado del teclado × figuración repetitiva, acumulando con el tiempo
+    turnMax: 1.0,        // rad/s de viraje máximo
+    turnSign: -1,        // si el giro te sale espejado, ponlo en 1
+    ostinatoRise: 1.3,   // s que tarda el giro en cerrarse manteniendo la figura
+    ostinatoFall: 0.7,   // s que tarda en abrirse al soltarla
+    chordMs: 45,         // notas dentro de esta ventana = un solo evento (acorde)
+    figGain: 2.5,        // cuánto puede la dirección de la figura sobre el lado
+    repeatClimb: 0.8,    // empuje vertical extra al martillear una nota o acorde
+    // El rumbo es una variable LENTA: cambiar de lado cuesta más que insistir
+    // en el que ya llevas. Sin esto, cada secuencia de notas zarandea el morro.
+    turnTau: 0.9,        // s en afianzar un giro en el sentido que ya iba
+    turnFlipTau: 2.4,    // s en invertir el sentido: hay que insistir de verdad
+    sideTau: 1.6,        // s de inercia del "en qué lado del teclado estoy"
+    // Pedal de sustain = acelerador y freno
+    pedalBoost: 0.85,    // empuje extra con el pedal a fondo
+    playingMs: 900,      // sin ataques durante este tiempo = "ya no está tocando"
+    slowCruise: 0.18,    // fracción de speedMax al soltar el pedal tocando
+    sustainDecay: 5.0,   // s que tarda en pararse con el pedal puesto y sin tocar
+    brakeTau: 0.14,      // s de frenado en seco (más bajo = más brusco)
+    fovBase: 75,
+    fovBoost: 22,
+    pitchSign: { firstPerson: 1, thirdPerson: -1 }, // si el cabeceo visual sale invertido, cambia el signo
+    // Zoom con la rueda del ratón (reemplaza los límites originales 5–30 / 10–50)
+    zoomStep: 0.12,      // 12 % por "click" de rueda
+    zoomMaxThird: 400,   // distancia máxima de la cámara en tercera persona
+    zoomMaxBird: 1500,   // altura máxima en vista de pájaro
+    cameraFar: 4000,     // para que no se recorte la escena al alejar
+    // Estela / mapa musical
+    trailOn: true,
+    cutOnSilence: false,  // false = estela continua, también marca el vuelo con WASD
+    // Órbitas: cada nota que suena enrolla una hélice alrededor de la estela
+    // principal, como los planetas al avanzar el sistema solar.
+    // El período sigue la altura real: una octava abajo tarda exactamente el
+    // doble, una quinta 3:2. Y el radio sale de la tercera ley de Kepler
+    // (r ∝ T^⅔), así que los graves quedan afuera y lentos por física.
+    orbitsOn: true,
+    orbitPeriodMid: 2.2,  // s por vuelta en el Do central
+    orbitPeriodMin: 0.45, // tope para que los agudos no sean un borrón
+    orbitPeriodMax: 9.0,  // tope para que los graves no se salgan de cuadro
+    orbitRadiusK: 3.6,    // escala del radio kepleriano
+    orbitStepRad: 0.15,   // resolución angular de la hélice (42 tramos por vuelta)
+    orbitFade: 2.0,       // s que sigue girando al soltar la tecla, apagándose
+    trailMaxSeg: 30000,   // segmentos de cinta (anillo: lo más viejo se sobrescribe)
+    trailMaxBeads: 4000,  // "cuentas" = una por nota tocada
+    trailStep: 0.8,       // unidades entre segmentos
+    trailWidth: 0.2,     // grosor de la estela principal, en unidades del mundo
+    orbitWidth: 0.28,     // grosor de las hélices que orbitan
+    widthScale: 0.0045,   // engorda con la distancia, conservando la proporción
+    minAngular: 0.0016,   // suelo de ~1 píxel: por fina que sea, no se rompe en puntos
+    colorTau: 0.12,       // s de mezcla RGB entre el color de una nota y la siguiente
+    glow: 1.35,           // brillo del plasma (súbelo para más bloom aditivo)
+    glowFloor: 0.55,      // brillo mínimo: la estela de desplazamiento se sigue viendo
+    breathe: true,        // onda de pulso viajando por el filamento
+    // Rejilla de notas: 12 columnas (clase de altura) × octavas (filas). Las 88 teclas
+    // caben sin superponerse, incluso con un acorde de diez notas a la vez.
+    laneW: 2.3,           // separación lateral entre semitonos vecinos
+    rowH: 3.1,            // separación vertical entre octavas
+    beadSize: 2.8,        // tamaño base de la nota (escala con la dinámica)
+    // Reproducción del trazo (tecla espacio)
+    replayRadius: 70,     // radio de búsqueda de notas alrededor del avatar
+    replayNoteMs: 320     // duración máxima de cada nota al reproducir
+  };
+  let minimized = true;   // el panel arranca plegado
+  try {
+    const s = localStorage.getItem('musicflightEnabled'); if (s !== null) CFG.enabled = (s === '1');
+    const mn = localStorage.getItem('musicflightMin'); if (mn !== null) minimized = (mn === '1');
+    const tr = localStorage.getItem('musicflightTrail'); if (tr !== null) CFG.trailOn = (tr === '1');
+    const cu = localStorage.getItem('musicflightCut'); if (cu !== null) CFG.cutOnSilence = (cu === '1');
+    const or = localStorage.getItem('musicflightOrbits'); if (or !== null) CFG.orbitsOn = (or === '1');
+  } catch (e) {}
+
+  // ── Utilidades ──
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const smooth = (c, t, tau, dt) => c + (t - c) * (1 - Math.exp(-dt / Math.max(1e-3, tau)));
+  const angDiff = (a, b) => {
+    let d = (a - b) % (2 * Math.PI);
+    if (d > Math.PI) d -= 2 * Math.PI;
+    if (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+  };
+  const NOTE_ES = ['Do', 'Do♯', 'Re', 'Mib', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Lab', 'La', 'Sib', 'Si'];
+  const KK_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+  const KK_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+  const DISSONANCE = [0, 1.0, 0.35, 0.10, 0.05, 0.0, 0.65]; // por clase de intervalo (0..6)
+
+  // ── Un color propio para cada una de las 128 notas MIDI ──────────
+  // El tono recorre el círculo de quintas, así las notas vecinas en armonía
+  // también lo son en color. La octava decide luminosidad y saturación: los
+  // graves son tintas profundas, los agudos se abren hacia la luz. Resultado:
+  // las 88 teclas tienen color distinguible sin perder la identidad del tono.
+  function hsl2rgb(h, s, l, out) {
+    h = ((h % 1) + 1) % 1;
+    if (s <= 0) { out[0] = out[1] = out[2] = l; return out; }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const f = t => {
+      t = ((t % 1) + 1) % 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    out[0] = f(h + 1 / 3); out[1] = f(h); out[2] = f(h - 1 / 3);
+    return out;
+  }
+  const NOTE_RGB = new Float32Array(128 * 3);
+  (function () {
+    const tmp = [0, 0, 0];
+    for (let n = 0; n < 128; n++) {
+      const oct = clamp(Math.floor(n / 12) - 1, 0, 8);
+      hsl2rgb(((n * 7) % 12) / 12, 0.95 - oct / 8 * 0.22, 0.34 + oct / 8 * 0.40, tmp);
+      NOTE_RGB[n * 3] = tmp[0]; NOTE_RGB[n * 3 + 1] = tmp[1]; NOTE_RGB[n * 3 + 2] = tmp[2];
+    }
+  })();
+
+  // ── Estado musical ──
+  const S = {
+    held: new Map(),          // nota -> {v}
+    ring: [],                 // timestamps de ataques (últimos 2 s)
+    pc: new Array(12).fill(0),// histograma de clases de altura (decae)
+    centroid: 60,             // registro medio (semitonos MIDI)
+    contour: 0,               // -1..1 tendencia melódica
+    last: null,               // última nota
+    loud: 0,                  // dinámica 0..1
+    dens: 0,                  // notas/seg
+    rough: 0,                 // disonancia 0..1
+    pedal: false,
+    pedalVal: 0,              // 0..1 continuo (CC64), permite medio pedal
+    brake: 0,                 // frenazo activo (decae)
+    parked: false,            // detenido tras un frenazo, hasta la próxima nota
+    events: [],               // últimos eventos (nota o acorde) con su instante
+    ostinato: 0,              // 0..1 cuán repetitiva es la figura actual
+    ostAccum: 0,              // 0..1 cuánto lleva sosteniéndose: cierra el giro
+    side: 0,                  // -1 mano izquierda .. +1 mano derecha
+    centroidSlow: 60,         // registro con inercia, solo para el timón
+    anchorKey: null,          // evento ancla, pegajoso para que no salte
+    spread: 0,                // 0 = repetición pura (una tecla o un acorde)
+    figDir: 0,                // -1..1 hacia dónde se aleja la figura de su ancla
+    turnDir: 0,               // dirección final del timón
+    bend: 0,                  // -1..1
+    impulse: 0,               // impulso rítmico
+    kick: 0,                  // latigazo lateral (rad/s)
+    energy: 0,
+    speed: 0,
+    climb: 0,
+    yawRate: 0,
+    key: null,                // {tonic, mode, score}
+    keyConf: 0,
+    keyHeading: 0,
+    hyper: false,
+    lastKeyCheck: 0,
+    lastOnset: -99,           // instante del último ataque
+    ioi: 1.2,                 // intervalo medio entre ataques (s), suavizado
+    run: 0,                   // contador de pasajes rápidos consecutivos
+    rate: 0,                  // ataques/s percibidos (tempo "sentido")
+    agility: 0                // 0..1 según rate
+  };
+
+  // ── Entrada musical ────────────────────────────────────────────
+  function noteOn(n, v) {
+    const t = performance.now() / 1000;
+    S.held.set(n, { v });
+    S.ring.push(t);
+    const vel = v / 127;
+    // Ritmo: los ataques casi simultáneos (acordes) cuentan como uno solo
+    const gap = t - S.lastOnset;
+    if (gap > 0.03) {
+      S.ioi = clamp(S.ioi + (clamp(gap, 0.06, 3) - S.ioi) * 0.45, 0.06, 3);
+      S.run = gap < 0.22 ? Math.min(16, S.run + 1) : Math.max(0, S.run - 2);
+      S.lastOnset = t;
+    }
+    TR.dropBead(n, vel);
+    S.parked = false; S.brake = 0;   // volver a tocar suelta el freno de mano
+    // Eventos, no notas sueltas: las notas que caen juntas son UN acorde. Así
+    // martillear un acorde se lee como repetición, igual que una tecla sola.
+    const last = S.events[S.events.length - 1];
+    if (last && (t - last.t) * 1000 < CFG.chordMs) {
+      last.notes.push(n);
+      last.p = last.notes.reduce((s, x) => s + x, 0) / last.notes.length;
+      last.key = last.notes.slice().sort((a, b) => a - b).join(',');
+    } else {
+      S.events.push({ p: n, notes: [n], key: '' + n, t });
+      if (S.events.length > 16) S.events.shift();
+    }
+    if (S.last !== null) {
+      const iv = n - S.last;
+      S.contour = clamp(S.contour + (iv / 10) * 0.6, -1, 1);
+      if (Math.abs(iv) >= 7) S.kick = clamp(S.kick + Math.sign(iv) * Math.min(1, Math.abs(iv) / 12) * 0.18, -0.4, 0.4);
+    }
+    S.last = n;
+    S.centroid += (n - S.centroid) * 0.22;
+    S.loud += (vel - S.loud) * 0.35;
+    S.impulse = Math.min(1.5, S.impulse + vel * (n < 55 ? 1.0 : n < 72 ? 0.6 : 0.4));
+    S.pc[n % 12] += 0.3 + 0.7 * vel;
+  }
+  function noteOff(n) { S.held.delete(n); }
+  function isPlaying() {
+    return S.held.size > 0 || (performance.now() / 1000 - S.lastOnset) < CFG.playingMs / 1000;
+  }
+  // Sensibilidad del slider: 1 = como está, 2 = responde el doble de rápido,
+  // 0.3 = tres veces más lento. Divide cada constante de tiempo del sistema.
+  const react = () => clamp(CFG.intensity, 0.2, 3);
+
+  // ── Figuración repetitiva (escalas, tríadas o tétradas en ostinato) ──
+  // Dos señales que se refuerzan: que los intervalos se repitan con período
+  // 2, 3 o 4, y que la figura reutilice pocas notas distintas. Es lo que
+  // distingue "estoy insistiendo con una figura" de "estoy tocando por ahí".
+  function ostinatoScore(tNow) {
+    const w = S.events.filter(e => tNow - e.t < 3);
+    if (w.length < 4) return 0;
+    const iv = [];
+    for (let i = 1; i < w.length; i++) iv.push(w[i].p - w[i - 1].p);
+    let best = 0;
+    for (let p = 1; p <= 4; p++) {
+      let hit = 0, tot = 0;
+      for (let i = p; i < iv.length; i++) { tot++; if (Math.abs(iv[i] - iv[i - p]) <= 1) hit++; }
+      if (tot >= 2) best = Math.max(best, hit / tot);
+    }
+    const pcs = new Set(w.map(e => Math.round(e.p) % 12)).size;
+    const concentration = clamp(1 - (pcs - 2) / 6, 0, 1);
+    return clamp(0.6 * best + 0.4 * concentration, 0, 1);
+  }
+
+  // ── Hacia dónde pide girar la figura ──────────────────────────────
+  // El ancla es el evento que más se repite. Si los demás no se alejan de
+  // ella, es repetición pura (una tecla o un acorde martilleado): no gira,
+  // solo sube o baja. Si se alejan, el signo de ese alejamiento es la
+  // dirección, y su tamaño decide si puede más que el lado del teclado.
+  function figure(tNow) {
+    const w = S.events.filter(e => tNow - e.t < 3);
+    if (w.length < 3) { S.spread = 0; S.figDir = 0; return; }
+    const count = new Map();
+    for (const e of w) count.set(e.key, (count.get(e.key) || 0) + 1);
+    let bestKey = null, bestN = -1;
+    for (const [k, c] of count) if (c > bestN) { bestN = c; bestKey = k; }
+    // Ancla pegajosa: solo cambia si la nueva candidata gana por margen. Si no,
+    // al deslizarse la ventana el ancla alterna y la dirección da bandazos.
+    const cur = count.get(S.anchorKey) || 0;
+    if (!count.has(S.anchorKey) || bestN >= cur + 2) S.anchorKey = bestKey;
+    let anchor = 0, na = 0;
+    for (const e of w) if (e.key === S.anchorKey) { anchor += e.p; na++; }
+    anchor /= Math.max(1, na);
+    let sum = 0, abs = 0;
+    for (const e of w) { sum += e.p - anchor; abs += Math.abs(e.p - anchor); }
+    S.spread = abs / w.length;
+    const asym = S.spread > 0.01 ? clamp((sum / w.length) / S.spread, -1, 1) : 0;
+    S.figDir = asym * clamp(S.spread / 3, 0, 1);  // un intervalo ancho pesa más
+  }
+
+  function feed(d) {
+    if (!d || d.length < 2) return;
+    const st = d[0] & 0xF0, d1 = d[1], d2 = d.length > 2 ? d[2] : 0;
+    if (st === 0x90 && d2 > 0) noteOn(d1, d2);
+    else if (st === 0x80 || (st === 0x90 && d2 === 0)) noteOff(d1);
+    else if (st === 0xE0) S.bend = clamp(((d2 << 7) | d1) / 8192 - 1, -1, 1);
+    else if (st === 0xB0) {
+      if (d1 === 64) {
+        const was = S.pedal;
+        S.pedalVal = d2 / 127; S.pedal = d2 >= 64;
+        // Soltar el pedal solo frena en seco si ya habías dejado de tocar.
+        // Si sigues tocando, el vuelo continúa: se pierde el empuje, nada más.
+        if (was && !S.pedal && !isPlaying()) { S.brake = 1; S.parked = true; }
+      }
+      if (d1 === 123 || d1 === 120) S.held.clear();
+    }
+  }
+
+  // ── Tonalidad (Krumhansl-Schmuckler con histéresis) ──
+  function pearson(a, b) {
+    let ma = 0, mb = 0; for (let i = 0; i < 12; i++) { ma += a[i]; mb += b[i]; } ma /= 12; mb /= 12;
+    let num = 0, da = 0, db = 0;
+    for (let i = 0; i < 12; i++) { const x = a[i] - ma, y = b[i] - mb; num += x * y; da += x * x; db += y * y; }
+    return (da > 0 && db > 0) ? num / Math.sqrt(da * db) : 0;
+  }
+  function scoreKey(tonic, mode) {
+    const rot = new Array(12);
+    for (let i = 0; i < 12; i++) rot[i] = S.pc[(tonic + i) % 12];
+    return pearson(rot, mode === 'major' ? KK_MAJOR : KK_MINOR);
+  }
+  function estimateKey() {
+    let tot = 0; for (let i = 0; i < 12; i++) tot += S.pc[i];
+    if (tot < 1.5) return;
+    let best = { tonic: 0, mode: 'major', score: -2 };
+    for (let t = 0; t < 12; t++) for (const m of ['major', 'minor']) {
+      const sc = scoreKey(t, m);
+      if (sc > best.score) best = { tonic: t, mode: m, score: sc };
+    }
+    const curScore = S.key ? scoreKey(S.key.tonic, S.key.mode) : -2;
+    if (!S.key || best.score > curScore + 0.06) S.key = best; else S.key.score = curScore;
+    const relMajor = S.key.mode === 'major' ? S.key.tonic : (S.key.tonic + 3) % 12;
+    S.keyHeading = ((relMajor * 7) % 12) * (2 * Math.PI / 12); // círculo de quintas = brújula
+    S._confTarget = clamp((S.key.score - 0.3) / 0.5, 0, 1);
+  }
+
+  // ── Análisis continuo ──
+  function analyze(dt, tNow) {
+    const hl = S.pedal ? 18 : 10;
+    const k = Math.exp(-dt * Math.LN2 / hl);
+    for (let i = 0; i < 12; i++) S.pc[i] *= k;
+
+    while (S.ring.length && tNow - S.ring[0] > 2) S.ring.shift();
+    S.dens = S.ring.length / 2;
+
+    // Tempo percibido: si pasa más tiempo que el intervalo habitual, el ritmo "se enfría" solo
+    const since = tNow - S.lastOnset;
+    const effIoi = Math.max(S.ioi, since > S.ioi * 1.5 ? since : 0);
+    S.rate = 1 / effIoi;
+    S.agility = clamp(S.rate / 8, 0, 1);
+    if (since > 0.6) S.run *= Math.exp(-dt / 0.5);
+
+    const rt = react();   // sensibilidad: divide todos los tiempos de respuesta
+    S.brake *= Math.exp(-dt / 0.8);
+
+    // ── Timón: qué lado del teclado, y con cuánta insistencia ──
+    // El lado decide el sentido; la figuración repetitiva decide si gira y
+    // cuánto. Mientras la figura se sostiene, el acumulador sube y la curva
+    // se va cerrando en espiral; al soltarla, se abre.
+    S.centroidSlow = smooth(S.centroidSlow, S.centroid, CFG.sideTau / rt, dt);
+    S.side = clamp((S.centroidSlow - 60) / 18, -1, 1);
+    figure(tNow);
+    // Invertir el rumbo tarda bastante más que reforzarlo: así una nota suelta
+    // en contra no tuerce el viaje, pero insistir en sentido opuesto sí lo gira.
+    const raw = clamp(S.side + CFG.figGain * S.figDir, -1, 1);
+    const flip = raw * S.turnDir < 0;
+    S.turnDir = smooth(S.turnDir, raw, (flip ? CFG.turnFlipTau : CFG.turnTau) / rt, dt);
+    const ostT = isPlaying() ? ostinatoScore(tNow) * clamp(S.agility * 1.4, 0, 1) : 0;
+    S.ostinato = smooth(S.ostinato, ostT, (ostT > S.ostinato ? 0.25 : 0.6) / rt, dt);
+    const acc = rt / (S.ostinato > 0.25 ? CFG.ostinatoRise : -CFG.ostinatoFall);
+    S.ostAccum = clamp(S.ostAccum + acc * dt, 0, 1);
+
+    S.contour *= Math.exp(-dt / 1.5);
+    S.kick *= Math.exp(-dt / 0.5);
+    S.impulse *= Math.exp(-dt / 0.6);
+    if (S.held.size === 0) S.loud *= Math.exp(-dt / (S.pedal ? 6 : 2.5));
+    if (S.held.size === 0) S.bend *= Math.exp(-dt / 0.4);
+
+    // Disonancia entre notas sostenidas
+    const arr = [...S.held.keys()];
+    let sum = 0, pairs = 0;
+    for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) {
+      let ic = Math.abs(arr[i] - arr[j]) % 12; if (ic > 6) ic = 12 - ic;
+      sum += DISSONANCE[ic]; pairs++;
+    }
+    S.rough = smooth(S.rough, pairs ? clamp(sum / pairs * 1.3, 0, 1) : 0, 0.3 / rt, dt);
+
+    if (tNow - S.lastKeyCheck > 0.15) { S.lastKeyCheck = tNow; estimateKey(); }
+    S.keyConf = smooth(S.keyConf, S._confTarget || 0, 1.2, dt);
+  }
+
+  // ── Física de vuelo orgánico ──
+  function fly(dt, t) {
+    // La sensibilidad actúa sobre todo en los tiempos de respuesta; sobre las
+    // amplitudes del ascenso y el viraje solo un poco, para que girar "más
+    // rápido" sea también algo más de rad/s sin volverse un trompo.
+    const g = 0.6 + 0.4 * react();
+
+    // Energía: agilidad rítmica + pasajes rápidos + densidad + dinámica
+    const runBoost = clamp(S.run / 10, 0, 1);
+    const energyT = clamp(0.40 * S.agility + 0.20 * runBoost + 0.15 * clamp(S.dens / 7, 0, 1) + 0.30 * S.loud, 0, 1);
+    const up = energyT > S.energy, rt = react();
+    S.energy = smooth(S.energy, energyT, (up ? 0.22 : (S.pedal ? 4.0 : 1.8)) / rt, dt);
+
+    // ── Velocidad: siempre hacia adelante, como un planeo ──
+    // La dirección es cosa del timón, no de la melodía: así un pasaje frenético
+    // empuja en vez de dar tirones hacia atrás. Ataque rápido, caída lenta.
+    const throttle = 1 + CFG.pedalBoost * S.pedalVal;
+    let speedT = (CFG.speedIdle + (CFG.speedMax - CFG.speedIdle) * Math.pow(S.energy, 1.1) * (1 + 0.35 * runBoost)
+                 + S.impulse * CFG.speedMax * 0.25) * throttle;
+    const playing = isPlaying();
+    let tau;
+    if (S.brake > 0.05) { speedT = 0; tau = CFG.brakeTau; }          // frenazo en seco
+    else if (S.parked) { speedT = 0; tau = 0.5; }                    // detenido hasta la próxima nota
+    else if (!playing && S.pedal) { speedT = 0; tau = CFG.sustainDecay; } // sustain apagándose
+    else {
+      if (playing) speedT = Math.max(speedT, CFG.speedMax * CFG.slowCruise); // soltar el pedal tocando: sigue lento
+      tau = speedT > S.speed ? 0.25 : 1.4;
+    }
+    S.speed = smooth(S.speed, speedT, tau / rt, dt);
+
+    // Ascenso: registro grave baja, agudo sube. Martillear una tecla o un
+    // acorde (dispersión cero) no gira: empuja el ascenso con fuerza extra.
+    const repeat = clamp(1 - S.spread / 1.2, 0, 1) * S.ostinato;
+    const reg = clamp((S.centroid - 60) / 24, -1, 1);
+    const wanderClimb = 0.10 * Math.sin(t * 0.2) * (1 - S.energy);
+    const climbT = (reg * 0.65 + S.contour * 0.35) * CFG.climbMax * (1 + CFG.repeatClimb * repeat)
+                 * clamp(S.energy * 3 + 0.15, 0, 1) * g + wanderClimb;
+    S.climb = smooth(S.climb, clamp(climbT, -1.3, 1.3), 0.9 / rt, dt);
+
+    // ── Viraje: el lado del teclado manda, la insistencia cierra la curva ──
+    // Figura repetitiva en el agudo → gira a un lado; la misma en el grave →
+    // al otro. Cuanto más la sostienes, más se cierra, hasta hacer espiral.
+    // La puerta de dispersión es la clave: repetir la misma tecla o el mismo
+    // acorde da dispersión cero y el timón queda a cero, por mucho que estés
+    // en el extremo agudo. Hace falta un intervalo para que gire.
+    const dragging = (typeof isDragging !== 'undefined') && isDragging;
+    const gate = clamp(S.spread / 1.2, 0, 1);
+    let pull = 0;
+    if (!dragging) {
+      pull = CFG.turnSign * S.turnDir * S.ostinato * gate * CFG.turnMax * (0.35 + 0.65 * S.ostAccum);
+    }
+    // El latigazo de los saltos se calla durante un ostinato: el salto de
+    // vuelta de la figura es parte de ella, no un gesto, y si no sesga el
+    // timón siempre hacia el mismo lado. (El sesgo por modo mayor/menor lo
+    // quité: la estimación oscila entre relativas y movía el morro sola.)
+    const wanderYaw = 0.06 * Math.sin(t * 0.3) * (1 - S.energy);
+    const yawT = (pull + S.bend * CFG.turnMax * 0.8 + S.kick * (1 - S.ostinato)) * g + wanderYaw;
+    S.yawRate = smooth(S.yawRate, yawT, 1.1 / rt, dt);
+    if (!dragging) yawAngle += S.yawRate * dt;
+    avatarObject.rotation.y = yawAngle;
+
+    // Cabeceo visual (sigue al ascenso + turbulencia por disonancia)
+    if (!dragging && currentViewMode !== 'birdEye' && S.energy > 0.03) {
+      const ps = currentViewMode === 'firstPerson' ? CFG.pitchSign.firstPerson : CFG.pitchSign.thirdPerson;
+      const shake = S.rough * 0.03 * (Math.sin(t * 17) + Math.sin(t * 23.7)) * 0.5;
+      const pT = clamp(S.climb * 0.5 * ps + shake, -1.4, 1.4);
+      pitchAngle = smooth(pitchAngle, pT, 0.8 / rt, dt);
+    }
+
+    // Dirección de avance coherente con la cámara actual
+    const hs = currentViewMode === 'thirdPerson' ? -1 : 1;
+    const c = Math.cos(S.climb), s = Math.sin(S.climb), sp = S.speed;
+    TR.dir.x = -Math.sin(yawAngle) * c * hs; TR.dir.y = s; TR.dir.z = -Math.cos(yawAngle) * c * hs;
+    avatarObject.position.x += TR.dir.x * sp * dt;
+    avatarObject.position.y += TR.dir.y * sp * dt;
+    avatarObject.position.z += TR.dir.z * sp * dt;
+
+    // FOV: sensación de velocidad
+    const fovT = CFG.fovBase + CFG.fovBoost * S.energy * g;
+    const nf = smooth(camera.fov, fovT, 0.6, dt);
+    if (Math.abs(nf - camera.fov) > 0.05) { camera.fov = nf; camera.updateProjectionMatrix(); }
+
+    // Líneas de hipervelocidad en pasajes intensos (histéresis)
+    if (typeof hyperspaceEffect !== 'undefined' && hyperspaceEffect) {
+      if (!S.hyper && S.energy > 0.82) { S.hyper = true; hyperspaceEffect.toggleHyperspace(true); }
+      else if (S.hyper && S.energy < 0.55) { S.hyper = false; hyperspaceEffect.toggleHyperspace(false); }
+    }
+  }
+
+  // ═══ ESTELA / MAPA MUSICAL ═══════════════════════════════════════
+  // Inspirada en las hifas del Micelator: un tubo con volumen real cuyo color
+  // se interpola entre los dos extremos, y que respira con una onda que viaja
+  // a lo largo del filamento. Dos capas, no tres:
+  //   ribbon — la cinta de plasma, siempre de cara a la cámara, con gradiente
+  //   beads  — una nota tocada = un punto, en una rejilla de 12 columnas
+  //            (clase de altura) × octavas (filas): las 88 teclas nunca chocan
+  // El color se mezcla en RGB (como el lerp de nodo a nodo del Micelator), así
+  // dos notas distintas dejan un degradado limpio, sin pasar por el arcoíris.
+
+  // Cinta: cada punto del camino se expande perpendicular a la vista, de modo
+  // que el filamento tiene grosor desde cualquier ángulo.
+  const RIBBON_VS = [
+    'attribute vec3 mfColor; attribute float mfSide; attribute vec3 mfDir; attribute float mfPhase;',
+    'attribute float mfWidth;',
+    'uniform float mfWScale; uniform float mfMinAng;',
+    'varying vec3 vC; varying float vS; varying float vP;',
+    'void main(){',
+    '  vC = mfColor; vS = mfSide; vP = mfPhase;',
+    '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+    '  vec3 dirV = normalize((modelViewMatrix * vec4(mfDir, 0.0)).xyz);',
+    '  vec3 toEye = normalize(-mv.xyz);',
+    '  vec3 cr = cross(dirV, toEye);',
+    '  vec3 sideV = length(cr) < 0.0001 ? vec3(1.0, 0.0, 0.0) : normalize(cr);',
+    // Cada tramo lleva su grosor. Engorda con la distancia conservando la
+    // proporción, y nunca baja de ~1 píxel: una cinta aditiva más fina que un
+    // píxel no se ve tenue, se rompe en puntos.
+    '  float w = max(mfWidth * max(1.0, -mv.z * mfWScale), -mv.z * mfMinAng);',
+    '  mv.xyz += sideV * (mfSide * w);',
+    '  gl_Position = projectionMatrix * mv;',
+    '}'
+  ].join('\n');
+  const RIBBON_FS = [
+    'uniform float mfTime;',
+    'varying vec3 vC; varying float vS; varying float vP;',
+    'void main(){',
+    '  float e = max(0.0, 1.0 - abs(vS));',       // 1 en el eje, 0 en los bordes
+    '  float a = pow(e, 1.5);',
+    '  float breathe = 0.82 + 0.18 * sin(mfTime * 2.2 + vP);',  // onda que viaja
+    // Núcleo que se va al blanco, bordes con el tono puro: sobre negro, plasma
+    '  vec3 c = vC * breathe * (0.5 + e * 1.3) + vec3(pow(e, 7.0) * 0.6);',
+    '  gl_FragColor = vec4(c, a);',
+    '}'
+  ].join('\n');
+
+  const POINT_VS = [
+    'attribute float mfSize; attribute vec3 mfColor; varying vec3 vC;',
+    'void main(){ vC = mfColor; vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+    '  gl_PointSize = mfSize * (320.0 / max(1.0, -mv.z));',
+    '  gl_Position = projectionMatrix * mv; }'
+  ].join('\n');
+  const POINT_FS = [
+    'varying vec3 vC;',
+    'void main(){ float d = length(gl_PointCoord - vec2(0.5));',
+    '  if (d > 0.5) discard;',
+    '  float e = 1.0 - d * 2.0;',
+    '  gl_FragColor = vec4(vC * (0.4 + pow(e, 2.2) * 1.9) + vec3(pow(e, 8.0) * 0.6), pow(e, 0.6)); }'
+  ].join('\n');
+
+  const TR = {
+    ribbon: null, beads: null, rMat: null, pMat: null, tmp: null, tmp2: null,
+    seg: 0, segHead: 0, bead: 0, beadHead: 0, phase: 0,
+    prev: null, cur: null, dirty: false, meta: [], replaying: false, nearCount: 0, fallback: false,
+    orbits: new Map(),    // nota sonando -> último punto de su hélice
+    dir: { x: 0, y: 0, z: -1 },  // dirección de avance, eje de las órbitas
+
+    build() {
+      if (this.ribbon || typeof THREE === 'undefined' || typeof scene === 'undefined' || !scene) return;
+      this.tmp = new THREE.Color(); this.tmp2 = new THREE.Color();
+      const N = CFG.trailMaxSeg;
+
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 18), 3));
+      g.setAttribute('mfColor', new THREE.BufferAttribute(new Float32Array(N * 18), 3));
+      g.setAttribute('mfDir', new THREE.BufferAttribute(new Float32Array(N * 18), 3));
+      g.setAttribute('mfSide', new THREE.BufferAttribute(new Float32Array(N * 6), 1));
+      g.setAttribute('mfPhase', new THREE.BufferAttribute(new Float32Array(N * 6), 1));
+      g.setAttribute('mfWidth', new THREE.BufferAttribute(new Float32Array(N * 6), 1));
+      g.setAttribute('color', g.getAttribute('mfColor'));   // para el material de reserva
+      g.setDrawRange(0, 0);
+      try {
+        this.rMat = new THREE.ShaderMaterial({
+          vertexShader: RIBBON_VS, fragmentShader: RIBBON_FS,
+          uniforms: { mfTime: { value: 0 }, mfWScale: { value: CFG.widthScale }, mfMinAng: { value: CFG.minAngular } },
+          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+        });
+        this.ribbon = new THREE.Mesh(g, this.rMat);
+      } catch (e) {
+        this.fallback = true;
+        this.rMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.8,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+        this.ribbon = new THREE.Mesh(g, this.rMat);
+      }
+      this.ribbon.frustumCulled = false;
+      scene.add(this.ribbon);
+
+      const bg = new THREE.BufferGeometry();
+      bg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(CFG.trailMaxBeads * 3), 3));
+      bg.setAttribute('mfColor', new THREE.BufferAttribute(new Float32Array(CFG.trailMaxBeads * 3), 3));
+      bg.setAttribute('mfSize', new THREE.BufferAttribute(new Float32Array(CFG.trailMaxBeads), 1));
+      bg.setAttribute('color', bg.getAttribute('mfColor'));
+      bg.setDrawRange(0, 0);
+      try {
+        this.pMat = new THREE.ShaderMaterial({ vertexShader: POINT_VS, fragmentShader: POINT_FS,
+          transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+      } catch (e) {
+        const fb = { size: CFG.beadSize, vertexColors: true, transparent: true, opacity: 0.95,
+                     blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true };
+        if (typeof createSharperCircleTexture === 'function') fb.map = createSharperCircleTexture();
+        this.pMat = new THREE.PointsMaterial(fb);
+      }
+      this.beads = new THREE.Points(bg, this.pMat);
+      this.beads.frustumCulled = false;
+      scene.add(this.beads);
+    },
+
+    // ── Color ──
+    // Tono por círculo de quintas: las notas vecinas en armonía también lo son
+    // en color. Saturación y luminosidad como en el Micelator (0.85 / 0.62):
+    // sobre fondo negro esos valores son los que se sienten eléctricos.
+    hueOf(n) { return ((n * 7) % 12) / 12; },
+    noteColor(n, out) {
+      const i = clamp(n | 0, 0, 127) * 3;
+      return (out || this.tmp).setRGB(NOTE_RGB[i], NOTE_RGB[i + 1], NOTE_RGB[i + 2]);
+    },
+    // Mezcla de los colores de TODAS las notas que suenan, ponderada por su
+    // dinámica: un acorde de Do mayor da la mezcla de sus tres colores, y al
+    // cambiar de armonía el filamento degrada en RGB de una mezcla a la otra.
+    blend(out) {
+      let r = 0, g = 0, b = 0, w = 0;
+      for (const [n, e] of S.held) {
+        const i = clamp(n | 0, 0, 127) * 3, k = 0.3 + 0.7 * (e.v / 127);
+        r += NOTE_RGB[i] * k; g += NOTE_RGB[i + 1] * k; b += NOTE_RGB[i + 2] * k; w += k;
+      }
+      if (w > 0) return out.setRGB(r / w, g / w, b / w);
+      return this.noteColor(S.last == null ? 60 : S.last, out);
+    },
+    stepColor(dt) {
+      const t = this.blend(this.tmp2);
+      const k = 1 - Math.exp(-dt * react() / Math.max(0.01, CFG.colorTau));
+      if (!this.cur) this.cur = { r: t.r, g: t.g, b: t.b };
+      else { this.cur.r += (t.r - this.cur.r) * k; this.cur.g += (t.g - this.cur.g) * k; this.cur.b += (t.b - this.cur.b) * k; }
+    },
+    // Brillo según energía y dinámica, con un suelo para que la estela de
+    // desplazamiento (WASD en silencio) se siga viendo.
+    drive() { return clamp(CFG.glowFloor + 0.8 * S.energy + 0.45 * S.loud, CFG.glowFloor, 1.9) * CFG.glow; },
+
+    // ── Cinta: 6 vértices por segmento (dos triángulos) ──
+    // `st` es el estado del hilo que lo dibuja; de ahí sale la dirección previa
+    // para unir los tramos en inglete. Sin eso, cada tramo se abre perpendicular
+    // a SU dirección y en las curvas los cuadriláteros no casan: esa muesca es
+    // lo que se ve como un trazo entrecortado.
+    pushSeg(a, b, ca, cb, width, st) {
+      const geo = this.ribbon.geometry, h = this.segHead, W = width || CFG.trailWidth;
+      const P_ = geo.attributes.position.array, C_ = geo.attributes.mfColor.array;
+      const D_ = geo.attributes.mfDir.array, SD = geo.attributes.mfSide.array;
+      const PH = geo.attributes.mfPhase.array, WD = geo.attributes.mfWidth.array;
+      let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+      const L = Math.hypot(dx, dy, dz) || 1; dx /= L; dy /= L; dz /= L;
+      // Inglete: el extremo A usa el promedio de la dirección entrante y saliente
+      let ax = dx, ay = dy, az = dz;
+      if (st && st.dx !== undefined) {
+        ax = st.dx + dx; ay = st.dy + dy; az = st.dz + dz;
+        const m = Math.hypot(ax, ay, az);
+        if (m > 1e-4) { ax /= m; ay /= m; az /= m; } else { ax = dx; ay = dy; az = dz; }
+      }
+      if (st) { st.dx = dx; st.dy = dy; st.dz = dz; }
+      this.phase = (this.phase + 0.09) % 6.2832;
+      //          A-   A+   B-   A+   B+   B-
+      const useB = [0, 0, 1, 0, 1, 1], side = [-1, 1, -1, 1, 1, -1];
+      // Sin shader, el grosor se hornea aquí para que la cinta no quede plana
+      let ox = 0, oy = 0, oz = 0;
+      if (this.fallback) {
+        let px = dz, py = 0, pz = -dx, pl = Math.hypot(px, py, pz);
+        if (pl < 1e-4) { px = 1; py = 0; pz = 0; pl = 1; }
+        ox = px / pl * W; oy = py / pl * W; oz = pz / pl * W;
+      }
+      for (let v = 0; v < 6; v++) {
+        const i3 = (h * 6 + v) * 3, i1 = h * 6 + v, onB = useB[v], pt = onB ? b : a, co = onB ? cb : ca;
+        P_[i3] = pt.x + ox * side[v]; P_[i3 + 1] = pt.y + oy * side[v]; P_[i3 + 2] = pt.z + oz * side[v];
+        C_[i3] = co.r; C_[i3 + 1] = co.g; C_[i3 + 2] = co.b;
+        D_[i3] = onB ? dx : ax; D_[i3 + 1] = onB ? dy : ay; D_[i3 + 2] = onB ? dz : az;
+        SD[i1] = side[v]; PH[i1] = this.phase; WD[i1] = W;
+      }
+      this.segHead = (this.segHead + 1) % CFG.trailMaxSeg;
+      this.seg = Math.min(this.seg + 1, CFG.trailMaxSeg);
+      geo.setDrawRange(0, this.seg * 6);
+      this.dirty = true;
+    },
+    pushBead(x, y, z, r, g_, b, size) {
+      const geo = this.beads.geometry, h = this.beadHead, i = h * 3;
+      const P_ = geo.attributes.position.array, C_ = geo.attributes.mfColor.array, Z_ = geo.attributes.mfSize.array;
+      P_[i] = x; P_[i + 1] = y; P_[i + 2] = z;
+      C_[i] = r; C_[i + 1] = g_; C_[i + 2] = b; Z_[h] = size;
+      this.beadHead = (this.beadHead + 1) % CFG.trailMaxBeads;
+      this.bead = Math.min(this.bead + 1, CFG.trailMaxBeads);
+      geo.setDrawRange(0, this.bead);
+      this.dirty = true;
+      return h;
+    },
+
+    // Rejilla: columna = clase de altura, fila = octava. Sin colisiones en 88 teclas.
+    cell(note) {
+      return { lane: ((note % 12) - 5.5) * CFG.laneW, row: (Math.floor(note / 12) - 5) * CFG.rowH };
+    },
+    dropBead(note, vel) {
+      if (!CFG.trailOn || this.replaying || !this.beads || typeof avatarObject === 'undefined' || !avatarObject) return;
+      const p = avatarObject.position, g = this.cell(note);
+      const c = this.noteColor(note).multiplyScalar(CFG.glow * (0.8 + 0.8 * vel));
+      const k = this.pushBead(p.x + Math.cos(yawAngle) * g.lane, p.y + g.row, p.z - Math.sin(yawAngle) * g.lane,
+                              c.r, c.g, c.b, CFG.beadSize * (0.6 + vel));
+      this.meta[k] = [note, vel, performance.now() / 1000];
+    },
+
+    // ── Órbitas: cada nota que suena enrolla una hélice alrededor de la
+    // estela principal, como los planetas trazando su espiral mientras el sol
+    // avanza. Los graves van anchos y lentos, los agudos ceñidos y rápidos:
+    // dos notas a una octava orbitan en relación 2:1, una quinta en 3:2.
+    orbitParams(n) {
+      const T = clamp(CFG.orbitPeriodMid * Math.pow(2, -(n - 60) / 12), CFG.orbitPeriodMin, CFG.orbitPeriodMax);
+      return { r: clamp(CFG.orbitRadiusK * Math.pow(T, 2 / 3), 1.2, 32), w: 6.2832 / T };
+    },
+    // Marco perpendicular al avance, con eje de reserva si se vuela a plomo
+    frame(d) {
+      let rx = d.z, ry = 0, rz = -d.x, L = Math.hypot(rx, ry, rz);
+      if (L < 1e-3) { rx = 1; ry = 0; rz = 0; L = 1; }
+      rx /= L; ry /= L; rz /= L;
+      return { rx, ry, rz, ux: ry * d.z - rz * d.y, uy: rz * d.x - rx * d.z, uz: rx * d.y - ry * d.x };
+    },
+    // La órbita nace y muere en su radio propio: la geometría no se deforma.
+    // Al soltar la tecla sigue girando unos segundos y el último tramo se
+    // apaga de forma difusa, en vez de cortarse de golpe o irse al centro.
+    orbitTick(t) {
+      if (!CFG.orbitsOn) { if (this.orbits.size) this.orbits.clear(); return; }
+      const p = avatarObject.position, f = this.frame(this.dir);
+      // Las teclas soltadas siguen vivas mientras se apagan
+      for (const [n, st] of this.orbits) {
+        if (S.held.has(n)) { st.off = 0; continue; }
+        if (!st.off) st.off = t;
+        if (t - st.off > CFG.orbitFade) this.orbits.delete(n);
+      }
+      for (const [n, st0] of this.orbits) {
+        const e = S.held.get(n), vel = st0.vel, o = this.orbitParams(n);
+        // El radio NO cambia: solo se apaga el brillo, con una curva suave
+        const u = st0.off ? clamp(1 - (t - st0.off) / CFG.orbitFade, 0, 1) : 1;
+        const env = u * u * (3 - 2 * u);   // smoothstep: se desvanece difuso
+        const a = t * o.w + n * 0.7, r = o.r;
+        const ca = Math.cos(a) * r, sa = Math.sin(a) * r;
+        const x = p.x + f.rx * ca + f.ux * sa, y = p.y + f.ry * ca + f.uy * sa, z = p.z + f.rz * ca + f.uz * sa;
+        const dx = x - st0.x, dy = y - st0.y, dz = z - st0.z;
+        if (Math.abs(a - st0.a) < CFG.orbitStepRad && dx * dx + dy * dy + dz * dz < CFG.trailStep * CFG.trailStep) continue;
+        const c = this.noteColor(n).multiplyScalar(CFG.glow * (0.5 + 0.7 * vel) * env);
+        const c0 = st0.c || { r: c.r, g: c.g, b: c.b };
+        this.pushSeg({ x: st0.x, y: st0.y, z: st0.z }, { x, y, z }, c0, { r: c.r, g: c.g, b: c.b }, CFG.orbitWidth, st0);
+        st0.x = x; st0.y = y; st0.z = z; st0.a = a; st0.c = { r: c.r, g: c.g, b: c.b };
+        if (e) st0.vel = e.v / 127;
+      }
+      // Altas nuevas: nacen ya en su radio, en el punto que les toca
+      for (const [n, e] of S.held) {
+        if (this.orbits.has(n)) continue;
+        const o = this.orbitParams(n), a = t * o.w + n * 0.7;
+        const ca = Math.cos(a) * o.r, sa = Math.sin(a) * o.r;
+        this.orbits.set(n, {
+          x: p.x + f.rx * ca + f.ux * sa, y: p.y + f.ry * ca + f.uy * sa, z: p.z + f.rz * ca + f.uz * sa,
+          a, off: 0, vel: e.v / 127, c: null
+        });
+      }
+    },
+
+    tick(dt, t) {
+      if (!this.ribbon || typeof avatarObject === 'undefined' || !avatarObject) return;
+      this.stepColor(dt);
+      if (this.rMat.uniforms) this.rMat.uniforms.mfTime.value = CFG.breathe ? t : 0;
+      if (this.dirty) {
+        for (const o of [this.ribbon, this.beads]) {
+          const at = o.geometry.attributes;
+          at.position.needsUpdate = true; at.mfColor.needsUpdate = true;
+          if (at.mfDir) at.mfDir.needsUpdate = true;
+          if (at.mfSide) { at.mfSide.needsUpdate = true; at.mfPhase.needsUpdate = true; }
+          if (at.mfWidth) at.mfWidth.needsUpdate = true;   // sin esto el grosor nunca llega a la GPU
+          if (at.mfSize) at.mfSize.needsUpdate = true;
+        }
+        this.dirty = false;
+      }
+      // Apagada: el trazo existente se queda tal cual; solo deja de crecer.
+      if (!CFG.trailOn) { this.prev = null; if (this.orbits.size) this.orbits.clear(); return; }
+      this.orbitTick(t);
+      // Con el corte activado, el silencio parte el trazo. Sin él, la estela es
+      // continua y también marca el desplazamiento con WASD, en el color de la
+      // última nota configurada.
+      if (CFG.cutOnSilence && !(S.held.size > 0 || S.energy > 0.05)) { this.prev = null; return; }
+      const p = avatarObject.position, d = this.drive();
+      const c = this.tmp.setRGB(this.cur.r, this.cur.g, this.cur.b).multiplyScalar(d);
+      if (!this.prev) { this.prev = { x: p.x, y: p.y, z: p.z, r: c.r, g: c.g, b: c.b }; return; }
+      const dx = p.x - this.prev.x, dy = p.y - this.prev.y, dz = p.z - this.prev.z;
+      if (dx * dx + dy * dy + dz * dz >= CFG.trailStep * CFG.trailStep) {
+        const pr = this.prev;
+        this.pushSeg(pr, p, { r: pr.r, g: pr.g, b: pr.b }, c, CFG.trailWidth, pr);
+        pr.x = p.x; pr.y = p.y; pr.z = p.z; pr.r = c.r; pr.g = c.g; pr.b = c.b;
+      }
+    },
+
+    // Apagar NO borra: congela el trazo. Al reactivar empieza un trazo nuevo.
+    setOn(v) {
+      CFG.trailOn = !!v; this.prev = null;
+      try { localStorage.setItem('musicflightTrail', CFG.trailOn ? '1' : '0'); } catch (e) {}
+    },
+    setCut(v) {
+      CFG.cutOnSilence = !!v; this.prev = null;
+      try { localStorage.setItem('musicflightCut', CFG.cutOnSilence ? '1' : '0'); } catch (e) {}
+    },
+    setOrbits(v) {
+      CFG.orbitsOn = !!v; this.orbits.clear();
+      try { localStorage.setItem('musicflightOrbits', CFG.orbitsOn ? '1' : '0'); } catch (e) {}
+    },
+    clear() {
+      this.seg = this.segHead = this.bead = this.beadHead = 0;
+      this.prev = null; this.meta = []; this.orbits.clear();
+      if (this.ribbon) { this.ribbon.geometry.setDrawRange(0, 0); this.beads.geometry.setDrawRange(0, 0); }
+    },
+
+    // ── Notas guardadas cerca del avatar (para reproducir el trazo) ──
+    nearby(radius) {
+      if (!this.beads || typeof avatarObject === 'undefined' || !avatarObject) return [];
+      const p = avatarObject.position, r2 = radius * radius, out = [];
+      const A = this.beads.geometry.attributes.position.array;
+      for (let k = 0; k < this.bead; k++) {
+        const dx = A[k * 3] - p.x, dy = A[k * 3 + 1] - p.y, dz = A[k * 3 + 2] - p.z;
+        if (dx * dx + dy * dy + dz * dz <= r2 && this.meta[k]) out.push(this.meta[k]);
+      }
+      return out;
+    },
+
+    exportJSON() {
+      const r1 = x => Math.round(x * 10) / 10, r2 = x => Math.round(x * 100) / 100;
+      const segs = [], cols = [], beads = [];
+      if (this.ribbon) {
+        // vértice local 0 = extremo A, vértice local 2 = extremo B
+        const P_ = this.ribbon.geometry.attributes.position.array, C_ = this.ribbon.geometry.attributes.mfColor.array;
+        for (let k = 0; k < this.seg; k++) {
+          const a = (k * 6) * 3, b = (k * 6 + 2) * 3;
+          segs.push(r1(P_[a]), r1(P_[a + 1]), r1(P_[a + 2]), r1(P_[b]), r1(P_[b + 1]), r1(P_[b + 2]));
+          cols.push(r2(C_[a]), r2(C_[a + 1]), r2(C_[a + 2]), r2(C_[b]), r2(C_[b + 1]), r2(C_[b + 2]));
+        }
+        const bp = this.beads.geometry.attributes.position.array;
+        const bc = this.beads.geometry.attributes.mfColor.array, bz = this.beads.geometry.attributes.mfSize.array;
+        const t0 = this.meta.length && this.meta[0] ? this.meta[0][2] : 0;
+        for (let k = 0; k < this.bead; k++) {
+          const m = this.meta[k] || [60, 0.5, 0];
+          beads.push([r1(bp[k * 3]), r1(bp[k * 3 + 1]), r1(bp[k * 3 + 2]),
+                      r2(bc[k * 3]), r2(bc[k * 3 + 1]), r2(bc[k * 3 + 2]),
+                      m[0], r2(m[1]), r2(m[2] - t0), r2(bz[k])]);
+        }
+      }
+      return JSON.stringify({ v: 2, segs, cols, beads });
+    },
+    importJSON(text) {
+      const d = JSON.parse(text);
+      if (!d || (d.v !== 1 && d.v !== 2)) throw new Error('Formato de mapa no reconocido');
+      this.build();
+      for (let i = 0; i + 5 < d.segs.length; i += 6) {
+        this.pushSeg({ x: d.segs[i], y: d.segs[i + 1], z: d.segs[i + 2] }, { x: d.segs[i + 3], y: d.segs[i + 4], z: d.segs[i + 5] },
+                     { r: d.cols[i], g: d.cols[i + 1], b: d.cols[i + 2] }, { r: d.cols[i + 3], g: d.cols[i + 4], b: d.cols[i + 5] });
+      }
+      const base = performance.now() / 1000;
+      d.beads.forEach((b, i) => {
+        const vel = b[7], size = b.length > 9 ? b[9] : CFG.beadSize * (0.6 + vel);
+        const k = this.pushBead(b[0], b[1], b[2], b[3], b[4], b[5], size);
+        this.meta[k] = [b[6], vel, base + (b.length > 8 ? b[8] : i * 0.25)];
+      });
+      return { segs: d.segs.length / 6, beads: d.beads.length };
+    }
+  };
+  function downloadText(name, text) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  }
+
+  // ═══ REPRODUCTOR DE ARCHIVOS .MID ═══════════════════════════════
+  const P = { events: [], i: 0, playing: false, startWall: 0, pos: 0, name: '', dur: 0, active: new Set() };
+
+  function parseMidi(buf) {
+    const dv = new DataView(buf); let p = 0;
+    const str = n => { let s = ''; for (let i = 0; i < n; i++) s += String.fromCharCode(dv.getUint8(p++)); return s; };
+    const vlq = () => { let v = 0, b; do { b = dv.getUint8(p++); v = (v << 7) | (b & 0x7F); } while (b & 0x80); return v; };
+    if (str(4) !== 'MThd') throw new Error('No es un archivo MIDI');
+    const hl = dv.getUint32(p); p += 4;
+    p += 2; // formato
+    const ntr = dv.getUint16(p); p += 2;
+    const div = dv.getUint16(p); p += 2;
+    p += hl - 6;
+    if (div & 0x8000) throw new Error('MIDI con división SMPTE no soportado');
+    const ev = []; let order = 0;
+    for (let t = 0; t < ntr; t++) {
+      if (p + 8 > dv.byteLength || str(4) !== 'MTrk') break;
+      const len = dv.getUint32(p); p += 4;
+      const end = p + len; let tick = 0, running = 0;
+      while (p < end) {
+        tick += vlq();
+        let b = dv.getUint8(p);
+        if (b === 0xFF) {
+          p++; const type = dv.getUint8(p++); const l = vlq();
+          if (type === 0x51 && l === 3) ev.push({ tick, order: order++, tempo: (dv.getUint8(p) << 16) | (dv.getUint8(p + 1) << 8) | dv.getUint8(p + 2) });
+          p += l;
+        } else if (b === 0xF0 || b === 0xF7) {
+          p++; p += vlq();
+        } else {
+          if (b & 0x80) { running = b; p++; }
+          const hi = running & 0xF0, n = (hi === 0xC0 || hi === 0xD0) ? 1 : 2;
+          const d1 = dv.getUint8(p++), d2 = n === 2 ? dv.getUint8(p++) : 0;
+          if (hi === 0x80 || hi === 0x90 || hi === 0xB0 || hi === 0xE0) ev.push({ tick, order: order++, st: running, d1, d2 });
+        }
+      }
+      p = end;
+    }
+    ev.sort((a, b) => a.tick - b.tick || a.order - b.order);
+    let tempo = 500000, lastTick = 0, ms = 0; const out = [];
+    for (const e of ev) {
+      ms += (e.tick - lastTick) * tempo / 1000 / div; lastTick = e.tick;
+      if (e.tempo) tempo = e.tempo; else out.push({ ms, st: e.st, d1: e.d1, d2: e.d2 });
+    }
+    return out;
+  }
+
+  function fireMidi(st, d1, d2) {
+    if ((st & 0x0F) === 9) return; // canal 10 = percusión: no tiene tono
+    const hi = st & 0xF0;
+    if (hi === 0x90 && d2 > 0) P.active.add((st & 0x0F) + ':' + d1);
+    else if (hi === 0x80 || hi === 0x90) P.active.delete((st & 0x0F) + ':' + d1);
+    onMIDIMessage({ data: new Uint8Array([st, d1, d2]) });
+  }
+  function releaseAll() {
+    for (const k of [...P.active]) { const [ch, n] = k.split(':').map(Number); fireMidi(0x80 | ch, n, 0); }
+    P.active.clear();
+  }
+  function play() {
+    if (!P.events.length) return;
+    if (P.i >= P.events.length) { P.i = 0; P.pos = 0; }
+    if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+    P.startWall = performance.now() - P.pos; P.playing = true;
+  }
+  function pause() { if (!P.playing) return; P.pos = performance.now() - P.startWall; P.playing = false; releaseAll(); }
+  function stop() { P.playing = false; P.pos = 0; P.i = 0; releaseAll(); TR.replaying = false; }
+  function playerTick() {
+    if (!P.playing) return;
+    const pos = performance.now() - P.startWall; P.pos = pos;
+    while (P.i < P.events.length && P.events[P.i].ms <= pos) { const e = P.events[P.i++]; fireMidi(e.st, e.d1, e.d2); }
+    if (P.i >= P.events.length && pos > P.dur + 2500) stop();
+  }
+  function loadMidiFile(file) {
+    return file.arrayBuffer().then(buf => {
+      P.events = parseMidi(buf);
+      P.dur = P.events.length ? P.events[P.events.length - 1].ms : 0;
+      P.name = file.name; stop(); play();
+      return P.events.length;
+    });
+  }
+
+  // ── Reproducir el trazo bajo el avatar (tecla espacio) ──
+  // Las notas se infieren de las cuentas guardadas en la estela: altura, dinámica
+  // y el instante en que se tocaron, así vuelve a sonar la frase original.
+  function replayTrail() {
+    const notes = TR.nearby(CFG.replayRadius);
+    if (notes.length < 2) return 0;
+    notes.sort((a, b) => a[2] - b[2]);
+    const t0 = notes[0][2], ev = [];
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i][0], v = notes[i][1], ms = (notes[i][2] - t0) * 1000;
+      const gap = i + 1 < notes.length ? (notes[i + 1][2] - notes[i][2]) * 1000 : CFG.replayNoteMs;
+      const dur = clamp(gap * 0.95, 90, CFG.replayNoteMs);
+      ev.push({ ms, st: 0x90, d1: n, d2: Math.max(1, Math.round(v * 127)) });
+      ev.push({ ms: ms + dur, st: 0x80, d1: n, d2: 0 });
+    }
+    ev.sort((a, b) => a.ms - b.ms);
+    stop();                       // también deja TR.replaying en false
+    P.events = ev; P.dur = ev[ev.length - 1].ms; P.name = 'estela';
+    TR.replaying = true;          // no duplicar cuentas mientras suena
+    play();
+    return notes.length;
+  }
+
+  // ═══ HUD ═════════════════════════════════════════════════════════
+  let ui = {};
+  function buildUI() {
+    const css = document.createElement('style');
+    css.textContent = `
+      #mfHud{position:absolute;top:62px;left:10px;z-index:150;width:210px;padding:10px;border-radius:8px;
+        background:rgba(0,0,0,.55);border:1px solid rgba(98,215,255,.3);backdrop-filter:blur(4px);
+        font:12px monospace;color:#c7e5ff;display:flex;flex-direction:column;gap:6px}
+      #mfHud button{background:rgba(50,50,90,.7);color:#fff;border:1px solid #557;border-radius:4px;padding:4px 8px;cursor:pointer;font:12px monospace}
+      #mfHud button:hover{background:rgba(70,70,120,.9)} #mfHud button.on{background:rgba(68,102,221,.7);border-color:#7799ff}
+      #mfHud .row{display:flex;gap:4px;align-items:center} #mfHud input[type=range]{flex:1}
+      #mfBar{height:5px;background:#223;border-radius:3px;overflow:hidden} #mfBarFill{height:100%;width:0;background:linear-gradient(90deg,#4466dd,#ff5599)}`;
+    document.head.appendChild(css);
+    const hud = document.createElement('div'); hud.id = 'mfHud';
+    hud.innerHTML = `
+      <div class="row" id="mfHead" style="cursor:pointer"><b style="flex:1">🎼 Vuelo musical</b><span id="mfMini" style="opacity:.8"></span><button id="mfMin" title="Minimizar / expandir">–</button></div>
+      <div id="mfBody" style="display:flex;flex-direction:column;gap:6px">
+        <div class="row"><button id="mfToggle" style="flex:1"></button></div>
+        <div id="mfSpeed" style="font-size:18px;color:#fff">0 u/s</div>
+        <div id="mfInfo">—</div><div id="mfBar"><div id="mfBarFill"></div></div>
+        <div class="row" title="Qué tan rápido reacciona el vuelo a lo que tocas. Baja = planeo lento; alta = sube y gira al instante."><span id="mfGainLbl">Sensib. 1.0</span><input type="range" id="mfGain" min="0.3" max="2" step="0.05" value="1"></div>
+        <div class="row"><button id="mfCut" style="flex:1" title="Si está ON, el silencio parte la estela. Si está OFF, la estela es continua y también marca el vuelo con WASD."></button></div>
+        <div class="row"><button id="mfOrbits" style="flex:1" title="Cada nota que suena enrolla una hélice alrededor de la estela principal. Graves anchos y lentos, agudos ceñidos y rápidos.">🪐 Órbitas</button></div>
+        <div class="row"><button id="mfTrail" style="flex:1"></button><button id="mfClear" title="Borrar estela">🧹</button>
+          <button id="mfSave" title="Guardar mapa (.json)">💾</button><button id="mfOpen" title="Cargar mapa (.json)">📥</button>
+          <input type="file" id="mfMapFile" accept=".json" hidden></div>
+        <div class="row"><button id="mfLoad" style="flex:1">📂 MIDI</button><button id="mfPlay">▶</button><button id="mfStop">■</button>
+          <input type="file" id="mfFile" accept=".mid,.midi" hidden></div>
+        <div id="mfFileName" style="opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      </div>
+      <div id="mfHint" style="display:none;color:#8fffc8;font-size:11px">␣ ESPACIO — reproducir este trazo</div>`;
+    document.body.appendChild(hud);
+    ['mousedown', 'touchstart', 'wheel'].forEach(ev => hud.addEventListener(ev, e => e.stopPropagation(), { passive: true }));
+    ui = { toggle: hud.querySelector('#mfToggle'), info: hud.querySelector('#mfInfo'), bar: hud.querySelector('#mfBarFill'),
+           gain: hud.querySelector('#mfGain'), gainLbl: hud.querySelector('#mfGainLbl'),
+           load: hud.querySelector('#mfLoad'), play: hud.querySelector('#mfPlay'),
+           stop: hud.querySelector('#mfStop'), file: hud.querySelector('#mfFile'), name: hud.querySelector('#mfFileName'),
+           hud, body: hud.querySelector('#mfBody'), min: hud.querySelector('#mfMin'), mini: hud.querySelector('#mfMini'),
+           speed: hud.querySelector('#mfSpeed'), trail: hud.querySelector('#mfTrail'), clear: hud.querySelector('#mfClear'),
+           hint: hud.querySelector('#mfHint'), cut: hud.querySelector('#mfCut'),
+           orbits: hud.querySelector('#mfOrbits'),
+           save: hud.querySelector('#mfSave'), open: hud.querySelector('#mfOpen'), mapFile: hud.querySelector('#mfMapFile') };
+    // Minimizar / expandir (clic en el encabezado o en el botón)
+    const applyMin = () => {
+      ui.body.style.display = minimized ? 'none' : 'flex';
+      ui.hud.style.width = minimized ? '190px' : '210px';
+      ui.min.textContent = minimized ? '+' : '–';
+      ui.mini.style.display = minimized ? '' : 'none';
+    };
+    const toggleMin = () => { minimized = !minimized; applyMin(); try { localStorage.setItem('musicflightMin', minimized ? '1' : '0'); } catch (e) {} };
+    ui.hud.querySelector('#mfHead').onclick = toggleMin;
+    applyMin();
+    // Estela y mapa
+    const refreshTrail = () => {
+      ui.trail.textContent = '〰 Estela: ' + (CFG.trailOn ? 'ON' : 'OFF'); ui.trail.classList.toggle('on', CFG.trailOn);
+      ui.cut.textContent = '✂ Corte en silencio: ' + (CFG.cutOnSilence ? 'ON' : 'OFF'); ui.cut.classList.toggle('on', CFG.cutOnSilence);
+      ui.orbits.classList.toggle('on', CFG.orbitsOn);
+    };
+    ui.trail.onclick = () => { TR.setOn(!CFG.trailOn); refreshTrail(); };
+    ui.cut.onclick = () => { TR.setCut(!CFG.cutOnSilence); refreshTrail(); };
+    ui.orbits.onclick = () => { TR.setOrbits(!CFG.orbitsOn); refreshTrail(); };
+    ui.clear.onclick = () => TR.clear();
+    ui.save.onclick = () => downloadText('musicosmos-mapa-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json', TR.exportJSON());
+    ui.open.onclick = () => ui.mapFile.click();
+    ui.mapFile.onchange = () => {
+      const f = ui.mapFile.files[0]; if (!f) return;
+      f.text().then(t => { const r = TR.importJSON(t); ui.name.textContent = `Mapa: ${r.segs} segmentos · ${r.beads} notas`; })
+        .catch(err => { ui.name.textContent = 'Error: ' + err.message; });
+      ui.mapFile.value = '';
+    };
+    refreshTrail();
+    ui.toggle.onclick = () => setEnabled(!CFG.enabled);
+    ui.gain.oninput = () => {
+      CFG.intensity = parseFloat(ui.gain.value);
+      ui.gainLbl.textContent = 'Sensib. ' + CFG.intensity.toFixed(2);
+    };
+    ui.load.onclick = () => ui.file.click();
+    ui.file.onchange = () => {
+      const f = ui.file.files[0]; if (!f) return;
+      loadMidiFile(f).then(n => { ui.name.textContent = `${f.name} · ${n} eventos`; })
+        .catch(err => { ui.name.textContent = 'Error: ' + err.message; });
+      ui.file.value = '';
+    };
+    ui.play.onclick = () => P.playing ? pause() : play();
+    ui.stop.onclick = stop;
+    refreshToggle();
+  }
+  function refreshToggle() { if (ui.toggle) { ui.toggle.textContent = '🎼 Vuelo musical: ' + (CFG.enabled ? 'ON' : 'OFF'); ui.toggle.classList.toggle('on', CFG.enabled); } }
+  function setEnabled(v) {
+    CFG.enabled = !!v;
+    try { localStorage.setItem('musicflightEnabled', CFG.enabled ? '1' : '0'); } catch (e) {}
+    if (!CFG.enabled) {
+      if (S.hyper && hyperspaceEffect) { hyperspaceEffect.toggleHyperspace(false); S.hyper = false; }
+      if (camera.fov !== CFG.fovBase) { camera.fov = CFG.fovBase; camera.updateProjectionMatrix(); }
+      S.speed = 0; S.climb = 0; S.yawRate = 0;
+    }
+    refreshToggle();
+  }
+  let lastHud = 0, lastNear = 0;
+  function hud(now) {
+    if (!ui.info || now - lastHud < 120) return; lastHud = now;
+    const keyTxt = S.key && S.keyConf > 0.15 ? `${NOTE_ES[S.key.tonic]} ${S.key.mode === 'major' ? 'mayor' : 'menor'}` : '—';
+    const mn = Math.round(S.centroid), reg = mn < 48 ? 'grave' : mn < 72 ? 'medio' : 'agudo';
+    const r = S.rate, tempo = r < 0.8 ? 'largo' : r < 1.8 ? 'andante' : r < 3.5 ? 'moderato' : r < 6 ? 'allegro' : 'presto';
+    const estado = S.parked ? '⏹ detenido' : S.brake > 0.05 ? '🛑 frenando'
+                 : S.pedalVal > 0.05 ? `⏩ pedal ${(S.pedalVal * 100) | 0}%` : tempo;
+    const giro = S.ostinato < 0.12 ? 'recto'
+               : `${S.side < 0 ? '◀' : '▶'} giro ${'●'.repeat(1 + Math.round(S.ostAccum * 3))}`;
+    ui.speed.textContent = `${S.speed.toFixed(0)} u/s · ${estado}`;
+    ui.mini.textContent = `${S.speed.toFixed(0)} u/s`;
+    ui.info.textContent = `${keyTxt} · ${reg} · ${giro}`;
+    ui.bar.style.width = (S.energy * 100).toFixed(0) + '%';
+    ui.play.textContent = P.playing ? '⏸' : '▶';
+    // ¿hay un trazo reproducible bajo el avatar?
+    if (now - lastNear > 300) {
+      lastNear = now;
+      TR.nearCount = TR.replaying ? 0 : TR.nearby(CFG.replayRadius).length;
+    }
+    const canReplay = TR.nearCount >= 2 && !P.playing;
+    ui.hint.style.display = canReplay ? '' : 'none';
+    if (canReplay) ui.hint.textContent = `␣ ESPACIO — reproducir trazo (${TR.nearCount} notas)`;
+  }
+
+  // ═══ BUCLE PROPIO (no toca animate) ═══════════════════════════════
+  let lastT = performance.now();
+  function step(dt, t) {
+    analyze(dt, t);
+    if (CFG.enabled && typeof avatarObject !== 'undefined' && avatarObject && !(typeof isOrbitingNebula !== 'undefined' && isOrbitingNebula)) fly(dt, t);
+    TR.tick(dt, t);
+  }
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    try { playerTick(); step(dt, now / 1000); hud(now); } catch (e) { console.error('[MusicFlight]', e); }
+  }
+
+  // ═══ ENGANCHES (sin editar el código existente) ═══════════════════
+  let inMidi = false;
+  if (typeof onMIDIMessage === 'function') {
+    const origMidi = onMIDIMessage;
+    onMIDIMessage = function (ev) {
+      try { feed(ev.data); } catch (e) { console.error(e); }
+      inMidi = true;
+      try { return origMidi.call(this, ev); } finally { inMidi = false; }
+    };
+  }
+  if (typeof sendNote === 'function') { // teclado XenoSynth y otras fuentes que no pasan por onMIDIMessage
+    const origSend = sendNote;
+    sendNote = function (cmd, note, vel) {
+      if (!inMidi) feed([cmd === 'note_on' ? 0x90 : 0x80, note, vel]);
+      return origSend.apply(this, arguments);
+    };
+  }
+
+  // Zoom con rueda: sustituye los límites originales (5–30 en 3ª persona, 10–50 en vista de pájaro).
+  // init() registra el listener al cargar el DOM, así que toma esta versión.
+  if (typeof onMouseWheel === 'function') {
+    const origWheel = onMouseWheel;
+    onMouseWheel = function (ev) {
+      if (typeof isOrbitingNebula !== 'undefined' && isOrbitingNebula) return origWheel.call(this, ev); // órbita: usa MAX_ORBIT_DISTANCE
+      const f = 1 + Math.sign(ev.deltaY) * CFG.zoomStep;
+      if (currentViewMode === 'thirdPerson') {
+        const z = clamp(cameraOffset.z * f, 5, CFG.zoomMaxThird);
+        cameraOffset.z = z; cameraOffset.y = z * 0.5;       // mantiene la proporción original 10:20
+      } else if (currentViewMode === 'birdEye') {
+        cameraOffset.y = clamp(cameraOffset.y * f, 10, CFG.zoomMaxBird);
+      }
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof camera !== 'undefined' && camera && camera.far < CFG.cameraFar) { camera.far = CFG.cameraFar; camera.updateProjectionMatrix(); }
+    TR.build();
+    buildUI();
+    window.addEventListener('keydown', e => {
+      if (e.repeat || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+      if (e.code === 'KeyF') setEnabled(!CFG.enabled);
+      else if (e.code === 'Space') {
+        if (P.playing) { pause(); e.preventDefault(); return; }
+        const n = replayTrail();
+        if (n) { ui.name && (ui.name.textContent = `Reproduciendo trazo · ${n} notas`); e.preventDefault(); }
+      }
+    });
+    requestAnimationFrame(frame);
+  });
+
+  window.MusicFlight = { config: CFG, state: S, trail: TR, player: P, feed, step, playerTick, loadMidiFile, play, pause, stop, setEnabled, parseMidi, replayTrail };
+  console.log('%c🎼 Music Flight activo (F = vuelo · ESPACIO = reproducir trazo)', 'color:#7799ff;font-size:11px;');
+})();
     </script>
         <!-- Teclado MIDI Virtual Compacto y Transparente -->
         <div id="virtualKeyboard" class="alien-synth compact minimized">
