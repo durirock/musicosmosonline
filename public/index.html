@@ -5059,9 +5059,8 @@
 
                 // CONECTA ESTO CON TUS VARIABLES DE ROTACIÓN DE CÁMARA
                 // Ejemplo basado en tu código `index - copia.html`:
-                yawAngle -= deltaX * mouseSensitivity * 1.5; // Aumentar sensibilidad para táctil
-                pitchAngle -= deltaY * mouseSensitivity * 1.5;
-                pitchAngle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchAngle)); // Limitar pitch
+                yawAngle -= deltaX * mouseSensitivity * 1.5 * camFlip(); // Aumentar sensibilidad para táctil
+                pitchAngle = wrapAngle(pitchAngle - deltaY * mouseSensitivity * 1.5); // 360° continuo
 
                 touchCameraInitialPos.x = touch.clientX;
                 touchCameraInitialPos.y = touch.clientY;
@@ -5732,10 +5731,8 @@
                 // --- ¡REEMPLAZA ESTE BLOQUE COMPLETO! ---
                 if (currentOrbitType === 'fixed') {
                     // MODO FIJO: El ratón controla la rotación de la CÁMARA
-                    yawAngle -= deltaX * mouseSensitivity;
-                    pitchAngle -= deltaY * mouseSensitivity * 0.5;
-                    const LIMIT = 1.56; 
-                    pitchAngle = Math.max(-LIMIT, Math.min(LIMIT, pitchAngle));
+                    yawAngle -= deltaX * mouseSensitivity * camFlip();
+                    pitchAngle = wrapAngle(pitchAngle - deltaY * mouseSensitivity * 0.5);   // 360° continuo
                     
                     avatarObject.rotation.y = yawAngle;
             } else { // currentOrbitType === 'comet'
@@ -5748,9 +5745,8 @@
 
                 } else {
                     // --- MODO VUELO LIBRE: El comportamiento se mantiene como lo tenías ---
-                    yawAngle -= deltaX * mouseSensitivity;
-                    pitchAngle -= deltaY * mouseSensitivity * 0.5;
-                    pitchAngle = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchAngle));
+                    yawAngle -= deltaX * mouseSensitivity * camFlip();
+                    pitchAngle = wrapAngle(pitchAngle - deltaY * mouseSensitivity * 0.5);   // 360° continuo
                     avatarObject.rotation.y = yawAngle;
                 }
 
@@ -5808,48 +5804,39 @@
                     camera.quaternion.setFromEuler(new THREE.Euler(pitchAngle, yawAngle, 0, 'YXZ'));
                     break;
                     
-                case 'thirdPerson':
-                    // Tercera persona: cámara detrás y arriba del avatar
-                    const offsetVector = new THREE.Vector3(
-                        -Math.sin(yawAngle) * Math.cos(pitchAngle) * cameraOffset.z,
-                        cameraOffset.y + Math.sin(pitchAngle) * cameraOffset.z,
-                        -Math.cos(yawAngle) * Math.cos(pitchAngle) * cameraOffset.z
-                    );
-                    
-                    camera.position.copy(avatarObject.position).add(offsetVector);
-                    
-                    // Mirar hacia el avatar con inclinación
+                case 'thirdPerson': {
+                    // Tercera persona: órbita continua 360° alrededor del avatar (cuaternión, sin volteo)
+                    const d3 = Math.hypot(cameraOffset.y, cameraOffset.z) || 1;
+                    const e3 = Math.atan2(cameraOffset.y, cameraOffset.z);   // elevación base del offset
+                    _camEuler.set(-(e3 + pitchAngle), yawAngle + Math.PI, 0, 'YXZ');
+                    camera.quaternion.setFromEuler(_camEuler);
                     cameraTarget.copy(avatarObject.position);
                     cameraTarget.y += 1; // Mirar un poco arriba del centro del avatar
-                    camera.lookAt(cameraTarget);
+                    _camVec.set(0, 0, d3).applyQuaternion(camera.quaternion);
+                    camera.position.copy(cameraTarget).add(_camVec);
                     break;
-                    
-                case 'birdEye':
-                    // MODIFICADO: Vista de pájaro con soporte para rotación
-                    // Posicionar la cámara en alto sobre el avatar pero permitiendo rotación
-                    const birdEyeHeight = cameraOffset.y;
-                    const birdEyeRadius = cameraOffset.z * 0.5; // Reducido para estar más centrado
-                    
-                    // Usar la rotación horizontal (yawAngle) para girar alrededor del avatar
-                    camera.position.copy(avatarObject.position);
-                    camera.position.y += birdEyeHeight;
-                    camera.position.x += Math.sin(yawAngle) * birdEyeRadius;
-                    camera.position.z += Math.cos(yawAngle) * birdEyeRadius;
-                    
-                    // Usar pitchAngle para ajustar la inclinación (limitada para vista de pájaro)
-                    const birdEyePitch = Math.max(-Math.PI/2, Math.min(-Math.PI/6, pitchAngle));
-                    
-                    // Calcular el punto de mira con base en la rotación
+                }
+                case 'birdEye': {
+                    // Vista de pájaro: órbita continua 360° sobre el avatar (pitch = −elevación)
+                    const dB = Math.hypot(cameraOffset.y, cameraOffset.z * 0.5) || 1;
+                    _camEuler.set(pitchAngle, yawAngle, 0, 'YXZ');
+                    camera.quaternion.setFromEuler(_camEuler);
                     cameraTarget.copy(avatarObject.position);
-                    // Ajustar el punto de mira para que mire "adelante" del avatar según la rotación
-                    cameraTarget.x += Math.sin(yawAngle) * 5 * Math.sin(birdEyePitch + Math.PI/2);
-                    cameraTarget.z += Math.cos(yawAngle) * 5 * Math.sin(birdEyePitch + Math.PI/2);
-                    // Ajustar altura del punto de mira según inclinación
-                    cameraTarget.y += Math.cos(birdEyePitch + Math.PI/2) * 5;
-                    
-                    camera.lookAt(cameraTarget);
+                    _camVec.set(0, 0, dB).applyQuaternion(camera.quaternion);
+                    camera.position.copy(cameraTarget).add(_camVec);
                     break;
+                }
             }
+        }
+
+        // Ayudantes de cámara 360°: ángulo envuelto en (−π, π] y signo de "cabeza abajo"
+        var _camEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+        var _camVec = new THREE.Vector3();
+        var _camUp = new THREE.Vector3();
+        function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+        function camFlip() {   // −1 si la cámara está invertida: el giro horizontal se invierte para seguir la pantalla
+            if (typeof camera === 'undefined' || !camera) return 1;
+            return _camUp.set(0, 1, 0).applyQuaternion(camera.quaternion).y < 0 ? -1 : 1;
         }
 
 
@@ -9314,7 +9301,7 @@ MAPEO MÚSICA → MOVIMIENTO
 })();
 /*
 ╔══════════════════════════════════════════════════════════════════╗
-║  CONTROL HUB v1.2 — joypad + MIDI para Musicosmos                ║
+║  CONTROL HUB v1.3 — joypad + MIDI para Musicosmos                ║
 ║  Optimizado para Akai MPK mini Plus y para mandos USB genéricos  ║
 ║  (DirectInput, tipo Ultra Game) o Bluetooth.                     ║
 ║                                                                  ║
@@ -9340,8 +9327,8 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
   Teclas           → notas (como siempre)
   Pads banco A/B   → acciones (canal 10, notas 36–51)
   Perillas K1–K8   → parámetros (CC 70–77)
-  Joystick X       → pitch bend = viraje del Vuelo musical (ya existente)
-  Joystick Y       → CC1 ascender / CC2 descender (analógico)
+  Joystick X       → pitch bend = girar (centro = reposo)
+  Joystick Y       → CC1 avanzar / CC2 retroceder (analógico)
 */
 ;(function () {
   'use strict';
@@ -9418,8 +9405,27 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
     eyeSep:      rangeParam('Separación estéreo', -0.3, 0.3, () => eyeSeparation, v => { eyeSeparation = v; }),
     padSpeed:    rangeParam('Velocidad del joypad', 4, 120, () => C.gp.speed, v => { C.gp.speed = v; syncGpSliders(); saveSoon(); }),
     liftUpA:     { label: 'Ascender (analógico)',  getN: () => H.midiLift.up,   setN: n => { H.midiLift.up = n; } },
-    liftDownA:   { label: 'Descender (analógico)', getN: () => H.midiLift.down, setN: n => { H.midiLift.down = n; } }
+    liftDownA:   { label: 'Descender (analógico)', getN: () => H.midiLift.down, setN: n => { H.midiLift.down = n; } },
+    // Navegación: "0→127" crece desde cero; "centro" usa 64 / pitch bend 8192 como reposo
+    navFwd:      uniNav('Avanzar (0→127)', 'fwd', 1),
+    navBack:     uniNav('Retroceder (0→127)', 'fwd', -1),
+    navLeft:     uniNav('Izquierda (0→127)', 'strafe', -1),
+    navRight:    uniNav('Derecha (0→127)', 'strafe', 1),
+    navFB:       biNav('Adelante / atrás (centro)', 'fwd'),
+    navStrafe:   biNav('Izquierda / derecha (centro)', 'strafe'),
+    navTurn:     biNav('Girar izq / der (centro)', 'turn'),
+    navPitch:    biNav('Mirar arriba / abajo (centro)', 'pitch'),
+    navLift:     biNav('Subir / bajar (centro)', 'lift')
   };
+  function biNav(label, axis) {
+    return { label, getN: () => (H.nav[axis] + 1) / 2,
+      setN(n) { const v = (clamp(n, 0, 1) - 0.5) * 2; H.nav[axis] = Math.abs(v) < 0.08 ? 0 : v; } };
+  }
+  function uniNav(label, axis, sign) {
+    const key = axis + (sign > 0 ? '+' : '-');
+    return { label, getN: () => H.navU[key] || 0,
+      setN(n) { H.navU[key] = n < 0.04 ? 0 : clamp(n, 0, 1); H.nav[axis] = (H.navU[axis + '+'] || 0) - (H.navU[axis + '-'] || 0); } };
+  }
 
   // ═══ CONFIGURACIÓN POR DEFECTO ═══════════════════════════════════
   function mpkPreset() {
@@ -9430,8 +9436,10 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
     padsB.forEach((a, k) => b.push({ kind: 'note', ch: 9, num: 44 + k, sel: 'a:' + a }));
     const knobs = ['flightSens', 'galaxySize', 'pulsarVol', 'playlistVol', 'zoom', 'flightMax', 'orbitDist', 'synthVol'];
     knobs.forEach((p, k) => b.push({ kind: 'cc', ch: -1, num: 70 + k, sel: 'p:' + p, mode: 'abs' }));
-    b.push({ kind: 'cc', ch: -1, num: 1, sel: 'p:liftUpA', mode: 'abs', thru: true });
-    b.push({ kind: 'cc', ch: -1, num: 2, sel: 'p:liftDownA', mode: 'abs', thru: true });
+    // Joystick: X (pitch bend) gira; Y arriba (CC1) avanza, Y abajo (CC2) retrocede
+    b.push({ kind: 'pb', ch: -1, num: 0, sel: 'p:navTurn', mode: 'abs' });
+    b.push({ kind: 'cc', ch: -1, num: 1, sel: 'p:navFwd', mode: 'abs' });
+    b.push({ kind: 'cc', ch: -1, num: 2, sel: 'p:navBack', mode: 'abs' });
     return b;
   }
   // ═══ PERFILES DE JOYPAD ═════════════════════════════════════════
@@ -9472,14 +9480,15 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
     return { dead: 0.18, speed: 28, look: 2.2, invertY: false, axes: ap.axes, buttons: ap.buttons, profiles: {}, modes: {} };
   }
   function defaults() {
-    return { v: 2, gp: gpDefaults(), midi: { padsMode: 'actions', auto: true, binds: mpkPreset() } };
+    return { v: 3, gp: gpDefaults(), midi: { padsMode: 'actions', auto: true, binds: mpkPreset() }, ui: { fold: {} } };
   }
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(LS_KEY));
-      if (s && s.v === 2) {
+      if (s && (s.v === 2 || s.v === 3)) {
         const d = defaults();
-        return { v: 2, gp: Object.assign(d.gp, s.gp), midi: Object.assign(d.midi, s.midi) };
+        const midi = s.v === 3 ? Object.assign(d.midi, s.midi) : d.midi;   // v2 → preset MIDI nuevo
+        return { v: 3, gp: Object.assign(d.gp, s.gp), midi, ui: Object.assign(d.ui, s.ui) };
       }
     } catch (e) {}
     return defaults();
@@ -9517,7 +9526,7 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
   const H = {
     padKey: null, rest: [], hatAxes: new Set(), prevBtn: [], holds: {},
     learnGp: null, learnMidi: null, ccState: {}, relN: {},
-    midiLift: { up: 0, down: 0 }, orbitDriving: false,
+    midiLift: { up: 0, down: 0 }, nav: { fwd: 0, strafe: 0, turn: 0, pitch: 0, lift: 0 }, navU: {}, orbitDriving: false, wasOpen: false,
     lastT: performance.now(), lastLive: 0, lastEnsure: 0, autoDone: new Set(), devSig: ''
   };
 
@@ -9616,20 +9625,33 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
   function learnGpStep(p, now) {
     const L = H.learnGp;
     if (now - L.start > 8000) { H.learnGp = null; renderGp(); return; }
-    if (!L.base) { L.base = { b: p.buttons.map(b => b.pressed), a: p.axes.slice() }; return; }
+    if (!L.base) { L.base = { b: p.buttons.map(b => b.pressed || b.value > 0.5), a: p.axes.slice() }; return; }
     let found = null;
     if (L.kind === 'btn') {
-      for (let i = 0; i < p.buttons.length && !found; i++) if (p.buttons[i].pressed && !L.base.b[i]) found = { t: 'b', i };
-      for (let i = 0; i < p.axes.length && !found; i++) {
-        const v = p.axes[i];
-        if (H.hatAxes.has(i)) { if (v <= 1.05) found = { t: 'hat', i, v: snapHat(v) }; }
-        else if (Math.abs(v - (H.rest[i] || 0)) > 0.6) found = { t: 'ax', i, s: Math.sign(v - (H.rest[i] || 0)) };
+      // 1) Botón digital (incluye L1/L2/R1/R2 aunque también muevan un eje de presión)
+      for (let i = 0; i < p.buttons.length && !found; i++) {
+        const b = p.buttons[i];
+        if ((b.pressed || b.value > 0.5) && !L.base.b[i]) found = { t: 'b', i };
+      }
+      // 2) Cruceta tipo hat
+      for (let i = 0; i < p.axes.length && !found; i++)
+        if (H.hatAxes.has(i) && p.axes[i] <= 1.05 && L.base.a[i] > 1.05) found = { t: 'hat', i, v: snapHat(p.axes[i]) };
+      // 3) Eje como botón: solo si no aparece un botón en 200 ms (los gatillos analógicos mueven ambos)
+      if (!found) {
+        let cand = null;
+        for (let i = 0; i < p.axes.length && !cand; i++) {
+          if (H.hatAxes.has(i)) continue;
+          const d = p.axes[i] - L.base.a[i];
+          if (Math.abs(d) > 0.6) cand = { t: 'ax', i, s: Math.sign(d) };
+        }
+        if (cand) { if (!L.axT) L.axT = now; else if (now - L.axT > 200) found = cand; }
+        else L.axT = 0;
       }
       if (found) C.gp.buttons[L.row].src = found;
     } else {
       for (let i = 0; i < p.axes.length && !found; i++) {
         if (H.hatAxes.has(i)) continue;
-        const d = p.axes[i] - (H.rest[i] || 0);
+        const d = p.axes[i] - L.base.a[i];
         if (Math.abs(d) > 0.6) found = { i, s: Math.sign(d) };
       }
       if (found) C.gp.axes[L.key] = found;
@@ -9661,6 +9683,9 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
 
     if (H.learnGp) { learnGpStep(p, now); return; }
 
+    // Panel de Controles abierto: el mando no mueve ni dispara nada (solo vista en vivo y Asignar)
+    if (panelOpen()) { H.prevBtn = C.gp.buttons.map(r => srcPressed(r.src, p)); return; }
+
     // Botones → acciones
     C.gp.buttons.forEach((r, i) => {
       const on = srcPressed(r.src, p), was = !!H.prevBtn[i];
@@ -9680,34 +9705,88 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
       else if (H.orbitDriving) { playerOrbitSpeed = 0; H.orbitDriving = false; }
       if (my) orbitDistance = clamp(orbitDistance - my * ORBIT_ZOOM_SPEED * 60 * dt, MIN_ORBIT_DISTANCE, MAX_ORBIT_DISTANCE);
       if (currentOrbitType === 'comet') { if (lx) orbitAngle -= lx * 1.2 * dt; }
-      else {
-        if (lx) { yawAngle -= lx * look * dt; avatarObject.rotation.y = yawAngle; }
-        if (ly) pitchAngle = clamp(pitchAngle - ly * look * 0.6 * dt, -1.56, 1.56);
-      }
+      else turnLook(lx, ly, look, dt);
       return;
     }
 
-    // Vuelo libre: mismas convenciones que W/A/S/D y el arrastre del ratón
-    if (lx) { yawAngle -= lx * look * dt; avatarObject.rotation.y = yawAngle; }
-    if (ly) pitchAngle = clamp(pitchAngle - ly * look * 0.6 * dt, -Math.PI / 2, Math.PI / 2);
-    if (mx || my || lf) {
-      const f = hyperspaceEffect ? hyperspaceEffect.speedFactor : 1;
-      const sp = C.gp.speed * f * dt;
-      const fx = -Math.sin(yawAngle), fz = -Math.cos(yawAngle);
-      const hs = currentViewMode === 'thirdPerson' ? -1 : 1;   // en 3ª persona W empuja hacia -front
-      avatarObject.position.x += (fx * hs * my + fz * mx) * sp;
-      avatarObject.position.z += (fz * hs * my - fx * mx) * sp;
-      avatarObject.position.y += lf * sp;
-    }
+    // Vuelo libre: giro 360° continuo y desplazamiento según lo que muestra la pantalla
+    turnLook(lx, ly, look, dt);
+    moveRel(my, mx, lf, dt);
   }
 
-  function applyMidiLift(dt) {
-    if (typeof avatarObject === 'undefined' || !avatarObject || isOrbitingNebula) return;
-    const l = H.midiLift.up - H.midiLift.down;
-    if (Math.abs(l) < 0.03) return;
-    const f = hyperspaceEffect ? hyperspaceEffect.speedFactor : 1;
-    avatarObject.position.y += l * C.gp.speed * f * dt;
+  // Giro: el horizontal se invierte cuando la cámara pasa "cabeza abajo", así sigue a la pantalla
+  function turnLook(lx, ly, look, dt) {
+    const flip = typeof camFlip === 'function' ? camFlip() : 1;
+    const wrap = typeof wrapAngle === 'function' ? wrapAngle : (a => a);
+    if (lx) { yawAngle -= lx * look * dt * flip; avatarObject.rotation.y = yawAngle; }
+    if (ly) pitchAngle = wrap(pitchAngle - ly * look * 0.6 * dt);
   }
+  // Desplazamiento relativo a la cámara: adelante = hacia el fondo de la pantalla
+  const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
+  function moveRel(fwd, strafe, lift, dt) {
+    if (!fwd && !strafe && !lift) return;
+    const q = camera.quaternion;
+    _f.set(0, 0, -1).applyQuaternion(q); _f.y = 0;
+    const fl = _f.length();
+    if (fl < 0.35) {   // mirando casi vertical (vista de pájaro): adelante = arriba de la pantalla
+      _u.set(0, 1, 0).applyQuaternion(q); _u.y = 0;
+      _f.multiplyScalar(fl / 0.35).addScaledVector(_u.normalize(), 1 - fl / 0.35);
+    }
+    _f.normalize();
+    _r.set(1, 0, 0).applyQuaternion(q); _r.y = 0; _r.normalize();
+    const f = hyperspaceEffect ? hyperspaceEffect.speedFactor : 1;
+    const sp = C.gp.speed * f * dt;
+    avatarObject.position.addScaledVector(_f, fwd * sp).addScaledVector(_r, strafe * sp);
+    avatarObject.position.y += lift * sp;
+  }
+
+  // Joystick / perillas MIDI: navegación analógica + ascenso heredado
+  function applyMidiNav(dt) {
+    if (typeof avatarObject === 'undefined' || !avatarObject || panelOpen()) return;
+    const N = H.nav;
+    const lift = N.lift + (H.midiLift.up - H.midiLift.down);
+    if (isOrbitingNebula) {
+      if (currentOrbitType !== 'comet') turnLook(N.turn, N.pitch, C.gp.look, dt);
+      return;
+    }
+    turnLook(N.turn, N.pitch, C.gp.look, dt);
+    moveRel(N.fwd, N.strafe, Math.abs(lift) < 0.03 ? 0 : lift, dt);
+  }
+
+  // ═══ PANEL ABIERTO: congela el cosmos mientras configuras ═══════════
+  function panelOpen() {
+    const tab = $('tab-controles'), menu = $('settingsMenu');
+    return !!(tab && menu && menu.style.display === 'block' && tab.classList.contains('active'));
+  }
+  function freezeOnOpen() {
+    const open = panelOpen();
+    if (open && !H.wasOpen) {
+      releaseAllGp();
+      for (const k in H.nav) H.nav[k] = 0;
+      H.navU = {}; H.midiLift.up = H.midiLift.down = 0;
+      H.holds = {};
+      moveForward = moveBackward = moveLeft = moveRight = moveUp = moveDown = false;
+      if (typeof rotateCameraLeft !== 'undefined') { rotateCameraLeft = false; rotateCameraRight = false; }
+      if (hyperspaceModeActive) { hyperspaceModeActive = false; if (hyperspaceEffect) hyperspaceEffect.toggleHyperspace(false); }
+      // Vuelo musical: se detiene su inercia sin tocar la preferencia guardada
+      const mf = MF();
+      if (mf) {
+        H.mfWas = mf.config.enabled;
+        mf.config.enabled = false;
+        if (mf.state) { mf.state.speed = 0; mf.state.climb = 0; mf.state.yawRate = 0; }
+      }
+    } else if (!open && H.wasOpen) {
+      const mf = MF();
+      if (mf && H.mfWas) mf.config.enabled = true;
+      H.mfWas = false;
+    }
+    H.wasOpen = open;
+  }
+  // Teclado del computador: con el panel abierto no llega al cosmos (escribir en los campos sí funciona)
+  ['keydown', 'keyup'].forEach(type => window.addEventListener(type, e => {
+    if (!panelOpen() || e.key === 'Escape') return;
+    e.stopImmediatePropagation();
+  }, true));
 
   // ═══ MIDI ═══════════════════════════════════════════════════════
   function monitor(hi, ch, n, v) {
@@ -9737,38 +9816,42 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
     const st = d[0]; if (st >= 0xF0) return false;   // reloj, sysex, etc.
     const hi = st & 0xF0, ch = st & 0x0F, n = d[1], v = d.length > 2 ? d[2] : 0;
     monitor(hi, ch, n, v);
-    const isOn = hi === 0x90 && v > 0, isOff = hi === 0x80 || (hi === 0x90 && v === 0), isCC = hi === 0xB0;
+    const isOn = hi === 0x90 && v > 0, isOff = hi === 0x80 || (hi === 0x90 && v === 0), isCC = hi === 0xB0, isPB = hi === 0xE0;
 
-    // Aprendizaje: el próximo pad/tecla/perilla queda asignado
-    if (H.learnMidi !== null && (isOn || isCC)) {
-      const src = { kind: isCC ? 'cc' : 'note', ch: isCC ? -1 : ch, num: n };
+    // Aprendizaje: el próximo pad/tecla/perilla/joystick queda asignado
+    if (H.learnMidi !== null && (isOn || isCC || (isPB && Math.abs(((v << 7) | n) - 8192) > 2500))) {
+      const src = { kind: isPB ? 'pb' : isCC ? 'cc' : 'note', ch: isOn ? ch : -1, num: isPB ? 0 : n };
       if (H.learnMidi === 'new') {
-        C.midi.binds.push(Object.assign(src, { sel: isCC ? 'p:zoom' : 'a:hyper', mode: 'abs' }));
+        C.midi.binds.push(Object.assign(src, { sel: isPB ? 'p:navTurn' : isCC ? 'p:zoom' : 'a:hyper', mode: 'abs' }));
       } else {
         const b = C.midi.binds[H.learnMidi];
-        if (b) { Object.assign(b, src); if (isCC && !b.mode) b.mode = 'abs'; }
+        if (b) { Object.assign(b, src); if (!b.mode) b.mode = 'abs'; }
       }
       H.learnMidi = null; save(); renderMidi();
       return true;
     }
-    if (!isOn && !isOff && !isCC) return false;
+    // Panel de Controles abierto: el monitor muestra todo, pero nada mueve el cosmos ni suena
+    if (panelOpen()) return true;
+    if (!isOn && !isOff && !isCC && !isPB) return false;
 
-    const kind = isCC ? 'cc' : 'note';
+    const kind = isPB ? 'pb' : isCC ? 'cc' : 'note';
+    const pbN = isPB ? ((v << 7) | n) / 16383 : 0;
     let consumed = false;
     C.midi.binds.forEach((b, idx) => {
-      if (b.kind !== kind || b.num !== n || (b.ch >= 0 && b.ch !== ch)) return;
+      if (b.kind !== kind || (kind !== 'pb' && b.num !== n) || (b.ch >= 0 && b.ch !== ch)) return;
       if (kind === 'note' && C.midi.padsMode === 'notes') return;
       const [type, k] = (b.sel || 'a:none').split(':');
       if (type === 'a' && k !== 'none') {
-        if (isCC) {
-          const on = v >= 64, was = !!H.ccState[idx];
+        if (isCC || isPB) {
+          const on = isPB ? Math.abs(pbN - 0.5) > 0.3 : v >= 64, was = !!H.ccState[idx];
           if (on && !was) press(k, b.param, 100);
           if (!on && was) release(k, b.param);
           H.ccState[idx] = on;
         } else if (isOn) press(k, b.param, v);
         else release(k, b.param);
       } else if (type === 'p') {
-        if (isCC) runParam(k, v, b.mode, idx);
+        if (isPB) { if (PARAMS[k]) PARAMS[k].setN(pbN); }
+        else if (isCC) runParam(k, v, b.mode, idx);
         else if (isOn) runParam(k, v, 'abs', idx);
         else if (PARAMS[k] && (k === 'liftUpA' || k === 'liftDownA')) PARAMS[k].setN(0);
       }
@@ -9814,6 +9897,13 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
     #settingsMenu .tab-button{padding:10px 9px}
     #settingsMenu.ch-wide{width:370px}
     #tab-controles h4{color:#c7e5ff;margin:4px 0 8px;border-bottom:1px solid #445;padding-bottom:5px}
+    .ch-fold{cursor:pointer;user-select:none;display:flex;align-items:center;gap:6px}
+    .ch-fold:hover{color:#fff}
+    .ch-tw::before{content:'▾';display:inline-block;width:12px;color:#62d7ff;transition:transform .15s}
+    .ch-sec.folded .ch-tw::before{transform:rotate(-90deg)}
+    .ch-sec.folded > :not(h4){display:none}
+    .ch-sec.folded h4{margin-bottom:0;border-bottom:none;padding-bottom:0}
+    .ch-freeze{font-size:11px;color:#ffd27a;background:rgba(80,60,0,.35);border:1px solid #6a5a20;border-radius:4px;padding:5px 7px;margin:0 0 10px}
     .ch-sec{margin-bottom:14px;padding:10px;background:rgba(15,15,25,.7);border:1px solid #557;border-radius:5px}
     .ch-sub{font-size:12px;color:#aaf;margin:10px 0 4px}
     .ch-status{font-size:12px;color:#9f9;margin-bottom:6px;line-height:1.35}
@@ -9852,8 +9942,9 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
   `;
   const TEMPLATE = `
     <h3>Controles</h3>
-    <div class="ch-sec">
-      <h4>Joypad / gamepad</h4>
+    <div class="ch-freeze">Con este panel abierto, el cosmos queda en pausa: el mando, el teclado MIDI y el del computador no mueven nada. Cierra el panel para volver a volar.</div>
+    <div class="ch-sec" data-sec="gp">
+      <h4 class="ch-fold" title="Minimizar / maximizar"><span class="ch-tw"></span>Joypad / gamepad</h4>
       <div id="chGpStatus" class="ch-status off">Conecta el mando y presiona cualquier botón para que el navegador lo detecte.</div>
       <div class="ch-row"><label>Modo</label>
         <select id="chGpMode" style="flex:1;background:rgba(40,40,60,.9);color:#fff;border:1px solid #557;border-radius:3px;padding:3px">
@@ -9874,8 +9965,8 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
       <div class="ch-row"><button id="chBtnAdd" class="ch-btn sec">+ Añadir botón</button></div>
       <div class="ch-note">Mando genérico antiguo: si los sticks no responden, presiona su botón ANALOG/MODE (la luz debe encenderse). Sin él, el stick izquierdo se comporta como cruceta.</div>
     </div>
-    <div class="ch-sec">
-      <h4>MIDI · Akai MPK mini Plus</h4>
+    <div class="ch-sec" data-sec="midi">
+      <h4 class="ch-fold" title="Minimizar / maximizar"><span class="ch-tw"></span>MIDI · Akai MPK mini Plus</h4>
       <div id="chMidiDev" class="ch-status off">Buscando dispositivos MIDI…</div>
       <div id="chMidiMon" class="ch-mon">Monitor: toca, gira una perilla o golpea un pad…</div>
       <div class="ch-row"><label>Pads</label>
@@ -9981,9 +10072,10 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
         <div class="ch-bind">
           <select class="ch-narrow" data-mkind="${i}" title="Tipo de mensaje">
             <option value="note"${b.kind === 'note' ? ' selected' : ''}>Nota</option>
-            <option value="cc"${b.kind === 'cc' ? ' selected' : ''}>CC</option></select>
+            <option value="cc"${b.kind === 'cc' ? ' selected' : ''}>CC</option>
+            <option value="pb"${b.kind === 'pb' ? ' selected' : ''}>Pitch bend</option></select>
           <select class="ch-narrow" data-mch="${i}" title="Canal MIDI (* = cualquiera)">${chOpts}</select>
-          <input type="number" min="0" max="127" value="${b.num}" data-mnum="${i}" title="${b.kind === 'note' ? 'Número de nota (' + noteName(b.num) + ')' : 'Número de CC'}">
+          ${b.kind === 'pb' ? '' : `<input type="number" min="0" max="127" value="${b.num}" data-mnum="${i}" title="${b.kind === 'note' ? 'Número de nota (' + noteName(b.num) + ')' : 'Número de CC'}">`}
           ${b.kind === 'note' ? `<span class="ch-inv">${noteName(b.num)}</span>` : ''}
           <span style="flex:1"></span>
           <button class="ch-mini${learning ? ' learning' : ''}" data-mlearn="${i}">${learning ? 'toca…' : 'Aprender'}</button>
@@ -10036,6 +10128,13 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
     ['keydown', 'keyup'].forEach(t => root.addEventListener(t, e => e.stopPropagation()));
 
     root.addEventListener('click', e => {
+      const fh = e.target.closest('.ch-fold');
+      if (fh) {
+        const sec = fh.parentElement, id = sec.dataset.sec;
+        sec.classList.toggle('folded');
+        C.ui.fold[id] = sec.classList.contains('folded'); save();
+        return;
+      }
       const t = e.target.closest('button'); if (!t) return;
       const ds = t.dataset;
       if (ds.gpax) { markEdited(); releaseAllGp(); H.learnGp = { kind: 'axis', key: ds.gpax, start: performance.now(), base: null }; renderGp(); }
@@ -10129,6 +10228,7 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
       menu.classList.toggle('ch-wide', b.dataset.tab === 'tab-controles');
     });
     wireUI(tab);
+    tab.querySelectorAll('.ch-sec[data-sec]').forEach(sec => { if (C.ui.fold[sec.dataset.sec]) sec.classList.add('folded'); });
     applyProfile(); syncGpSliders(); renderGpMode(); renderGp(); renderMidi();
   })();
 
@@ -10138,7 +10238,7 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
   function frame(now) {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - H.lastT) / 1000); H.lastT = now;
-    try { pollPad(dt, now); applyMidiLift(dt); ensureMidi(now); live(now); }
+    try { freezeOnOpen(); pollPad(dt, now); applyMidiNav(dt); ensureMidi(now); live(now); }
     catch (e) { console.error('[ControlHub]', e); }
   }
   document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(frame));
