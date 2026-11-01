@@ -9312,6 +9312,840 @@ MAPEO MÚSICA → MOVIMIENTO
   window.MusicFlight = { config: CFG, state: S, trail: TR, player: P, feed, step, playerTick, loadMidiFile, play, pause, stop, setEnabled, parseMidi, replayTrail };
   console.log('%c🎼 Music Flight activo (F = vuelo · ESPACIO = reproducir trazo)', 'color:#7799ff;font-size:11px;');
 })();
+/*
+╔══════════════════════════════════════════════════════════════════╗
+║  CONTROL HUB v1.2 — joypad + MIDI para Musicosmos                ║
+║  Optimizado para Akai MPK mini Plus y para mandos USB genéricos  ║
+║  (DirectInput, tipo Ultra Game) o Bluetooth.                     ║
+║                                                                  ║
+║  Pegar al FINAL del script principal, justo después del cierre   ║
+║  "})();" del bloque MUSIC FLIGHT y antes del cierre del script.   ║
+║  Inyecta su propia pestaña "Controles" en Configuración.         ║
+║  No edita ninguna función existente: envuelve onMIDIMessage y    ║
+║  reutiliza onKeyDown, cycleViewMode, toggleTeleportPanel, etc.   ║
+╚══════════════════════════════════════════════════════════════════╝
+
+JOYPAD (Gamepad API — el navegador solo lo "ve" tras presionar un botón)
+  Modo Automático  → detecta el tipo de mando al conectarlo (estándar Xbox/PS/
+                     8BitDo, o genérico USB con cruceta tipo hat) y aplica un perfil
+  Modo Manual      → cada botón, eje y cruceta se edita a mano; se guarda por mando
+                     (editar cualquier fila en Automático pasa ese mando a Manual)
+  Stick izquierdo  → mover (adelante/atrás, lateral)     — analógico
+  Stick derecho    → girar / mirar                        — analógico
+  En órbita        → stick izq. X = velocidad orbital, Y = distancia;
+                     stick der. X = recorrer la órbita (cometa) o girar (fija)
+  Botones          → acciones asignables (aprender con "Asignar")
+
+MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
+  Teclas           → notas (como siempre)
+  Pads banco A/B   → acciones (canal 10, notas 36–51)
+  Perillas K1–K8   → parámetros (CC 70–77)
+  Joystick X       → pitch bend = viraje del Vuelo musical (ya existente)
+  Joystick Y       → CC1 ascender / CC2 descender (analógico)
+*/
+;(function () {
+  'use strict';
+  const LS_KEY = 'musicosmosControlHub';
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const $ = id => document.getElementById(id);
+  const MF = () => window.MusicFlight || null;
+  const NOTE_N = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteName = n => NOTE_N[n % 12] + (Math.floor(n / 12) - 1);
+
+  // ═══ ACCIONES DISCRETAS (botones, pads, transport) ═══════════════
+  const ACTIONS = {
+    none:      { label: '— sin acción —' },
+    hyper:     { label: 'Hipersalto (mantener)' },
+    liftUp:    { label: 'Subir (mantener)' },
+    liftDown:  { label: 'Bajar (mantener)' },
+    view:      { label: 'Cambiar vista' },
+    orbit:     { label: 'Orbitar púlsar cercano' },
+    orbitExit: { label: 'Salir de órbita' },
+    orbitMode: { label: 'Órbita fija / cometa' },
+    flight:    { label: 'Vuelo musical on/off' },
+    trail:     { label: 'Estela on/off' },
+    orbits:    { label: 'Órbitas de notas on/off' },
+    replay:    { label: 'Reproducir trazo' },
+    midiPlay:  { label: 'Archivo MIDI: play/pausa' },
+    midiStop:  { label: 'Archivo MIDI: stop' },
+    teleport:  { label: 'Panel teletransporte' },
+    settings:  { label: 'Abrir/cerrar configuración' },
+    synth:     { label: 'XenoSynth abrir/cerrar' },
+    octUp:     { label: 'XenoSynth octava +' },
+    octDown:   { label: 'XenoSynth octava −' },
+    stereo:    { label: 'Modo estéreo 3D' },
+    note:      { label: 'Tocar nota…' }
+  };
+
+  // ═══ PARÁMETROS CONTINUOS (perillas / joystick) ═══════════════════
+  function sliderParam(label, id) {
+    return {
+      label,
+      getN() { const e = $(id); if (!e) return 0; return (+e.value - +e.min) / ((+e.max - +e.min) || 1); },
+      setN(n) {
+        const e = $(id); if (!e) return;
+        const mn = +e.min, mx = +e.max, st = parseFloat(e.step) || 0;
+        let v = mn + clamp(n, 0, 1) * (mx - mn);
+        if (st) v = Math.round(v / st) * st;
+        e.value = v;
+        e.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    };
+  }
+  function rangeParam(label, min, max, get, set, curve) {
+    return {
+      label,
+      getN() { const v = get(); return curve === 'exp' ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min); },
+      setN(n) { n = clamp(n, 0, 1); set(curve === 'exp' ? min * Math.pow(max / min, n) : min + n * (max - min)); }
+    };
+  }
+  const PARAMS = {
+    flightSens:  sliderParam('Sensibilidad del vuelo', 'mfGain'),
+    flightMax:   rangeParam('Velocidad máx. del vuelo', 20, 250,
+                   () => MF() ? MF().config.speedMax : 95, v => { if (MF()) MF().config.speedMax = v; }),
+    galaxySize:  sliderParam('Tamaño de galaxia', 'galaxySize'),
+    particles:   sliderParam('Partículas por nota', 'particleCount'),
+    colorMix:    sliderParam('Mezcla de color', 'colorMixing'),
+    pulsarVol:   sliderParam('Volumen púlsares 3D', 'pulsarVolume'),
+    playlistVol: sliderParam('Volumen playlist', 'playlist-volume'),
+    synthVol:    sliderParam('Volumen XenoSynth', 'virtualVelocity'),
+    zoom:        rangeParam('Zoom de cámara', 5, 400,
+                   () => currentViewMode === 'birdEye' ? cameraOffset.y : cameraOffset.z,
+                   v => { if (currentViewMode === 'birdEye') cameraOffset.y = Math.max(10, v); else { cameraOffset.z = v; cameraOffset.y = v * 0.5; } },
+                   'exp'),
+    orbitDist:   rangeParam('Distancia de órbita', MIN_ORBIT_DISTANCE, MAX_ORBIT_DISTANCE,
+                   () => orbitDistance, v => { orbitDistance = v; }),
+    eyeSep:      rangeParam('Separación estéreo', -0.3, 0.3, () => eyeSeparation, v => { eyeSeparation = v; }),
+    padSpeed:    rangeParam('Velocidad del joypad', 4, 120, () => C.gp.speed, v => { C.gp.speed = v; syncGpSliders(); saveSoon(); }),
+    liftUpA:     { label: 'Ascender (analógico)',  getN: () => H.midiLift.up,   setN: n => { H.midiLift.up = n; } },
+    liftDownA:   { label: 'Descender (analógico)', getN: () => H.midiLift.down, setN: n => { H.midiLift.down = n; } }
+  };
+
+  // ═══ CONFIGURACIÓN POR DEFECTO ═══════════════════════════════════
+  function mpkPreset() {
+    const b = [];
+    const padsA = ['hyper', 'view', 'orbit', 'orbitExit', 'flight', 'trail', 'replay', 'orbitMode'];
+    const padsB = ['liftUp', 'liftDown', 'synth', 'settings', 'teleport', 'midiPlay', 'midiStop', 'stereo'];
+    padsA.forEach((a, k) => b.push({ kind: 'note', ch: 9, num: 36 + k, sel: 'a:' + a }));
+    padsB.forEach((a, k) => b.push({ kind: 'note', ch: 9, num: 44 + k, sel: 'a:' + a }));
+    const knobs = ['flightSens', 'galaxySize', 'pulsarVol', 'playlistVol', 'zoom', 'flightMax', 'orbitDist', 'synthVol'];
+    knobs.forEach((p, k) => b.push({ kind: 'cc', ch: -1, num: 70 + k, sel: 'p:' + p, mode: 'abs' }));
+    b.push({ kind: 'cc', ch: -1, num: 1, sel: 'p:liftUpA', mode: 'abs', thru: true });
+    b.push({ kind: 'cc', ch: -1, num: 2, sel: 'p:liftDownA', mode: 'abs', thru: true });
+    return b;
+  }
+  // ═══ PERFILES DE JOYPAD ═════════════════════════════════════════
+  // Automático: se genera al conectar según el tipo de mando.
+  // Manual: copia editable guardada por mando (id del dispositivo).
+  const ACT_ORDER = ['hyper', 'view', 'orbit', 'orbitExit', 'liftDown', 'liftUp', 'trail', 'replay', 'settings', 'flight'];
+  function autoProfile(p, hatAxis) {
+    const std = p && p.mapping === 'standard';
+    const nAx = p ? p.axes.length : 4;
+    const axes = { moveX: { i: 0, s: 1 }, moveY: { i: 1, s: -1 }, lookX: { i: 2, s: 1 }, lookY: { i: 'auto', s: 1 }, lift: null };
+    const buttons = [];
+    let kind;
+    if (std) {
+      kind = 'estándar (Xbox · PlayStation · 8BitDo · Switch Pro)';
+      // A/✕ B/○ X/□ Y/△ LB RB LT RT Back Start
+      ACT_ORDER.forEach((a, i) => buttons.push({ src: { t: 'b', i }, a }));
+      [['liftUp', 12], ['liftDown', 13], ['octDown', 14], ['octUp', 15]].forEach(([a, i]) => buttons.push({ src: { t: 'b', i }, a }));
+    } else {
+      // Genérico DirectInput (DragonRise 0079:0006 y similares: la mayoría de mandos USB baratos)
+      // △=0 ○=1 ✕=2 □=3 L2=4 R2=5 L1=6 R1=7 Select=8 Start=9
+      const phys = [2, 1, 3, 0, 6, 7, 4, 5, 8, 9];
+      ACT_ORDER.forEach((a, k) => buttons.push({ src: { t: 'b', i: phys[k] }, a }));
+      if (nAx < 4) { axes.lookX = null; axes.lookY = null; }     // modo digital: sin stick derecho
+      if (hatAxis >= 0) {
+        kind = 'genérico USB · cruceta en eje ' + hatAxis;
+        [['liftUp', -1], ['liftDown', 0.143], ['octDown', 0.714], ['octUp', -0.429]]
+          .forEach(([a, v]) => buttons.push({ src: { t: 'hat', i: hatAxis, v }, a }));
+      } else {
+        kind = 'genérico USB';
+        // Sin hat detectado: la cruceta suele venir como botones 12–15
+        [['liftUp', 12], ['liftDown', 13], ['octDown', 14], ['octUp', 15]].forEach(([a, i]) => buttons.push({ src: { t: 'b', i }, a }));
+      }
+    }
+    return { axes, buttons, kind };
+  }
+  function gpDefaults() {
+    const ap = autoProfile(null, 9);
+    return { dead: 0.18, speed: 28, look: 2.2, invertY: false, axes: ap.axes, buttons: ap.buttons, profiles: {}, modes: {} };
+  }
+  function defaults() {
+    return { v: 2, gp: gpDefaults(), midi: { padsMode: 'actions', auto: true, binds: mpkPreset() } };
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(LS_KEY));
+      if (s && s.v === 2) {
+        const d = defaults();
+        return { v: 2, gp: Object.assign(d.gp, s.gp), midi: Object.assign(d.midi, s.midi) };
+      }
+    } catch (e) {}
+    return defaults();
+  }
+  const C = load();
+  const clone = o => JSON.parse(JSON.stringify(o));
+  let saveTimer = null;
+  // Mando activo: id del dispositivo, o "_" si todavía no hay ninguno
+  const GP = { id: '_', kind: '', hat: -1, pad: null };
+  const isManual = () => C.gp.modes[GP.id] === 'manual';
+  function save() {
+    if (isManual()) C.gp.profiles[GP.id] = clone({ axes: C.gp.axes, buttons: C.gp.buttons });
+    try { localStorage.setItem(LS_KEY, JSON.stringify(C)); } catch (e) {}
+  }
+  // Aplica el perfil que corresponde al mando actual (auto o manual)
+  function applyProfile() {
+    const ap = autoProfile(GP.pad, GP.hat);
+    GP.kind = ap.kind;
+    const prof = isManual() && C.gp.profiles[GP.id];
+    const src = prof || ap;
+    C.gp.axes = clone(src.axes); C.gp.buttons = clone(src.buttons);
+  }
+  function setMode(mode) {
+    if (mode === 'manual') {
+      if (!C.gp.profiles[GP.id]) C.gp.profiles[GP.id] = clone({ axes: C.gp.axes, buttons: C.gp.buttons });
+      C.gp.modes[GP.id] = 'manual';
+    } else delete C.gp.modes[GP.id];         // el perfil manual queda guardado por si vuelves
+    applyProfile(); save();
+  }
+  // Cualquier edición en modo automático pasa ese mando a manual
+  function markEdited() { if (!isManual()) { C.gp.modes[GP.id] = 'manual'; renderGpMode(); } }
+  function saveSoon() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); }
+
+  // ═══ ESTADO EN VIVO ═════════════════════════════════════════════
+  const H = {
+    padKey: null, rest: [], hatAxes: new Set(), prevBtn: [], holds: {},
+    learnGp: null, learnMidi: null, ccState: {}, relN: {},
+    midiLift: { up: 0, down: 0 }, orbitDriving: false,
+    lastT: performance.now(), lastLive: 0, lastEnsure: 0, autoDone: new Set(), devSig: ''
+  };
+
+  // ═══ EJECUCIÓN DE ACCIONES ══════════════════════════════════════
+  function hold(key, d) { H.holds[key] = Math.max(0, (H.holds[key] || 0) + d); return H.holds[key] > 0; }
+  function key(code, k, shift) {
+    const o = { code, key: k, shiftKey: !!shift, bubbles: true };
+    window.dispatchEvent(new KeyboardEvent('keydown', o));   // window: no llega al XenoSynth (escucha en document)
+    window.dispatchEvent(new KeyboardEvent('keyup', o));
+  }
+  function click(id) { const e = $(id); if (e) { e.click(); return true; } return false; }
+  let midiThru = null;   // se define al envolver onMIDIMessage
+  function resumeAudio() { if (typeof audioContext !== 'undefined' && audioContext && audioContext.state === 'suspended') audioContext.resume(); }
+
+  function press(a, param, vel) {
+    resumeAudio();
+    switch (a) {
+      case 'hyper':
+        if (!(H.holds.hyper > 0)) { hyperspaceModeActive = true; if (hyperspaceEffect) hyperspaceEffect.toggleHyperspace(true); }
+        hold('hyper', 1); break;
+      case 'liftUp': moveUp = hold('liftUp', 1); break;
+      case 'liftDown': moveDown = hold('liftDown', 1); break;
+      case 'view': cycleViewMode(); break;
+      case 'orbit': key('KeyC', 'c', false); break;
+      case 'orbitExit': key('KeyC', 'C', true); break;
+      case 'orbitMode': if (isOrbitingNebula) currentOrbitType = currentOrbitType === 'comet' ? 'fixed' : 'comet'; break;
+      case 'flight': if (!click('mfToggle') && MF()) MF().setEnabled(!MF().config.enabled); break;
+      case 'trail': click('mfTrail'); break;
+      case 'orbits': click('mfOrbits'); break;
+      case 'replay': if (MF()) MF().replayTrail(); break;
+      case 'midiPlay': click('mfPlay'); break;
+      case 'midiStop': click('mfStop'); break;
+      case 'teleport': toggleTeleportPanel(); break;
+      case 'settings': toggleSettingsMenu(); break;
+      case 'synth': if (window.alienSynth) window.alienSynth.toggleMinimize(); break;
+      case 'octUp': if (window.alienSynth) window.alienSynth.changeOctave(1); break;
+      case 'octDown': if (window.alienSynth) window.alienSynth.changeOctave(-1); break;
+      case 'stereo': key('Digit3', '3', false); break;
+      case 'note': if (midiThru) midiThru([0x90, clamp(param | 0, 0, 127), clamp(vel | 0, 1, 127)]); break;
+    }
+  }
+  function release(a, param) {
+    switch (a) {
+      case 'hyper':
+        if (!hold('hyper', -1)) { hyperspaceModeActive = false; if (hyperspaceEffect) hyperspaceEffect.toggleHyperspace(false); }
+        break;
+      case 'liftUp': moveUp = hold('liftUp', -1); break;
+      case 'liftDown': moveDown = hold('liftDown', -1); break;
+      case 'note': if (midiThru) midiThru([0x80, clamp(param | 0, 0, 127), 0]); break;
+    }
+  }
+
+  // ═══ JOYPAD ═════════════════════════════════════════════════════
+  function getPad() {
+    const list = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const p of list) if (p && p.connected) return p;
+    return null;
+  }
+  function axisIndex(b, p) {
+    if (!b) return -1;
+    if (b.i === 'auto') return (p.mapping === 'standard' || p.axes.length < 6) ? 3 : 5;
+    return b.i;
+  }
+  function calibrate(p) { H.rest = p.axes.map(v => (v > 1.05 ? 0 : v)); }
+  function axisVal(name, p) {
+    const b = C.gp.axes[name]; const i = axisIndex(b, p);
+    if (i < 0 || i >= p.axes.length || H.hatAxes.has(i)) return 0;
+    const raw = p.axes[i] - (H.rest[i] || 0), a = Math.abs(raw), dz = C.gp.dead;
+    if (a < dz) return 0;
+    return clamp(Math.sign(raw) * (a - dz) / (1 - dz), -1, 1) * b.s;
+  }
+  const HAT_RING = 2.2857;   // 8 posiciones separadas 0.2857 entre -1 y 1
+  function srcPressed(src, p) {
+    if (!src) return false;
+    if (src.t === 'b') { const b = p.buttons[src.i]; return !!b && (b.pressed || b.value > 0.5); }
+    const v = p.axes[src.i];
+    if (v === undefined) return false;
+    if (src.t === 'hat') {
+      if (v > 1.05) return false;
+      let d = Math.abs(v - src.v); d = Math.min(d, HAT_RING - d);
+      return d < 0.32;   // incluye diagonales vecinas
+    }
+    if (src.t === 'ax') return !H.hatAxes.has(src.i) && (v - (H.rest[src.i] || 0)) * src.s > 0.55;
+    return false;
+  }
+  function releaseAllGp() {
+    C.gp.buttons.forEach((r, k) => { if (H.prevBtn[k]) release(r.a, r.param); });
+    H.prevBtn = [];
+    if (H.orbitDriving) { playerOrbitSpeed = 0; H.orbitDriving = false; }
+  }
+  function snapHat(v) {
+    const ring = [-1, -0.714, -0.429, -0.143, 0.143, 0.429, 0.714, 1];
+    return ring.reduce((b, x) => Math.abs(x - v) < Math.abs(b - v) ? x : b, ring[0]);
+  }
+
+  function learnGpStep(p, now) {
+    const L = H.learnGp;
+    if (now - L.start > 8000) { H.learnGp = null; renderGp(); return; }
+    if (!L.base) { L.base = { b: p.buttons.map(b => b.pressed), a: p.axes.slice() }; return; }
+    let found = null;
+    if (L.kind === 'btn') {
+      for (let i = 0; i < p.buttons.length && !found; i++) if (p.buttons[i].pressed && !L.base.b[i]) found = { t: 'b', i };
+      for (let i = 0; i < p.axes.length && !found; i++) {
+        const v = p.axes[i];
+        if (H.hatAxes.has(i)) { if (v <= 1.05) found = { t: 'hat', i, v: snapHat(v) }; }
+        else if (Math.abs(v - (H.rest[i] || 0)) > 0.6) found = { t: 'ax', i, s: Math.sign(v - (H.rest[i] || 0)) };
+      }
+      if (found) C.gp.buttons[L.row].src = found;
+    } else {
+      for (let i = 0; i < p.axes.length && !found; i++) {
+        if (H.hatAxes.has(i)) continue;
+        const d = p.axes[i] - (H.rest[i] || 0);
+        if (Math.abs(d) > 0.6) found = { i, s: Math.sign(d) };
+      }
+      if (found) C.gp.axes[L.key] = found;
+    }
+    if (found) {
+      H.learnGp = null;
+      H.prevBtn = C.gp.buttons.map(r => srcPressed(r.src, p));   // no disparar lo que sigue apretado
+      markEdited(); save(); renderGp();
+    }
+  }
+
+  function pollPad(dt, now) {
+    const p = getPad();
+    if (!p) { if (H.padKey) { releaseAllGp(); H.padKey = null; renderGpStatus(null); } return; }
+    const k = p.index + '|' + p.id;
+    if (k !== H.padKey) {
+      releaseAllGp();
+      H.padKey = k; H.hatAxes.clear(); calibrate(p); H.prevBtn = [];
+      p.axes.forEach((v, i) => { if (v > 1.05) H.hatAxes.add(i); });
+      GP.id = p.id; GP.pad = p; GP.hat = H.hatAxes.size ? Math.min(...H.hatAxes) : -1;
+      applyProfile(); renderGpStatus(p); renderGpMode(); renderGp();
+    }
+    p.axes.forEach((v, i) => { if (v > 1.05) H.hatAxes.add(i); });
+    // Cruceta descubierta tarde (algunos mandos solo la reportan al primer toque)
+    if (GP.hat < 0 && H.hatAxes.size) {
+      GP.hat = Math.min(...H.hatAxes);
+      if (!isManual()) { releaseAllGp(); applyProfile(); renderGpStatus(p); renderGp(); }
+    }
+
+    if (H.learnGp) { learnGpStep(p, now); return; }
+
+    // Botones → acciones
+    C.gp.buttons.forEach((r, i) => {
+      const on = srcPressed(r.src, p), was = !!H.prevBtn[i];
+      if (on && !was) press(r.a, r.param, 100);
+      else if (!on && was) release(r.a, r.param);
+      H.prevBtn[i] = on;
+    });
+
+    if (typeof avatarObject === 'undefined' || !avatarObject) return;
+    const mx = axisVal('moveX', p), my = axisVal('moveY', p);
+    const lx = axisVal('lookX', p), ly = axisVal('lookY', p) * (C.gp.invertY ? -1 : 1);
+    const lf = axisVal('lift', p);
+    const look = C.gp.look;
+
+    if (isOrbitingNebula) {
+      if (mx) { playerOrbitSpeed = -mx * 0.004; H.orbitDriving = true; }
+      else if (H.orbitDriving) { playerOrbitSpeed = 0; H.orbitDriving = false; }
+      if (my) orbitDistance = clamp(orbitDistance - my * ORBIT_ZOOM_SPEED * 60 * dt, MIN_ORBIT_DISTANCE, MAX_ORBIT_DISTANCE);
+      if (currentOrbitType === 'comet') { if (lx) orbitAngle -= lx * 1.2 * dt; }
+      else {
+        if (lx) { yawAngle -= lx * look * dt; avatarObject.rotation.y = yawAngle; }
+        if (ly) pitchAngle = clamp(pitchAngle - ly * look * 0.6 * dt, -1.56, 1.56);
+      }
+      return;
+    }
+
+    // Vuelo libre: mismas convenciones que W/A/S/D y el arrastre del ratón
+    if (lx) { yawAngle -= lx * look * dt; avatarObject.rotation.y = yawAngle; }
+    if (ly) pitchAngle = clamp(pitchAngle - ly * look * 0.6 * dt, -Math.PI / 2, Math.PI / 2);
+    if (mx || my || lf) {
+      const f = hyperspaceEffect ? hyperspaceEffect.speedFactor : 1;
+      const sp = C.gp.speed * f * dt;
+      const fx = -Math.sin(yawAngle), fz = -Math.cos(yawAngle);
+      const hs = currentViewMode === 'thirdPerson' ? -1 : 1;   // en 3ª persona W empuja hacia -front
+      avatarObject.position.x += (fx * hs * my + fz * mx) * sp;
+      avatarObject.position.z += (fz * hs * my - fx * mx) * sp;
+      avatarObject.position.y += lf * sp;
+    }
+  }
+
+  function applyMidiLift(dt) {
+    if (typeof avatarObject === 'undefined' || !avatarObject || isOrbitingNebula) return;
+    const l = H.midiLift.up - H.midiLift.down;
+    if (Math.abs(l) < 0.03) return;
+    const f = hyperspaceEffect ? hyperspaceEffect.speedFactor : 1;
+    avatarObject.position.y += l * C.gp.speed * f * dt;
+  }
+
+  // ═══ MIDI ═══════════════════════════════════════════════════════
+  function monitor(hi, ch, n, v) {
+    const el = $('chMidiMon'); if (!el) return;
+    let t;
+    if (hi === 0x90 && v > 0) t = `ch${ch + 1} · Nota ${n} (${noteName(n)}) · vel ${v}`;
+    else if (hi === 0x80 || hi === 0x90) t = `ch${ch + 1} · Nota ${n} soltada`;
+    else if (hi === 0xB0) t = `ch${ch + 1} · CC ${n} = ${v}`;
+    else if (hi === 0xE0) t = `ch${ch + 1} · Pitch bend ${((v << 7) | n) - 8192}`;
+    else t = `ch${ch + 1} · estado 0x${hi.toString(16)}`;
+    el.textContent = 'Monitor: ' + t;
+  }
+
+  function runParam(pkey, v, mode, idx) {
+    const P = PARAMS[pkey]; if (!P) return;
+    if (mode === 'rel' || mode === 'rel64') {
+      const d = mode === 'rel' ? (v >= 64 ? v - 128 : v) : v - 64;
+      if (H.relN[idx] === undefined) H.relN[idx] = P.getN();
+      H.relN[idx] = clamp(H.relN[idx] + d * 0.008, 0, 1);
+      P.setN(H.relN[idx]);
+    } else {
+      P.setN(v / 127);
+    }
+  }
+
+  function handleMidi(d) {
+    const st = d[0]; if (st >= 0xF0) return false;   // reloj, sysex, etc.
+    const hi = st & 0xF0, ch = st & 0x0F, n = d[1], v = d.length > 2 ? d[2] : 0;
+    monitor(hi, ch, n, v);
+    const isOn = hi === 0x90 && v > 0, isOff = hi === 0x80 || (hi === 0x90 && v === 0), isCC = hi === 0xB0;
+
+    // Aprendizaje: el próximo pad/tecla/perilla queda asignado
+    if (H.learnMidi !== null && (isOn || isCC)) {
+      const src = { kind: isCC ? 'cc' : 'note', ch: isCC ? -1 : ch, num: n };
+      if (H.learnMidi === 'new') {
+        C.midi.binds.push(Object.assign(src, { sel: isCC ? 'p:zoom' : 'a:hyper', mode: 'abs' }));
+      } else {
+        const b = C.midi.binds[H.learnMidi];
+        if (b) { Object.assign(b, src); if (isCC && !b.mode) b.mode = 'abs'; }
+      }
+      H.learnMidi = null; save(); renderMidi();
+      return true;
+    }
+    if (!isOn && !isOff && !isCC) return false;
+
+    const kind = isCC ? 'cc' : 'note';
+    let consumed = false;
+    C.midi.binds.forEach((b, idx) => {
+      if (b.kind !== kind || b.num !== n || (b.ch >= 0 && b.ch !== ch)) return;
+      if (kind === 'note' && C.midi.padsMode === 'notes') return;
+      const [type, k] = (b.sel || 'a:none').split(':');
+      if (type === 'a' && k !== 'none') {
+        if (isCC) {
+          const on = v >= 64, was = !!H.ccState[idx];
+          if (on && !was) press(k, b.param, 100);
+          if (!on && was) release(k, b.param);
+          H.ccState[idx] = on;
+        } else if (isOn) press(k, b.param, v);
+        else release(k, b.param);
+      } else if (type === 'p') {
+        if (isCC) runParam(k, v, b.mode, idx);
+        else if (isOn) runParam(k, v, 'abs', idx);
+        else if (PARAMS[k] && (k === 'liftUpA' || k === 'liftDownA')) PARAMS[k].setN(0);
+      }
+      const thru = b.thru || (kind === 'note' && C.midi.padsMode === 'both');
+      if (!thru) consumed = true;
+    });
+    return consumed;
+  }
+
+  // Envoltura de onMIDIMessage (se instala antes de que se active ningún dispositivo)
+  if (typeof onMIDIMessage === 'function') {
+    const prevMidi = onMIDIMessage;
+    midiThru = data => prevMidi.call(null, { data: new Uint8Array(data) });
+    onMIDIMessage = function (ev) {
+      const d = ev && ev.data;
+      // Solo mensajes reales del hardware; el reproductor de archivos MIDI pasa directo
+      if (d && d.length && typeof Event !== 'undefined' && ev instanceof Event) {
+        try { if (handleMidi(d)) return; } catch (e) { console.error('[ControlHub]', e); }
+      }
+      return prevMidi.call(this, ev);
+    };
+  }
+
+  // Activa automáticamente las entradas MIDI (una vez por dispositivo y sesión)
+  function ensureMidi(now) {
+    if (now - H.lastEnsure < 1500) return; H.lastEnsure = now;
+    if (typeof midiAccess === 'undefined' || !midiAccess) return;
+    let changed = false;
+    if (C.midi.auto) {
+      midiAccess.inputs.forEach(inp => {
+        if (H.autoDone.has(inp.id)) return;
+        H.autoDone.add(inp.id);
+        if (!activeInputs.has(inp.id)) { toggleMIDIInput(inp.id); changed = true; }
+      });
+    }
+    if (changed && typeof updateDeviceList === 'function') updateDeviceList();
+    const sig = [...midiAccess.inputs.values()].map(i => i.id + (activeInputs.has(i.id) ? '+' : '-')).join(',');
+    if (sig !== H.devSig) { H.devSig = sig; renderMidiDevices(); }
+  }
+
+  // ═══ INTERFAZ: pestaña "Controles" ═══════════════════════════════
+  const CSS = `
+    #settingsMenu .tab-button{padding:10px 9px}
+    #settingsMenu.ch-wide{width:370px}
+    #tab-controles h4{color:#c7e5ff;margin:4px 0 8px;border-bottom:1px solid #445;padding-bottom:5px}
+    .ch-sec{margin-bottom:14px;padding:10px;background:rgba(15,15,25,.7);border:1px solid #557;border-radius:5px}
+    .ch-sub{font-size:12px;color:#aaf;margin:10px 0 4px}
+    .ch-status{font-size:12px;color:#9f9;margin-bottom:6px;line-height:1.35}
+    .ch-status.off{color:#aab}
+    .ch-note{font-size:11px;color:#889;line-height:1.35;margin:4px 0 6px}
+    .ch-row{display:flex;align-items:center;gap:6px;margin:5px 0;font-size:12px}
+    .ch-row label{color:#aaf;min-width:78px}
+    .ch-row input[type=range]{flex:1}
+    .ch-row .ch-val{min-width:34px;text-align:right;color:#c7e5ff;font-family:monospace}
+    .ch-btn{padding:6px 10px;background:#4466dd;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px}
+    .ch-btn.sec{background:#555}
+    .ch-btn:hover{filter:brightness(1.15)}
+    .ch-bind{display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid #2a2a40;font-size:12px}
+    .ch-bind .ch-name{flex:1;color:#c7e5ff}
+    .ch-bind .ch-src{min-width:78px;font-family:monospace;color:#9fd8ff;font-size:11px}
+    .ch-bind select{flex:1;min-width:0;background:rgba(40,40,60,.9);color:#fff;border:1px solid #557;border-radius:3px;font-size:11px;padding:3px}
+    .ch-bind input[type=number]{width:44px;background:rgba(40,40,60,.9);color:#fff;border:1px solid #557;border-radius:3px;font-size:11px;padding:2px}
+    .ch-card{border-bottom:1px solid #2a2a40;padding:3px 0}
+    .ch-card .ch-bind{border-bottom:none;padding:2px 0}
+    .ch-bind select.ch-narrow{flex:0 0 auto}
+    .ch-inv{display:flex;align-items:center;gap:3px;color:#aab;font-size:11px;white-space:nowrap}
+    .ch-arrow{color:#62d7ff;width:14px;text-align:center}
+    .ch-mini{background:#334;color:#cde;border:1px solid #557;border-radius:3px;padding:3px 6px;font-size:11px;cursor:pointer;white-space:nowrap}
+    .ch-mini.x{color:#f99}
+    .ch-mini.learning{background:#a3315a;color:#fff;border-color:#ff809d}
+    .ch-live{display:flex;flex-direction:column;gap:3px;margin:6px 0}
+    .ch-ax{display:flex;align-items:center;gap:5px;font:10px monospace;color:#aab}
+    .ch-ax span{width:14px;text-align:right}
+    .ch-axbar{flex:1;height:6px;background:#223;border-radius:3px;position:relative}
+    .ch-axbar i{position:absolute;top:-1px;width:4px;height:8px;margin-left:-2px;background:#62d7ff;border-radius:2px}
+    .ch-ax b{width:36px;font-weight:normal;text-align:right}
+    .ch-dots{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+    .ch-dot{width:20px;height:16px;line-height:16px;text-align:center;font:9px monospace;border:1px solid #446;border-radius:3px;color:#778}
+    .ch-dot.on{background:#62d7ff;color:#002;border-color:#9ef}
+    .ch-mon{font:11px monospace;color:#ffc0d0;background:rgba(0,0,0,.4);padding:5px 7px;border-radius:4px;margin:6px 0}
+  `;
+  const TEMPLATE = `
+    <h3>Controles</h3>
+    <div class="ch-sec">
+      <h4>Joypad / gamepad</h4>
+      <div id="chGpStatus" class="ch-status off">Conecta el mando y presiona cualquier botón para que el navegador lo detecte.</div>
+      <div class="ch-row"><label>Modo</label>
+        <select id="chGpMode" style="flex:1;background:rgba(40,40,60,.9);color:#fff;border:1px solid #557;border-radius:3px;padding:3px">
+          <option value="auto">Automático · detecta el mando</option>
+          <option value="manual">Manual · mi configuración</option>
+        </select></div>
+      <div id="chGpProfile" class="ch-note"></div>
+      <div id="chGpLive" class="ch-live"></div>
+      <div class="ch-row"><button id="chGpCal" class="ch-btn">Calibrar centro</button><button id="chGpReset" class="ch-btn sec">Restaurar automático</button></div>
+      <div class="ch-row"><label>Zona muerta</label><input type="range" id="chDead" min="0.05" max="0.5" step="0.01"><span class="ch-val" id="chDeadV"></span></div>
+      <div class="ch-row"><label>Velocidad</label><input type="range" id="chSpeed" min="4" max="120" step="1"><span class="ch-val" id="chSpeedV"></span></div>
+      <div class="ch-row"><label>Giro cámara</label><input type="range" id="chLook" min="0.5" max="5" step="0.1"><span class="ch-val" id="chLookV"></span></div>
+      <div class="ch-row"><label style="min-width:0"><input type="checkbox" id="chInvY"> Invertir mirada vertical</label></div>
+      <div class="ch-sub">Ejes analógicos</div>
+      <div id="chAxes"></div>
+      <div class="ch-sub">Botones</div>
+      <div id="chBtns"></div>
+      <div class="ch-row"><button id="chBtnAdd" class="ch-btn sec">+ Añadir botón</button></div>
+      <div class="ch-note">Mando genérico antiguo: si los sticks no responden, presiona su botón ANALOG/MODE (la luz debe encenderse). Sin él, el stick izquierdo se comporta como cruceta.</div>
+    </div>
+    <div class="ch-sec">
+      <h4>MIDI · Akai MPK mini Plus</h4>
+      <div id="chMidiDev" class="ch-status off">Buscando dispositivos MIDI…</div>
+      <div id="chMidiMon" class="ch-mon">Monitor: toca, gira una perilla o golpea un pad…</div>
+      <div class="ch-row"><label>Pads</label>
+        <select id="chPadsMode" style="flex:1;background:rgba(40,40,60,.9);color:#fff;border:1px solid #557;border-radius:3px;padding:3px">
+          <option value="actions">Disparan acciones</option>
+          <option value="notes">Tocan notas</option>
+          <option value="both">Acciones y notas</option>
+        </select></div>
+      <div class="ch-row"><label style="min-width:0"><input type="checkbox" id="chAuto"> Activar dispositivos MIDI automáticamente</label></div>
+      <div id="chMidiList"></div>
+      <div class="ch-row"><button id="chMidiLearn" class="ch-btn">Aprender nuevo</button><button id="chMidiAdd" class="ch-btn sec">+ Fila manual</button><button id="chMidiPreset" class="ch-btn sec">Preset MPK mini Plus</button></div>
+      <div class="ch-note">Teclas: notas, como siempre. Joystick X (pitch bend): viraje del Vuelo musical. Si un pad o perilla no coincide con el preset, pulsa "Aprender" en su fila y tócalo.</div>
+    </div>`;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function actionOptions(sel, withParams) {
+    let h = '<optgroup label="Acciones">';
+    for (const k in ACTIONS) h += `<option value="a:${k}"${sel === 'a:' + k ? ' selected' : ''}>${esc(ACTIONS[k].label)}</option>`;
+    h += '</optgroup>';
+    if (withParams) {
+      h += '<optgroup label="Parámetros (perilla)">';
+      for (const k in PARAMS) h += `<option value="p:${k}"${sel === 'p:' + k ? ' selected' : ''}>${esc(PARAMS[k].label)}</option>`;
+      h += '</optgroup>';
+    }
+    return h;
+  }
+  const HAT_NAMES = { '-1': '↑', '-0.714': '↗', '-0.429': '→', '-0.143': '↘', '0.143': '↓', '0.429': '↙', '0.714': '←', '1': '↖' };
+  function srcLabel(s) {
+    if (!s) return '—';
+    if (s.t === 'b') return 'B' + s.i;
+    if (s.t === 'hat') return 'Cruceta ' + (HAT_NAMES[String(s.v)] || s.v);
+    if (s.t === 'ax') return 'Eje ' + s.i + (s.s > 0 ? '+' : '−');
+    return '?';
+  }
+  const HAT_DIRS = [[-1, '↑ arriba'], [-0.429, '→ derecha'], [0.143, '↓ abajo'], [0.714, '← izquierda'],
+                    [-0.714, '↗'], [-0.143, '↘'], [0.429, '↙'], [1, '↖']];
+  const AX_LABELS = { moveX: 'Mover lateral', moveY: 'Avanzar / retroceder', lookX: 'Girar', lookY: 'Mirar arriba/abajo', lift: 'Subir / bajar' };
+  const AX_HINT = { moveX: 'derecha', moveY: 'adelante', lookX: 'derecha', lookY: 'abajo', lift: 'arriba' };
+
+  function renderGp() {
+    const ax = $('chAxes'), bt = $('chBtns'); if (!ax) return;
+    ax.innerHTML = Object.keys(AX_LABELS).map(k => {
+      const b = C.gp.axes[k];
+      const learning = H.learnGp && H.learnGp.kind === 'axis' && H.learnGp.key === k;
+      const idx = b && b.i !== 'auto' ? b.i : '';
+      const ph = b && b.i === 'auto' ? 'auto' : '—';
+      return `<div class="ch-bind"><span class="ch-name">${AX_LABELS[k]}</span>
+        <span class="ch-inv">eje <input type="number" min="0" max="31" value="${idx}" placeholder="${ph}" data-gpaxidx="${k}" title="Número de eje (mira la vista en vivo)"></span>
+        <label class="ch-inv" title="Invertir sentido"><input type="checkbox" data-gpaxinv="${k}"${b && b.s < 0 ? ' checked' : ''}>inv</label>
+        <button class="ch-mini${learning ? ' learning' : ''}" data-gpax="${k}">${learning ? 'mueve: ' + AX_HINT[k] : 'Asignar'}</button>
+        <button class="ch-mini x" data-gpaxdel="${k}" title="Quitar">×</button></div>`;
+    }).join('');
+    bt.innerHTML = C.gp.buttons.map((r, i) => {
+      const learning = H.learnGp && H.learnGp.kind === 'btn' && H.learnGp.row === i;
+      const s = r.src || { t: 'b', i: '' };
+      const typ = s.t === 'ax' ? (s.s > 0 ? 'ax+' : 'ax-') : s.t;
+      const opt = (v, l) => `<option value="${v}"${typ === v ? ' selected' : ''}>${l}</option>`;
+      const hatOpts = HAT_DIRS.map(([v, l]) => `<option value="${v}"${s.v === v ? ' selected' : ''}>${l}</option>`).join('');
+      return `<div class="ch-card">
+        <div class="ch-bind">
+          <select class="ch-narrow" data-gptype="${i}" title="Tipo de entrada">${opt('b', 'Botón')}${opt('hat', 'Cruceta')}${opt('ax+', 'Eje +')}${opt('ax-', 'Eje −')}</select>
+          <input type="number" min="0" max="31" value="${r.src ? s.i : ''}" placeholder="n°" data-gpidx="${i}" title="Número (mira la vista en vivo)">
+          ${typ === 'hat' ? `<select class="ch-narrow" data-gphat="${i}" title="Dirección">${hatOpts}</select>` : ''}
+          <span style="flex:1"></span>
+          <button class="ch-mini${learning ? ' learning' : ''}" data-gplearn="${i}">${learning ? 'presiona…' : 'Asignar'}</button>
+          <button class="ch-mini x" data-gpdel="${i}" title="Quitar">×</button>
+        </div>
+        <div class="ch-bind">
+          <span class="ch-arrow">→</span>
+          <select data-gpsel="${i}">${actionOptions('a:' + r.a, false)}</select>
+          ${r.a === 'note' ? `<input type="number" min="0" max="127" value="${r.param != null ? r.param : 60}" data-gpparam="${i}" title="Nota MIDI">` : ''}
+        </div></div>`;
+    }).join('') || '<div class="ch-note">Sin botones asignados.</div>';
+  }
+  function renderGpMode() {
+    const m = $('chGpMode'); if (m) m.value = isManual() ? 'manual' : 'auto';
+    const el = $('chGpProfile'); if (!el) return;
+    el.innerHTML = isManual()
+      ? 'Configuración manual guardada para este mando. Cada mando recuerda la suya.'
+      : 'Perfil detectado: <b style="color:#c7e5ff">' + esc(GP.kind || '—') + '</b>. Si cambias cualquier fila, este mando pasa a manual.';
+  }
+  function renderGpStatus(p) {
+    const el = $('chGpStatus'); if (!el) return;
+    if (!p) { el.className = 'ch-status off'; el.textContent = 'Conecta el mando y presiona cualquier botón para que el navegador lo detecte.'; return; }
+    el.className = 'ch-status';
+    el.textContent = `${p.id.slice(0, 48)} · ${p.mapping === 'standard' ? 'mapeo estándar' : 'mapeo genérico'} · ${p.axes.length} ejes · ${p.buttons.length} botones`;
+  }
+  function syncGpSliders() {
+    const set = (id, v, txt) => { const e = $(id); if (e) e.value = v; const t = $(id + 'V'); if (t) t.textContent = txt; };
+    set('chDead', C.gp.dead, C.gp.dead.toFixed(2));
+    set('chSpeed', C.gp.speed, Math.round(C.gp.speed));
+    set('chLook', C.gp.look, C.gp.look.toFixed(1));
+    const inv = $('chInvY'); if (inv) inv.checked = !!C.gp.invertY;
+  }
+  function renderMidi() {
+    const el = $('chMidiList'); if (!el) return;
+    el.innerHTML = C.midi.binds.map((b, i) => {
+      const learning = H.learnMidi === i;
+      const isParam = (b.sel || '').startsWith('p:');
+      let chOpts = `<option value="-1"${b.ch < 0 ? ' selected' : ''}>ch *</option>`;
+      for (let c = 0; c < 16; c++) chOpts += `<option value="${c}"${b.ch === c ? ' selected' : ''}>ch ${c + 1}</option>`;
+      return `<div class="ch-card">
+        <div class="ch-bind">
+          <select class="ch-narrow" data-mkind="${i}" title="Tipo de mensaje">
+            <option value="note"${b.kind === 'note' ? ' selected' : ''}>Nota</option>
+            <option value="cc"${b.kind === 'cc' ? ' selected' : ''}>CC</option></select>
+          <select class="ch-narrow" data-mch="${i}" title="Canal MIDI (* = cualquiera)">${chOpts}</select>
+          <input type="number" min="0" max="127" value="${b.num}" data-mnum="${i}" title="${b.kind === 'note' ? 'Número de nota (' + noteName(b.num) + ')' : 'Número de CC'}">
+          ${b.kind === 'note' ? `<span class="ch-inv">${noteName(b.num)}</span>` : ''}
+          <span style="flex:1"></span>
+          <button class="ch-mini${learning ? ' learning' : ''}" data-mlearn="${i}">${learning ? 'toca…' : 'Aprender'}</button>
+          <button class="ch-mini x" data-mdel="${i}" title="Quitar">×</button>
+        </div>
+        <div class="ch-bind">
+        <span class="ch-arrow">→</span>
+        <select data-msel="${i}">${actionOptions(b.sel, true)}</select>
+        ${b.sel === 'a:note' ? `<input type="number" min="0" max="127" value="${b.param != null ? b.param : 60}" data-mparam="${i}" title="Nota MIDI">` : ''}
+        ${b.kind === 'cc' && isParam ? `<select data-mmode="${i}" style="flex:0 0 52px" title="Modo de la perilla">
+            <option value="abs"${b.mode === 'abs' ? ' selected' : ''}>abs</option>
+            <option value="rel"${b.mode === 'rel' ? ' selected' : ''}>rel</option>
+            <option value="rel64"${b.mode === 'rel64' ? ' selected' : ''}>rel64</option></select>` : ''}
+        </div></div>`;
+    }).join('') || '<div class="ch-note">Sin asignaciones MIDI.</div>';
+    const nl = $('chMidiLearn');
+    if (nl) { nl.textContent = H.learnMidi === 'new' ? 'Toca un pad o gira una perilla…' : 'Aprender nuevo'; nl.style.background = H.learnMidi === 'new' ? '#a3315a' : ''; }
+    const pm = $('chPadsMode'); if (pm) pm.value = C.midi.padsMode;
+    const au = $('chAuto'); if (au) au.checked = !!C.midi.auto;
+  }
+  function renderMidiDevices() {
+    const el = $('chMidiDev'); if (!el) return;
+    if (typeof midiAccess === 'undefined' || !midiAccess || !midiAccess.inputs.size) {
+      el.className = 'ch-status off'; el.textContent = 'Sin dispositivos MIDI conectados.'; return;
+    }
+    const parts = [];
+    midiAccess.inputs.forEach(i => {
+      const mpk = /mpk/i.test(i.name || '');
+      parts.push(`${esc(i.name || 'MIDI')}${mpk ? ' [MPK]' : ''} — ${activeInputs.has(i.id) ? 'activo' : 'inactivo'}`);
+    });
+    el.className = 'ch-status'; el.innerHTML = parts.join('<br>');
+  }
+  function live(now) {
+    if (now - H.lastLive < 110) return; H.lastLive = now;
+    const tab = $('tab-controles'), menu = $('settingsMenu');
+    if (!tab || !tab.classList.contains('active') || !menu || menu.style.display !== 'block') return;
+    const el = $('chGpLive'), p = getPad(); if (!el) return;
+    if (!p) { el.innerHTML = ''; return; }
+    const axes = p.axes.map((v, i) => {
+      const hat = v > 1.05 || H.hatAxes.has(i);
+      const pos = hat ? (v > 1.05 ? 50 : 50 + clamp(v, -1, 1) * 50) : 50 + clamp(v, -1, 1) * 50;
+      return `<div class="ch-ax"><span>${i}</span><div class="ch-axbar"><i style="left:${pos}%;${hat ? 'background:#ff99aa' : ''}"></i></div><b>${v > 1.05 ? 'hat' : v.toFixed(2)}</b></div>`;
+    }).join('');
+    const btns = p.buttons.map((b, i) => `<span class="ch-dot${b.pressed ? ' on' : ''}">${i}</span>`).join('');
+    el.innerHTML = axes + `<div class="ch-dots">${btns}</div>`;
+  }
+
+  function wireUI(root) {
+    // Evita que escribir en los campos dispare atajos del cosmos (3 = estéreo, W/A/S/D…)
+    ['keydown', 'keyup'].forEach(t => root.addEventListener(t, e => e.stopPropagation()));
+
+    root.addEventListener('click', e => {
+      const t = e.target.closest('button'); if (!t) return;
+      const ds = t.dataset;
+      if (ds.gpax) { markEdited(); releaseAllGp(); H.learnGp = { kind: 'axis', key: ds.gpax, start: performance.now(), base: null }; renderGp(); }
+      else if (ds.gpaxdel) { markEdited(); C.gp.axes[ds.gpaxdel] = null; save(); renderGp(); }
+      else if (ds.gplearn !== undefined) { releaseAllGp(); H.learnGp = { kind: 'btn', row: +ds.gplearn, start: performance.now(), base: null }; renderGp(); }
+      else if (ds.gpdel !== undefined) { markEdited(); releaseAllGp(); C.gp.buttons.splice(+ds.gpdel, 1); save(); renderGp(); }
+      else if (ds.mlearn !== undefined) { H.learnMidi = H.learnMidi === +ds.mlearn ? null : +ds.mlearn; renderMidi(); }
+      else if (ds.mdel !== undefined) { C.midi.binds.splice(+ds.mdel, 1); H.ccState = {}; H.relN = {}; save(); renderMidi(); }
+      else if (t.id === 'chBtnAdd') { markEdited(); releaseAllGp(); C.gp.buttons.push({ src: null, a: 'none' }); save(); renderGp(); }
+      else if (t.id === 'chMidiAdd') { C.midi.binds.push({ kind: 'note', ch: -1, num: 60, sel: 'a:none', mode: 'abs' }); save(); renderMidi(); }
+      else if (t.id === 'chGpCal') { const p = getPad(); if (p) { calibrate(p); t.textContent = 'Centro calibrado'; setTimeout(() => { t.textContent = 'Calibrar centro'; }, 1200); } }
+      else if (t.id === 'chGpReset') { releaseAllGp(); delete C.gp.profiles[GP.id]; delete C.gp.modes[GP.id]; applyProfile(); save(); renderGpMode(); renderGp(); }
+      else if (t.id === 'chMidiLearn') { H.learnMidi = H.learnMidi === 'new' ? null : 'new'; renderMidi(); }
+      else if (t.id === 'chMidiPreset') { C.midi.binds = mpkPreset(); H.ccState = {}; H.relN = {}; save(); renderMidi(); }
+    });
+
+    root.addEventListener('change', e => {
+      const t = e.target, ds = t.dataset;
+      if (t.id === 'chGpMode') { releaseAllGp(); setMode(t.value); renderGpMode(); renderGp(); return; }
+      if (Object.keys(ds).some(k => k.startsWith('gp'))) markEdited();
+      // ── Edición manual del origen (joypad) ──
+      if (ds.gptype !== undefined) {
+        releaseAllGp();
+        const r = C.gp.buttons[+ds.gptype], n = r.src ? r.src.i : 0;
+        r.src = t.value === 'b' ? { t: 'b', i: n } : t.value === 'hat' ? { t: 'hat', i: n, v: -1 }
+              : { t: 'ax', i: n, s: t.value === 'ax+' ? 1 : -1 };
+        save(); renderGp(); return;
+      }
+      if (ds.gpidx !== undefined) {
+        releaseAllGp();
+        const r = C.gp.buttons[+ds.gpidx];
+        if (t.value === '') r.src = null;
+        else {
+          const n = clamp(+t.value | 0, 0, 31);
+          r.src = Object.assign(r.src || { t: 'b' }, { i: n });
+          if (r.src.t === 'ax' && !r.src.s) r.src.s = 1;
+          if (r.src.t === 'hat' && r.src.v === undefined) r.src.v = -1;
+        }
+        save(); renderGp(); return;
+      }
+      if (ds.gphat !== undefined) { releaseAllGp(); C.gp.buttons[+ds.gphat].src.v = +t.value; save(); renderGp(); return; }
+      if (ds.gpaxidx !== undefined) {
+        const k = ds.gpaxidx, old = C.gp.axes[k];
+        C.gp.axes[k] = t.value === '' ? null : { i: clamp(+t.value | 0, 0, 31), s: old ? old.s : 1 };
+        save(); renderGp(); return;
+      }
+      if (ds.gpaxinv !== undefined) {
+        const b = C.gp.axes[ds.gpaxinv];
+        if (b) { b.s = t.checked ? -1 : 1; save(); } else { t.checked = false; }
+        return;
+      }
+      // ── Edición manual del origen (MIDI) ──
+      if (ds.mkind !== undefined) { const b = C.midi.binds[+ds.mkind]; b.kind = t.value; if (b.kind === 'cc' && !b.mode) b.mode = 'abs'; H.ccState = {}; H.relN = {}; save(); renderMidi(); return; }
+      if (ds.mch !== undefined) { C.midi.binds[+ds.mch].ch = +t.value; save(); return; }
+      if (ds.mnum !== undefined) { C.midi.binds[+ds.mnum].num = clamp(+t.value | 0, 0, 127); H.ccState = {}; H.relN = {}; save(); renderMidi(); return; }
+      if (ds.gpsel !== undefined) { releaseAllGp(); C.gp.buttons[+ds.gpsel].a = t.value.slice(2); save(); renderGp(); }
+      else if (ds.gpparam !== undefined) { C.gp.buttons[+ds.gpparam].param = clamp(+t.value | 0, 0, 127); save(); }
+      else if (ds.msel !== undefined) { const b = C.midi.binds[+ds.msel]; b.sel = t.value; if (b.kind === 'cc' && !b.mode) b.mode = 'abs'; delete H.relN[+ds.msel]; save(); renderMidi(); }
+      else if (ds.mparam !== undefined) { C.midi.binds[+ds.mparam].param = clamp(+t.value | 0, 0, 127); save(); }
+      else if (ds.mmode !== undefined) { C.midi.binds[+ds.mmode].mode = t.value; delete H.relN[+ds.mmode]; save(); }
+      else if (t.id === 'chPadsMode') { C.midi.padsMode = t.value; save(); }
+      else if (t.id === 'chAuto') { C.midi.auto = t.checked; H.autoDone.clear(); save(); }
+      else if (t.id === 'chInvY') { C.gp.invertY = t.checked; save(); }
+    });
+
+    root.addEventListener('input', e => {
+      const t = e.target;
+      if (t.id === 'chDead') C.gp.dead = +t.value;
+      else if (t.id === 'chSpeed') C.gp.speed = +t.value;
+      else if (t.id === 'chLook') C.gp.look = +t.value;
+      else return;
+      syncGpSliders(); saveSoon();
+    });
+  }
+
+  // Inyección inmediata (antes de DOMContentLoaded) para que initTabs() recoja la pestaña
+  (function inject() {
+    const menu = $('settingsMenu'); if (!menu) return;
+    const style = document.createElement('style'); style.textContent = CSS; document.head.appendChild(style);
+    const tabs = menu.querySelector('.settings-tabs');
+    const btn = document.createElement('button');
+    btn.className = 'tab-button'; btn.dataset.tab = 'tab-controles'; btn.textContent = 'Controles';
+    tabs.appendChild(btn);
+    const tab = document.createElement('div');
+    tab.id = 'tab-controles'; tab.className = 'tab-content'; tab.innerHTML = TEMPLATE;
+    const after = $('tab-pulsares');
+    if (after) after.after(tab); else menu.appendChild(tab);
+    // El panel se ensancha solo mientras la pestaña Controles está abierta
+    tabs.addEventListener('click', e => {
+      const b = e.target.closest('.tab-button'); if (!b) return;
+      menu.classList.toggle('ch-wide', b.dataset.tab === 'tab-controles');
+    });
+    wireUI(tab);
+    applyProfile(); syncGpSliders(); renderGpMode(); renderGp(); renderMidi();
+  })();
+
+  window.addEventListener('gamepadconnected', e => { renderGpStatus(e.gamepad); });
+  window.addEventListener('gamepaddisconnected', () => { releaseAllGp(); H.padKey = null; renderGpStatus(null); });
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(0.05, (now - H.lastT) / 1000); H.lastT = now;
+    try { pollPad(dt, now); applyMidiLift(dt); ensureMidi(now); live(now); }
+    catch (e) { console.error('[ControlHub]', e); }
+  }
+  document.addEventListener('DOMContentLoaded', () => requestAnimationFrame(frame));
+
+  window.ControlHub = { config: C, state: H, actions: ACTIONS, params: PARAMS, press, release, save };
+  console.log('%c◆ Control Hub activo — joypad + MIDI (MPK mini Plus)', 'color:#62d7ff;font-size:11px;');
+})();
     </script>
         <!-- Teclado MIDI Virtual Compacto y Transparente -->
         <div id="virtualKeyboard" class="alien-synth compact minimized">
