@@ -1,0 +1,1913 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Sagitario A* - El Surgente & Sinfonía Gravitacional</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Space+Grotesk:wght@400;700&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Inter', sans-serif;
+            color: #fff;
+            user-select: none;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+
+        header {
+            max-width: 600px;
+            margin-top: 3.6rem;
+            pointer-events: auto;
+            transition: opacity 2s ease-in-out;
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-weight: 700;
+            font-size: 2.5rem;
+            margin: 0 0 0.5rem 0;
+            letter-spacing: -1px;
+            background: linear-gradient(90deg, #fff, #88ccff, #ffdd66);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0px 4px 20px rgba(136, 204, 255, 0.2);
+        }
+
+        p.subtitle {
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #aaa;
+            margin: 0;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+
+        .highlight {
+            color: #ffdd66;
+            font-weight: 400;
+        }
+
+        #controls-hint {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            font-size: 0.85rem;
+            color: #666;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: opacity 2s ease-in-out;
+        }
+
+        #btn-back {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1rem;
+            border-radius: 30px;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            pointer-events: auto;
+            display: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        #btn-back:hover {
+            background: rgba(255, 221, 102, 0.2);
+            border-color: #ffdd66;
+            color: #ffdd66;
+        }
+
+        .hud-panel {
+            position: absolute;
+            top: 6rem;
+            right: 2rem;
+            width: 320px;
+            background: rgba(10, 15, 20, 0.18);
+            border: 1px solid rgba(136, 204, 255, 0.16);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(3px);
+            text-shadow: 0 1px 6px rgba(0,0,0,0.95);
+            pointer-events: auto;
+            transform: translateX(120%);
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s ease;
+            opacity: 1;
+        }
+
+        .hud-panel.active {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        .hud-panel.fade-out {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        .hud-title {
+            font-family: 'Space Grotesk', sans-serif;
+            color: #ffdd66;
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            margin-top: 0;
+        }
+
+        .hud-text {
+            font-size: 0.9rem;
+            color: #ccc;
+            line-height: 1.6;
+            margin: 0;
+            white-space: pre-line;
+        }
+
+        .fade-out {
+            opacity: 0 !important;
+            pointer-events: none;
+            transition: opacity 2s ease-in-out;
+        }
+
+        /* Loading Screen */
+        #loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            letter-spacing: 2px;
+            transition: opacity 1s ease;
+        }
+
+        /* Botones Superiores */
+        .top-icon-btn {
+            position: absolute;
+            top: 2rem;
+            width: 44px;
+            height: 44px;
+            background: rgba(10, 15, 20, 0.22);
+            border: 1px solid rgba(136, 204, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 20;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            color: #fff;
+        }
+        .top-icon-btn svg { width: 20px; height: 20px; color: #fff; transition: all 0.3s ease; }
+        .top-icon-btn:hover, .top-icon-btn.active { border-color: #ffdd66; color: #ffdd66; box-shadow: 0 0 15px rgba(255, 221, 102, 0.25); }
+        .top-icon-btn:hover svg, .top-icon-btn.active svg { color: #ffdd66; }
+
+        #btn-settings { right: 2rem; }
+        #btn-settings:hover svg { transform: rotate(45deg); }
+        #btn-stereo { right: 5.5rem; }
+        #btn-pip { right: 9rem; font-size: 1.05rem; }
+        /* Grupo izquierdo: consola, capa de información y modo de ola */
+        #btn-audio-dock { left: 2rem; }
+        #btn-info { left: 5.5rem; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 1.05rem; }
+        #btn-wave-mode { left: 9rem; font-size: 1.2rem; line-height: 1; }
+        #btn-geo { left: 12.5rem; font-size: 1.05rem; line-height: 1; }
+        #btn-flight { left: 16rem; font-size: 1.15rem; line-height: 1; }
+        #btn-flight.active { border-color: #c4b5fd; color: #e9d5ff; box-shadow: 0 0 18px rgba(196, 181, 253, 0.45); }
+        .top-icon-btn, #ws-badge, #btn-back { transition: opacity 0.8s ease, transform 0.3s, background 0.3s, border-color 0.3s, color 0.3s; }
+        /* Inmersión: sin actividad, los símbolos se retiran (y no capturan toques: el primer toque solo los despierta) */
+        body.ui-idle .top-icon-btn, body.ui-idle #ws-badge, body.ui-idle #btn-back {
+            opacity: 0 !important; pointer-events: none !important;
+        }
+        #planet-labels { position: fixed; inset: 0; pointer-events: none; z-index: 12; overflow: hidden; }
+        .planet-label {
+            position: absolute; left: 0; top: 0;
+            font: 500 11.5px 'Space Grotesk', sans-serif;
+            letter-spacing: 0.03em;
+            white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis;
+            opacity: 0; transition: opacity 0.5s ease;
+            will-change: transform;
+        }
+        .planet-label.sel { font-weight: 700; border-bottom: 1px solid rgba(255, 221, 102, 0.45); }
+        body.stereo-active #planet-labels { display: none; }
+        #btn-pip:hover, #btn-pip.active { border-color: #63f5a1; background: rgba(99, 245, 161, 0.08); }
+        #pip-video { display: none; }
+
+        body.stereo-active #main-header,
+        body.stereo-active #controls-hint,
+        body.stereo-active .hud-panel,
+        body.stereo-active #audio-dock,
+        body.stereo-active .joystick-zone {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        /* ═══════ DOCK FLOTANTE DE AUDIO & MIDI & LAGRANGE ═══════ */
+        /* Consola anclada a la esquina superior izquierda, bajo su botón 🎵 */
+        #audio-dock {
+            position: absolute;
+            top: 5.4rem;
+            left: 2rem;
+            z-index: 25;
+            pointer-events: auto;
+            background: rgba(8, 11, 18, 0.18);
+            border: 1px solid rgba(136, 204, 255, 0.16);
+            border-radius: 14px;
+            padding: 12px;
+            backdrop-filter: blur(3px);
+            text-shadow: 0 1px 5px rgba(0,0,0,0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            width: 230px;
+            max-height: calc(100vh - 8rem);
+            overflow-y: auto;
+            box-sizing: border-box;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+            transform-origin: top left;
+            transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0s;
+        }
+        /* Minimizado real: sale del flujo visual y deja de capturar toques */
+        #audio-dock.dock-hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transform: translateY(-10px) scale(0.92);
+            transition: opacity 0.3s ease, transform 0.3s ease, visibility 0s linear 0.3s;
+        }
+        /* Auto-fade suave por inactividad */
+        #audio-dock.dock-idle:not(.dock-hidden) {
+            opacity: 0.18;
+        }
+        /* Solo en dispositivos con hover real (en táctil el :hover queda pegado) */
+        @media (hover: hover) {
+            #audio-dock:not(.dock-hidden):hover { opacity: 1; }
+        }
+        .dock-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .hud-action {
+            margin-top: 0.9rem;
+            width: 100%;
+            justify-content: center;
+            font-size: 0.85rem;
+        }
+
+        .dock-btn.dock-mini { padding: 7px 9px; font-size: 0.9rem; margin-left: -4px; }
+        .dock-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: #ddd;
+            padding: 7px 12px;
+            border-radius: 10px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.76rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.25s ease;
+            white-space: nowrap;
+        }
+        .dock-btn:hover {
+            border-color: #88ccff;
+            color: #fff;
+            background: rgba(136, 204, 255, 0.12);
+        }
+        .dock-btn.active-source {
+            border-color: #ffdd66;
+            color: #ffdd66;
+            background: rgba(255, 221, 102, 0.14);
+            box-shadow: 0 0 14px rgba(255, 221, 102, 0.25);
+        }
+        .midi-out-select {
+            background: rgba(10, 15, 22, 0.35);
+            color: #cfe8ff;
+            border: 1px solid rgba(136, 204, 255, 0.3);
+            border-radius: 8px;
+            padding: 4px 6px;
+            font: 0.78rem 'Space Grotesk', sans-serif;
+            max-width: 46%;
+        }
+        .dock-btn.rec-active {
+            border-color: #ff3355;
+            color: #ffd0d8;
+            background: rgba(255, 40, 80, 0.18);
+            box-shadow: 0 0 14px rgba(255, 40, 80, 0.45);
+        }
+        .dock-btn.spheres-active {
+            border-color: #c084fc;
+            color: #e9d5ff;
+            background: rgba(168, 85, 247, 0.2);
+            box-shadow: 0 0 16px rgba(168, 85, 247, 0.4);
+        }
+        .dock-btn.lagrange-danger {
+            border-color: #ff3366;
+            color: #ff6688;
+            background: rgba(255, 34, 85, 0.16);
+            box-shadow: 0 0 18px rgba(255, 34, 85, 0.35);
+        }
+        .dock-min-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #99aabb;
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            align-self: flex-end;
+        }
+        .dock-min-btn:hover {
+            color: #ffdd66;
+            border-color: #ffdd66;
+            background: rgba(255, 221, 102, 0.1);
+        }
+
+        @keyframes pulseLagrange {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 34, 85, 0.25); }
+            50% { box-shadow: 0 0 24px rgba(255, 34, 85, 0.65); }
+        }
+
+        #spectrum-canvas {
+            width: 100%;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.45);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .freq-badges {
+            display: flex;
+            justify-content: space-around;
+            gap: 8px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.66rem;
+            text-transform: uppercase;
+        }
+        .freq-pill {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 40px;
+        }
+        .freq-pill span.val {
+            font-weight: 700;
+            font-size: 0.78rem;
+        }
+
+        /* Indicador de nota MIDI o Resonancia en pantalla */
+        #midi-floating-note {
+            position: fixed;
+            top: 18%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.85);
+            font-family: 'Space Grotesk', sans-serif;
+            text-align: center;
+            pointer-events: none;
+            z-index: 40;
+            opacity: 0;
+            transition: opacity 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #midi-floating-note.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        #midi-floating-note .note-big {
+            font-size: 3.4rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #ffdd66, #88ccff, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 25px rgba(136, 204, 255, 0.5));
+        }
+        #midi-floating-note .note-sub {
+            font-size: 0.75rem;
+            letter-spacing: 2px;
+            color: #aaddff;
+            text-transform: uppercase;
+        }
+        
+        /* Modal de Configuración y Teoría */
+        /* Configuración: se despliega hacia abajo desde el engranaje (esquina superior derecha) */
+        #settings-modal {
+            position: fixed;
+            top: 5.4rem; right: 2rem;
+            width: min(440px, calc(100vw - 4rem));
+            max-height: calc(100vh - 7rem);
+            overflow-y: auto;
+            z-index: 30;
+            pointer-events: auto;
+            opacity: 1; visibility: visible;
+            transform-origin: top right;
+            transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0s;
+        }
+        #settings-modal.modal-hidden {
+            opacity: 0; visibility: hidden; pointer-events: none;
+            transform: translateY(-10px) scale(0.95);
+            transition: opacity 0.25s ease, transform 0.25s ease, visibility 0s linear 0.25s;
+        }
+        .modal-content {
+            background: rgba(10, 15, 22, 0.2);
+            border: 1px solid rgba(136, 204, 255, 0.18);
+            text-shadow: 0 1px 6px rgba(0,0,0,0.95);
+            border-radius: 14px;
+            width: 100%; box-sizing: border-box;
+            padding: 1.4rem 1.4rem 1.6rem;
+            position: relative;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+            backdrop-filter: blur(3px);
+        }
+        .modal-close {
+            position: absolute; top: 1rem; right: 1.5rem;
+            font-size: 1.8rem; color: #aaa; cursor: pointer; transition: color 0.3s;
+            font-family: 'Inter', sans-serif;
+        }
+        .modal-close:hover { color: #ffdd66; }
+        .modal-tabs {
+            display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1.5rem; gap: 0.5rem; flex-wrap: wrap;
+        }
+        .modal-tab {
+            padding: 0.5rem 0.9rem; cursor: pointer; color: #aaa; border-bottom: 2px solid transparent;
+            font-family: 'Space Grotesk', sans-serif; font-size: 0.9rem; transition: color 0.3s;
+        }
+        .modal-tab:hover { color: #fff; }
+        .modal-tab.active { color: #ffdd66; border-bottom-color: #ffdd66; }
+        .modal-pane { display: none; max-height: 64vh; overflow-y: auto; padding-right: 10px; }
+        .modal-pane.active { display: block; }
+        .modal-pane p { line-height: 1.6; color: #ccc; font-size: 0.92rem; margin-bottom: 1rem; }
+        
+        .setting-group { margin-bottom: 1.15rem; }
+        .setting-group label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem; font-size: 0.85rem; color: #fff; }
+        .setting-group input[type="range"] {
+            width: 100%; appearance: none; background: rgba(255,255,255,0.1); height: 6px; border-radius: 3px; outline: none;
+        }
+        .setting-group input[type="range"]::-webkit-slider-thumb {
+            appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #ffdd66; cursor: pointer; transition: transform 0.1s;
+        }
+        .setting-group input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.55rem 0.75rem;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 8px;
+            margin-bottom: 0.65rem;
+            font-size: 0.84rem;
+            color: #ddd;
+        }
+        .toggle-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #ffdd66;
+            cursor: pointer;
+        }
+        
+        .modal-pane::-webkit-scrollbar { width: 6px; }
+        .modal-pane::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 3px;}
+        .modal-pane::-webkit-scrollbar-thumb { background: rgba(136, 204, 255, 0.3); border-radius: 3px;}
+
+        /* Joysticks para Móviles */
+        .joystick-zone {
+            position: absolute; bottom: 0.9rem; width: 78px; height: 78px;
+            background: radial-gradient(circle, rgba(167, 139, 250, 0.08), rgba(125, 211, 252, 0.03) 70%);
+            border: 1.5px solid rgba(196, 181, 253, 0.32);
+            box-shadow: 0 0 14px rgba(125, 211, 252, 0.12), inset 0 0 12px rgba(167, 139, 250, 0.12);
+            border-radius: 50%; pointer-events: auto; display: none; touch-action: none; z-index: 15;
+            backdrop-filter: blur(5px);
+            transition: opacity 1s ease;
+            opacity: 1;
+        }
+        .fade-out-joy {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+        #joy-left { left: 0.9rem; }
+        #joy-right { right: 0.9rem; }
+        .joy-knob {
+            position: absolute; top: 50%; left: 50%; width: 30px; height: 30px;
+            background: radial-gradient(circle at 35% 30%, rgba(221, 214, 254, 0.95), rgba(167, 139, 250, 0.75) 45%, rgba(109, 40, 217, 0.65));
+            border-radius: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+            box-shadow: 0 0 14px rgba(125, 211, 252, 0.55), 0 0 4px rgba(196, 181, 253, 0.8);
+            border: 1px solid rgba(186, 230, 253, 0.6);
+        }
+        /* Pantallas angostas (teléfono): iconos compactos, sin superposición entre grupos */
+        @media (max-width: 640px) {
+            .top-icon-btn { top: 1rem; width: 38px; height: 38px; }
+            #btn-audio-dock { left: 0.8rem; }
+            #btn-info { left: 3.6rem; }
+            #btn-wave-mode { left: 6.4rem; }
+            #btn-geo { left: 9.2rem; }
+            #btn-flight { left: 12rem; }
+            #btn-settings { right: 0.8rem; }
+            #btn-stereo { right: 3.6rem; }
+            #btn-pip { right: 6.4rem; }
+            /* KP: solo el punto de estado, bajo el engranaje */
+            body #ws-badge { top: 3.9rem; right: 0.8rem; height: 26px; padding: 0 9px; font-size: 0; gap: 0; }
+            #audio-dock { top: 4.2rem; left: 0.8rem; }
+            #settings-modal { top: 4.2rem; right: 0.8rem; width: calc(100vw - 1.6rem); max-height: calc(100vh - 11rem); }
+            .hud-panel { top: 5.6rem; right: 0.8rem; width: calc(100vw - 1.6rem); box-sizing: border-box; }
+        }
+        @media (pointer: coarse) {
+            .joystick-zone { display: block; }
+            /* el botón de regreso no compite con el joystick derecho */
+            #btn-back { right: auto; left: 50%; transform: translateX(-50%); bottom: 1.2rem; }
+        }
+
+        /* ═══════ KP INTEGRATION STYLES ═══════ */
+        #ws-badge {
+            position: absolute;
+            top: 2rem;
+            right: 12.5rem;
+            height: 44px;
+            padding: 0 14px;
+            background: rgba(10, 15, 20, 0.22);
+            border: 1px solid rgba(136, 204, 255, 0.2);
+            border-radius: 22px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            cursor: default;
+            z-index: 20;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+            transition: border-color 0.4s;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.78rem;
+            color: #aaa;
+        }
+        #ws-badge.connected { border-color: rgba(99, 245, 161, 0.5); color: #63f5a1; }
+        #ws-badge.local     { border-color: rgba(255, 221, 102, 0.5); color: #ffdd66; }
+        #ws-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #555; transition: background 0.4s, box-shadow 0.4s;
+        }
+        #ws-badge.connected #ws-dot { background: #63f5a1; box-shadow: 0 0 8px #63f5a1; }
+        #ws-badge.local     #ws-dot { background: #ffdd66; box-shadow: 0 0 8px #ffdd66; }
+
+        #star-tooltip {
+            position: fixed;
+            z-index: 50;
+            pointer-events: none;
+            background: rgba(6, 8, 16, 0.3);
+            border: 1px solid rgba(136, 204, 255, 0.2);
+            border-radius: 8px;
+            text-shadow: 0 1px 5px rgba(0,0,0,1);
+            padding: 8px 13px;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.82rem;
+            color: #ddd;
+            backdrop-filter: blur(8px);
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            max-width: 260px;
+            white-space: pre-line;
+            line-height: 1.45;
+        }
+        #star-tooltip.visible { opacity: 1; }
+        #star-tooltip .tip-title {
+            font-weight: 700;
+            font-size: 0.92rem;
+            margin-bottom: 3px;
+        }
+        #star-tooltip .tip-sub {
+            font-size: 0.75rem;
+            color: #99aabb;
+        }
+
+        .hud-fade-only {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transition: opacity 2.5s ease-in-out !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader"><span style="width:10px;height:10px;border-radius:50%;background:#ffdd66;box-shadow:0 0 24px #ffdd66;animation:pulseLagrange 1.6s infinite ease-in-out;"></span></div>
+
+    <div id="canvas-container"></div>
+    
+    <video id="pip-video" muted playsinline></video>
+    <button id="btn-pip" class="top-icon-btn" title="Ventana flotante siempre visible (PiP)" onclick="togglePiP()">📺</button>
+
+    <div id="btn-audio-dock" class="top-icon-btn" title="Consola de sonido (M)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 18V5l12-2v13"></path>
+            <circle cx="6" cy="18" r="3"></circle>
+            <circle cx="18" cy="16" r="3"></circle>
+        </svg>
+    </div>
+    <div id="btn-info" class="top-icon-btn" title="Capa de información (I)">i</div>
+    <div id="btn-wave-mode" class="top-icon-btn" title="Ola galáctica / plano (O)">〰</div>
+    <div id="btn-geo" class="top-icon-btn" title="Galaxia fiel (ecuador) / Sombrero artístico (G)">◎</div>
+    <div id="btn-flight" class="top-icon-btn" title="Viaje por la galaxia (V) · rueda = velocidad · arrastrar = mirar">✧</div>
+    <div id="planet-labels"></div>
+
+    <div id="btn-stereo" class="top-icon-btn" title="Modo Estereoscópico (VR / 3D)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="10" rx="2" ry="2"></rect>
+            <line x1="12" y1="7" x2="12" y2="17"></line>
+            <circle cx="7" cy="12" r="1.5"></circle>
+            <circle cx="17" cy="12" r="1.5"></circle>
+        </svg>
+    </div>
+
+    <div id="btn-settings" class="top-icon-btn" title="Configuraciones, Estelas y Teoría">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+    </div>
+
+    <!-- Indicador flotante de nota MIDI o Resonancia -->
+    <div id="midi-floating-note">
+        <div class="note-big" id="midi-note-txt">C4</div>
+        <div class="note-sub" id="midi-vel-txt">IMPULSO RESONANTE</div>
+    </div>
+
+    <!-- CONSOLA (esquina superior izquierda, inicia minimizada): AUDIO, ESFERAS, MIDI Y LAGRANGE -->
+    <div id="audio-dock" class="dock-hidden">
+        <button id="btn-spheres" class="dock-btn" title="Generador Procedural Infinito: Música de las Esferas (Fibonacci / Proporción Áurea / 432Hz)">
+            <span>✨</span> <span id="lbl-spheres">Música de las Esferas</span>
+        </button>
+        <button id="btn-sound-cfg" class="dock-btn dock-mini" title="Instrumentos de las Esferas: paleta, piano, mano izquierda">⚙</button>
+
+        <button id="btn-mic" class="dock-btn" title="Conectar Piano Acústico / Tarjeta de Sonido / Micrófono">
+            <span>🎙️</span> <span id="lbl-mic">Mic / Línea</span>
+        </button>
+
+        <label class="dock-btn" title="Cargar canción MP3, FLAC, WAV...">
+            <span>📂</span> <span id="lbl-file">Cargar Audio</span>
+            <input type="file" id="audio-file-input" accept="audio/*" style="display:none;">
+        </label>
+
+        <button id="btn-play-pause" class="dock-btn" style="display:none;" title="Reproducir / Pausar canción">
+            <span id="icon-play">⏸️</span> <span id="lbl-track-short">Pista</span>
+        </button>
+
+        <button id="btn-rec-midi" class="dock-btn" title="Graba en un archivo .mid lo que generan las Esferas (pista 1, afinación pura por pitch bend) y lo que tocas (pista 2)">
+            <span>⏺</span> <span id="lbl-rec-midi">Grabar MIDI</span>
+        </button>
+
+        <div class="dock-btn" id="midi-indicator" style="cursor:pointer" title="MIDI: toca para elegir por dónde suenan las Esferas (tu piano o el sonido interno)">
+            <span>🎹</span> <span id="lbl-midi">MIDI: Espera</span>
+        </div>
+
+        <canvas id="spectrum-canvas" width="206" height="30"></canvas>
+
+        <div class="freq-badges">
+            <div class="freq-pill" title="Graves: Profundidad del Pozo y Amplitud de la Ola Galáctica">
+                <span class="val" id="val-bass" style="color:#ff2266;">0.00</span>
+                <span style="color:#888;">Graves</span>
+            </div>
+            <div class="freq-pill" title="Medios: Velocidad de Onda y Arrastre Temporal">
+                <span class="val" id="val-mid" style="color:#00f0ff;">0.00</span>
+                <span style="color:#888;">Onda</span>
+            </div>
+            <div class="freq-pill" title="Agudos: Fricción Cuántica y Armónicos">
+                <span class="val" id="val-high" style="color:#63f5a1;">0.00</span>
+                <span style="color:#888;">Agudos</span>
+            </div>
+        </div>
+
+        <button id="btn-minimize-dock" class="dock-min-btn" title="Minimizar consola">▲</button>
+    </div>
+
+    <!-- MODAL DE CONFIGURACIÓN Y TEORÍA PSICO-ASTROFÍSICA -->
+    <div id="settings-modal" class="modal-hidden">
+        <div class="modal-content">
+            <div class="modal-close" id="btn-close-modal">×</div>
+            <div class="modal-tabs">
+                <div class="modal-tab active" data-target="tab-config">Física, Onda & Estelas</div>
+                <div class="modal-tab" data-target="tab-theory">El Surgente</div>
+                <div class="modal-tab" data-target="tab-psique">La Ola y Lagrange (Psique)</div>
+            </div>
+            
+            <div id="tab-config" class="modal-pane active">
+                <!-- Interruptores de Estelas y Líneas Orbitales -->
+                <div class="toggle-row">
+                    <span>🌟 Estela Sinusoidal y Guía de Órbita de las Estrellas (Aspectos KP)</span>
+                    <input type="checkbox" id="chk-star-trails" checked>
+                </div>
+                <div class="toggle-row">
+                    <span>🏷 Nombre del pendiente junto a cada planeta</span>
+                    <input type="checkbox" id="chk-planet-labels">
+                </div>
+                <div class="toggle-row">
+                    <span>🪐 Estela Helicoidal Vertical de los Planetas (Pendientes KP)</span>
+                    <input type="checkbox" id="chk-planet-trails" checked>
+                </div>
+                <div class="toggle-row">
+                    <span>⭕ Órbita completa de cada Sol (anticipa la ola)</span>
+                    <input type="checkbox" id="chk-orbit-rings" checked>
+                </div>
+                <div class="toggle-row">
+                    <span>〰 Ola galáctica activa (desmarcar = disco plano)</span>
+                    <input type="checkbox" id="chk-wave-enabled" checked>
+                </div>
+                <div class="setting-group">
+                    <label>✧ Velocidad del viaje por la galaxia <span id="val-flight-speed" class="highlight">1.0×</span></label>
+                    <input type="range" id="slider-flight-speed" min="0.3" max="2.5" step="0.1" value="1">
+                </div>
+                <div class="toggle-row">
+                    <span>✧ El viaje sigue a la música (nueva escena con cada mundo de las Esferas)</span>
+                    <input type="checkbox" id="chk-flight-music" checked>
+                </div>
+                <div class="toggle-row">
+                    <span>🎼 Sonido <span id="lbl-sample-status" class="highlight"></span></span>
+                    <select id="sel-palette" class="midi-out-select">
+                        <option value="angelical">✨ Dimensión angelical · cuerdas, coro y arpa</option>
+                        <option value="cuerdas">🎻 Orquesta de cuerdas</option>
+                        <option value="arpa">🪽 Arpa y coro celestial</option>
+                        <option value="estelar">〰 Cuerdas estelares (sintetizadas)</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <span>🎹 Piano de cola en la melodía y la mano izquierda</span>
+                    <input type="checkbox" id="chk-piano-on">
+                </div>
+                <div class="toggle-row">
+                    <span>🎹 Sonido de tus teclas MIDI</span>
+                    <select id="sel-keys-sound" class="midi-out-select">
+                        <option value="synth">Cuerdas estelares</option>
+                        <option value="piano">Piano de cola</option>
+                        <option value="strings">Ensamble de cuerdas</option>
+                        <option value="violin">Violines</option>
+                        <option value="cello">Chelos</option>
+                        <option value="choir">Coro angelical</option>
+                        <option value="harp">Arpa</option>
+                        <option value="celesta">Celesta</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <span>🎹→ Salida de las Esferas a un instrumento MIDI con sonido (su preset)</span>
+                    <select id="sel-midi-out" class="midi-out-select">
+                        <option value="">Ninguna · sonido interno</option>
+                    </select>
+                </div>
+                <div class="toggle-row">
+                    <span>🔇 Con instrumento conectado, silenciar el sintetizador interno</span>
+                    <input type="checkbox" id="chk-midi-mute" checked>
+                </div>
+                <div class="toggle-row">
+                    <span>🎚 Microtonos exactos en la salida (MPE: canal por voz + pitch bend ±2)</span>
+                    <input type="checkbox" id="chk-midi-mpe">
+                </div>
+                <div class="toggle-row">
+                    <span>🎹 Voz del instrumento · melodía (canal 1)</span>
+                    <select id="sel-voice-mel" class="midi-out-select voice-sel"></select>
+                </div>
+                <div class="toggle-row">
+                    <span>🎻 Voz del instrumento · pedal y acordes (canal 2)</span>
+                    <select id="sel-voice-pad" class="midi-out-select voice-sel"></select>
+                </div>
+                <div class="toggle-row">
+                    <span>🤚 Voz del instrumento · mano izquierda (canal 3)</span>
+                    <select id="sel-voice-lh" class="midi-out-select voice-sel"></select>
+                </div>
+                <div class="setting-group">
+                    <label>🎼 Mano izquierda y ornamentos <span id="val-lh-level" class="highlight">Arpegios</span></label>
+                    <input type="range" id="slider-lh-level" min="0" max="3" step="1" value="2">
+                </div>
+                <div class="toggle-row">
+                    <span>🤚 Mano izquierda solo con la orquesta grabada o tu instrumento MIDI (no sobre las cuerdas estelares)</span>
+                    <input type="checkbox" id="chk-lh-only-out" checked>
+                </div>
+                <div class="toggle-row">
+                    <span>🌱 Semilla de las Esferas <span id="lbl-seed" class="highlight"></span> (misma semilla = misma pieza)</span>
+                    <span style="display:flex;gap:6px;align-items:center;">
+                        <input type="number" id="seed-input" min="0" max="99999" class="midi-out-select" style="width:6.5em;">
+                        <button id="btn-seed-new" class="dock-btn" style="padding:4px 8px;" title="Semilla nueva al azar">🎲</button>
+                        <label style="font-size:0.72rem;display:flex;gap:4px;align-items:center;" title="Usar siempre esta semilla al abrir la página">
+                            <input type="checkbox" id="chk-seed-fixed"> fija</label>
+                    </span>
+                </div>
+                <div class="toggle-row">
+                    <span>🎹 Afinación adaptativa: el MIDI se afina a las Esferas</span>
+                    <input type="checkbox" id="chk-adaptive-tuning" checked>
+                </div>
+                <div class="toggle-row">
+                    <span>⚡ Modo liviano (teléfono / Bluetooth): audio con búfer holgado y síntesis más eficiente; la nitidez se adapta sola <span id="lbl-lite-note" class="highlight"></span></span>
+                    <input type="checkbox" id="chk-lite">
+                </div>
+                <div class="toggle-row">
+                    <span>😌 Auto-atenuar Consola de Audio al no usar el ratón</span>
+                    <input type="checkbox" id="chk-auto-hide-dock" checked>
+                </div>
+
+                <div class="setting-group" style="margin-top: 1rem;">
+                    <label>Velocidad de la Ola Galáctica <span id="val-wave-speed" class="highlight">0.25</span></label>
+                    <input type="range" id="slider-wave-speed" min="0" max="2.5" step="0.05" value="0.25">
+                </div>
+                <div class="setting-group">
+                    <label>Amplitud de la Ola Galáctica (Altura de Marea) <span id="val-wave-amp" class="highlight">1.6</span></label>
+                    <input type="range" id="slider-wave-amp" min="0" max="6.0" step="0.1" value="1.6">
+                </div>
+                <div class="setting-group">
+                    <label>Crestas de la Ola (entero, sin costura) <span id="val-wave-freq" class="highlight">3</span></label>
+                    <input type="range" id="slider-wave-freq" min="1" max="8" step="1" value="3">
+                </div>
+                <div class="setting-group">
+                    <label>Visibilidad de las Órbitas Completas <span id="val-orbit-op" class="highlight">0.55</span></label>
+                    <input type="range" id="slider-orbit-op" min="0" max="1" step="0.05" value="0.55">
+                </div>
+                <div class="setting-group">
+                    <label>Velocidad de la Estela (Arrastre Orbital) <span id="val-spin" class="highlight">3.2</span></label>
+                    <input type="range" id="slider-spin" min="0" max="12" step="0.1" value="3.2">
+                </div>
+                <div class="setting-group">
+                    <label>Hundimiento Gravitacional Base <span id="val-well" class="highlight">8.0</span></label>
+                    <input type="range" id="slider-well" min="0" max="20" step="0.5" value="8.0">
+                </div>
+                <div class="setting-group">
+                    <label>Sensibilidad Neuroatractiva al Audio <span id="val-audio-react" class="highlight">1.5</span></label>
+                    <input type="range" id="slider-audio-react" min="0.2" max="3.5" step="0.1" value="1.5">
+                </div>
+                <div class="setting-group">
+                    <label>Brillo Estelar Base <span id="val-brightness" class="highlight">1.0</span></label>
+                    <input type="range" id="slider-brightness" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+                <div class="setting-group">
+                    <label>Opacidad Red Espacio-Tiempo <span id="val-grid" class="highlight">0.6</span></label>
+                    <input type="range" id="slider-grid" min="0.0" max="1.0" step="0.05" value="0.6">
+                </div>
+            </div>
+            
+            <div id="tab-theory" class="modal-pane">
+                <h4 style="margin-top: 0; color: #ffdd66; font-family: 'Space Grotesk', sans-serif;">El Pozo y la Estela</h4>
+                <p>El <b>embudo</b> de la malla representa la curvatura del espacio-tiempo producida por una masa inmensa. Sin embargo, este atractor gira sobre sí mismo, lo que, según la métrica de Kerr (el efecto de arrastre de marco o Lense-Thirring), genera un remolino: <b>la estela temporal</b>.</p>
+                
+                <h4 style="color: #88ccff; font-family: 'Space Grotesk', sans-serif;">Vórtice Helicoidal Vertical</h4>
+                <p>Al igual que el Sistema Solar tejiendo su camino por la Vía Láctea, cada estrella (Aspecto) surfea las olas gravitacionales subiendo y bajando con la marea del tejido espacio-temporal, mientras sus planetas (Pendientes) orbitan en un <b>plano vertical perpendicular</b> al avance, dibujando hélices en el espacio.</p>
+
+                <h4 style="color: #c084fc; font-family: 'Space Grotesk', sans-serif;">Música de las Esferas (Matemática Sagrada)</h4>
+                <p>Cada nota es una <b>razón de números enteros</b> de la serie armónica (la afinación de la naturaleza), así suenan puras aunque caigan entre las teclas del piano: el 7º, 11º y 13º armónico, y las razones de <b>Fibonacci</b> (3/2, 5/3, 8/5, 13/8…) que convergen a <b>φ</b>. El ritmo y los pasos siguen la palabra de Fibonacci; las frases duran 8 o 13 notas y cada mundo 34 o 55. Al cerrar un mundo la tónica modula por una razón consonante y la música viaja a regiones que el teclado temperado no tiene. Con las Esferas sonando, tu MIDI se afina a ese mismo mundo.</p>
+            </div>
+
+            <div id="tab-psique" class="modal-pane">
+                <h4 style="margin-top: 0; color: #00f0ff; font-family: 'Space Grotesk', sans-serif;">1. La Ola Galáctica y los Ciclos Anímicos</h4>
+                <p>Así como el Sol orbita la Vía Láctea subiendo y bajando a través del plano galáctico cada ~30 millones de años, <b>la psique no viaja en un círculo plano</b>. Oscila verticalmente sobre las olas que recorren el tejido espacio-temporal. La línea tenue muestra su órbita base y la estela luminosa dibuja la memoria de sus ascensos y descensos.</p>
+
+                <h4 style="color: #ff3366; font-family: 'Space Grotesk', sans-serif;">2. Los Puntos de Lagrange y la Depresión</h4>
+                <p>En astrofísica, los <b>Puntos de Lagrange (L1-L5)</b> son nodos donde las fuerzas gravitacionales opuestas se cancelan. En la psique, cuando dos influjos invisibles tiran con igual fuerza, la persona cae en un <b>Punto de Lagrange Psíquico</b>: la onda se aplana y el movimiento pierde vitalidad.</p>
+
+                <h4 style="color: #63f5a1; font-family: 'Space Grotesk', sans-serif;">3. Ruptura de Simetría por Resonancia (Música)</h4>
+                <p>Para escapar de un punto de equilibrio estático, la resonancia rompe la simetría: toca tu piano MIDI o activa la <b>Música de las Esferas</b> para devolverle a las estrellas su oleaje natural.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="ui-layer">
+        <header id="main-header" class="fade-out">
+            <h1>El Método del Horizonte</h1>
+            <p class="subtitle">Las estrellas surfean la <span class="highlight">ola galáctica</span> mientras sus planetas tejen hélices verticales.<br>Toca tu piano MIDI o activa la <span class="highlight">Música de las Esferas</span> para armonizar el cosmos.</p>
+        </header>
+
+        <div id="controls-hint" class="fade-out">
+            WASD: Navegar | Z/X: Subir/Bajar | M: Consola | I: Info | O: Ola/Plano | G: Geometría | 9/0: Distancia ojos (estéreo) | Click Estrella → Planetas
+        </div>
+
+        <div id="hud" class="hud-panel">
+            <h3 class="hud-title" id="hud-title">Sistema Estelar</h3>
+            <p class="hud-text" id="hud-desc"></p>
+            <button id="hud-action" class="dock-btn hud-action" style="display:none;">▶ Iniciar pendiente</button>
+        </div>
+
+        <button id="btn-back">← Retornar al Gran Atractor</button>
+        
+        <!-- Joysticks Táctiles -->
+        <div id="joy-left" class="joystick-zone"><div class="joy-knob" id="knob-left"></div></div>
+        <div id="joy-right" class="joystick-zone"><div class="joy-knob" id="knob-right"></div></div>
+    </div>
+
+    <!-- KP Integration: WS Badge + Tooltip -->
+    <div id="ws-badge" title="Conexión con Killer Pendiente">
+        <div id="ws-dot"></div>
+        <span id="ws-lbl">KP Desconectado</span>
+    </div>
+    <div id="star-tooltip">
+        <div class="tip-title" id="tip-title"></div>
+        <div class="tip-sub"  id="tip-sub"></div>
+    </div>
+
+    <!-- Three.js and Dependencies via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+
+    <script>
+        /**
+         * FÍSICA Y ARQUITECTURA DEL ESPACIO-TIEMPO + MÚSICA DE LAS ESFERAS
+         * -----------------------------------------------------------------
+         * 1. Cada estrella sube y baja exactamente sincronizada con la ola de mar que viaja por la malla.
+         * 2. Cada estrella tiene una línea guía de su anillo orbital + su estela ondulante.
+         * 3. Los planetas (pendientes) orbitan en un plano vertical perpendicular al vector tangente de avance,
+         *    dibujando un tirabuzón / hélice tridimensional idéntico a la animación de referencia.
+         * 4. Sintetizador Estelar Polifónico (con Reverb Espacial y Delay Áureo) para teclado MIDI y
+         *    Generador Infinito "Música de las Esferas" basado en Fibonacci y Proporción Áurea.
+         */
+
+        // Variables Globales
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock();
+        let globalUniforms;
+        let stars = [];
+        let starMaterials = [];
+        let starGlows = [];
+        let lagrangeNodes = [];
+        let raycaster = new THREE.Raycaster();
+        let mouse = new THREE.Vector2();
+        
+        let blackHoleMesh, bhHaloMesh, bhGlowMesh;
+
+        let isZoomed = false;
+        let targetedStar = null;
+        let originalCameraPos = new THREE.Vector3(0, 15, 30);
+        let originalTarget = new THREE.Vector3(0, 0, 0);
+        
+        let isAnimatingZoom = false;
+        let zoomProgress = { value: 0 };
+        let startCamPos = new THREE.Vector3();
+        let startTargetPos = new THREE.Vector3();
+        let pointerDownPos = new THREE.Vector2();
+
+        // ── VARIABLES DE AUDIO, SINTETIZADOR ESTELAR Y MÚSICA DE LAS ESFERAS ──
+        let audioCtx = null;
+        let analyser = null;
+        let masterBus = null;
+        let reverbNode = null;
+        let delayNode = null;
+        let freqData = null;
+        let micStream = null;
+        let audioElement = null;
+        let mediaSourceNode = null;
+        let isMicActive = false;
+        let isFilePlaying = false;
+        let isSpheresPlaying = false;
+        let spheresTimer = null;
+
+        // Bandas de frecuencia suavizadas
+        let smoothBass = 0.0;
+        let smoothMid  = 0.0;
+        let smoothHigh = 0.0;
+        let smoothVol  = 0.0;
+        let midiBoostBass = 0.0;
+        let midiBoostMid  = 0.0;
+        let midiBoostHigh = 0.0;
+        let AUDIO_SENSITIVITY = 1.5;
+
+        // Fases acumuladas suaves (evitan saltos al cambiar la velocidad con la música o sliders)
+        let accumulatedPhase = 0.0;     // Fase de rotación orbital
+        let accumulatedWavePhase = 0.0; // Fase de propagación de las olas de mar
+
+        // Parámetros de la Ola Galáctica (forma de la ola previa: baja, armónica; configurable en opciones)
+        let WAVE_SPEED = 0.25;   // ola casi quieta: el Sol la recorre (como el video) → estela de onda larga
+        let WAVE_AMPLITUDE = 1.6;
+        const WAVE_AMP_SCALE = 0.32; // Escala de la ola previa (v1): mantiene la marea suave
+        let WAVE_FREQUENCY = 3;      // Siempre entero: evita la costura en θ = π
+        let SHOW_STAR_TRAILS = true;
+        let SHOW_PLANET_TRAILS = true;
+        let SHOW_ORBIT_RINGS = true;
+        let AUTO_HIDE_DOCK = true;
+
+        // Capa de información (textos, notas flotantes, pistas). Inicia apagada: inmersión total.
+        let INFO_MODE = false;
+        // Ola activa / disco plano (animación previa sin onda)
+        let WAVE_ENABLED = true;
+        let waveMix = 0.0; // inicia plano (modo original) y la ola emerge al girar
+
+        // Inicio "a la antigua": disco en reposo → empieza a girar → la ola emerge lentamente
+        let introTime = 0.0;
+        const INTRO_SPIN_SECS = 3.0;               // de reposo al giro basal en 3 s
+        const INTRO_WAVE_FROM = 3.0, INTRO_WAVE_TO = 20.0; // la ola aparece entre estos segundos
+
+        // Dinámica orgánica del piano (MIDI)
+        let midiEnergy = 0.0;    // fuerza acumulada de las notas (velocity) → amplitud de la ola, decae al basal
+        const noteTimes = [];    // instantes de ataque → densidad / tempo
+        let midiRate = 0.0;      // notas por segundo suavizadas → velocidad de giro
+
+        // Color armónico de las notas (círculo de quintas): A = registro grave/centro, B = agudo/periferia
+        const noteHueA = { x: 0, y: 0, w: 0 }, noteHueB = { x: 0, y: 0, w: 0 };
+        let noteMix = 0.0;
+
+        // Señales "lentas" para la geometría: los colores siguen la música al instante,
+        // pero la forma (pozo, ola, giro) se mueve como fluido → estelas sin quiebres tipo electrocardiograma
+        let slowBass = 0.0;
+        let visWaveAmp = WAVE_AMPLITUDE * WAVE_AMP_SCALE;
+        let visWaveSpeed = 0.25;
+        let visSpin = 3.2;
+
+        // Las estelas se muestrean por tiempo (no por cuadro): largo constante a cualquier FPS
+        const TRAIL_DT = 1 / 40;
+        const orbitRingOpacity = { value: 0.55 }; // uniform compartido por todos los anillos
+
+        // Planeta seleccionado (pendiente KP)
+        let selectedPlanet = null;
+        let selectionGlow = null;
+        let lastPlanetTap = 0;
+        // Al enfocar un Sol, sus pendientes giran más lento para poder leerlos y tocarlos
+        let planetTimeScale = 1.0;
+
+        // Geometría: 'fiel' (agujero negro en el ecuador de la galaxia) o 'sombrero' (embudo artístico)
+        let FUNNEL_ENABLED = false;
+        let funnelMix = 0.0;
+        const LOCAL_WELL_SCALE = 0.54; // garganta del embudo bajo el agujero = la del archivo previo
+        const BH_R = 0.85;           // agujero negro más pequeño: deja ver los haces y el disco
+        let bhDiskMesh = null, bhLensMesh = null;
+
+        let isLagrangeTrapped = false;
+        let lagrangeDamping = 1.0;
+
+        // ── KP INTEGRATION GLOBALS ─────────────────────────────────────────
+        var ceggData      = null;
+        var userColors    = {};
+        var allPlanets    = [];
+        var wsKP          = null;
+        var wsSource      = null;
+        var wsRetryMs     = 5000;
+        var kpConnected   = false;
+        var tooltipEl     = document.getElementById('star-tooltip');
+        var tipTitle      = document.getElementById('tip-title');
+        var tipSub        = document.getElementById('tip-sub');
+        var wsBadge       = document.getElementById('ws-badge');
+        var wsLbl         = document.getElementById('ws-lbl');
+        var wsDot         = document.getElementById('ws-dot');
+        var _mouseScreenX = 0;
+        var _mouseScreenY = 0;
+        var _gridMat   = null;
+        var _timeMat   = null;
+        var _wakeMat   = null;
+
+        let stereoCamera = new THREE.StereoCamera();
+        stereoCamera.eyeSep = 0.5;
+        let isStereo = false;
+
+        const keys = { w:false, a:false, s:false, d:false, q:false, e:false, z:false, x:false };
+        const joyL = { x: 0, y: 0 };
+        const joyR = { x: 0, y: 0 };
+        const joyRS = { x: 0, y: 0 }; // joystick derecho suavizado (respuesta lenta y orgánica)
+        let joystickTimeout;
+        let dockIdleTimeout;
+        let hudTimeout;
+
+        // UI Elements
+        const uiLoader = document.getElementById('loader');
+        const btnBack = document.getElementById('btn-back');
+        const hud = document.getElementById('hud');
+        const mainHeader = document.getElementById('main-header');
+        const controlsHint = document.getElementById('controls-hint');
+        
+        const btnSettings = document.getElementById('btn-settings');
+        const btnStereo = document.getElementById('btn-stereo');
+        const btnAudioDock = document.getElementById('btn-audio-dock');
+        const audioDock = document.getElementById('audio-dock');
+        const btnMinimizeDock = document.getElementById('btn-minimize-dock');
+        const btnInfo = document.getElementById('btn-info');
+        const btnWaveMode = document.getElementById('btn-wave-mode');
+        const hudAction = document.getElementById('hud-action');
+        const settingsModal = document.getElementById('settings-modal');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+        const tabs = document.querySelectorAll('.modal-tab');
+        const panes = document.querySelectorAll('.modal-pane');
+
+        const sliderWaveSpeed = document.getElementById('slider-wave-speed');
+        const valWaveSpeed = document.getElementById('val-wave-speed');
+        const sliderWaveAmp = document.getElementById('slider-wave-amp');
+        const valWaveAmp = document.getElementById('val-wave-amp');
+        const sliderWaveFreq = document.getElementById('slider-wave-freq');
+        const valWaveFreq = document.getElementById('val-wave-freq');
+        const sliderSpin = document.getElementById('slider-spin');
+        const valSpin = document.getElementById('val-spin');
+        const sliderWell = document.getElementById('slider-well');
+        const valWell = document.getElementById('val-well');
+        const sliderAudioReact = document.getElementById('slider-audio-react');
+        const valAudioReact = document.getElementById('val-audio-react');
+        const sliderBrightness = document.getElementById('slider-brightness');
+        const valBrightness = document.getElementById('val-brightness');
+        const sliderGrid = document.getElementById('slider-grid');
+        const valGrid = document.getElementById('val-grid');
+
+        let G_WELL_DEPTH = 8.0;
+        let SPIN_SPEED = 3.2; // Más armónico y pausado por defecto
+        let STAR_BRIGHTNESS = 1.0;
+        const MAX_RADIUS = 40.0;
+
+        // Función matemática compartida entre CPU (Estrellas) y GPU (Malla/Estela) para que las estrellas
+        // suban y bajen exactamente sobre las olas de mar que pasan por la coordenada (r, theta)
+        // (forma de la ola previa: r*0.25 y entrada suave 2→9; espejo exacto del GLSL)
+        // Espejo CPU del pozo del shader (sombrero clásico + embudo local bajo el ecuador)
+        function wellOffsetY(r) {
+            const r_safe = Math.max(r, 1.5);
+            const k = 1.0 + slowBass * 0.45;
+            const xw = 1.0 / r_safe - 1.0 / 6.0;
+            const gw = 0.5 * (xw + Math.sqrt(xw * xw + 0.0004));
+            return -(G_WELL_DEPTH * funnelMix * k) / (r_safe * 0.5)
+                   - G_WELL_DEPTH * LOCAL_WELL_SCALE * (1.0 - funnelMix) * k * 2.0 * gw;
+        }
+
+        function computeGalacticWaveY(r, theta, wavePhase, waveFreq, waveAmp) {
+            const innerSmooth = Math.max(0, Math.min(1, (r - 2.0) / (9.0 - 2.0)));
+            const envIn = innerSmooth * innerSmooth * (3 - 2 * innerSmooth);
+            const outerSmooth = Math.max(0, Math.min(1, (r - 28.0) / (42.0 - 28.0)));
+            const envOut = 1.0 - (outerSmooth * outerSmooth * (3 - 2 * outerSmooth));
+            const radialEnvelope = envIn * envOut;
+            return Math.sin(theta * waveFreq - wavePhase + r * 0.25) * waveAmp * radialEnvelope;
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // PiP — Picture-in-Picture del agujero negro
+        // ═══════════════════════════════════════════════════════
+        let _pipStream  = null;
+        let _pipActive  = false;
+        let bgAudioEl = null; // salida multimedia del teléfono (sigue sonando en segundo plano)
+
+        // Al volver a la página, reanuda el audio si el sistema lo hubiera pausado
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                if (audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+                if (bgAudioEl && bgAudioEl.paused) bgAudioEl.play().catch(() => {});
+            }
+            updatePipTicker();
+        });
+
+        // Control desde la notificación / pantalla de bloqueo (Media Session)
+        function updateMediaSession(playing) {
+            if (!('mediaSession' in navigator)) return;
+            try {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: 'Música de las Esferas', artist: 'Sinfonía Gravitacional', album: 'Chamalnquimyst Labs'
+                });
+                navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+                navigator.mediaSession.setActionHandler('play', () => { if (!isSpheresPlaying) toggleMusicOfTheSpheres(); });
+                navigator.mediaSession.setActionHandler('pause', () => { if (isSpheresPlaying) toggleMusicOfTheSpheres(); });
+            } catch (_) {}
+        }
+
+        // ── PiP: con la ventana flotante activa y la página oculta, un pulso en un Worker sigue dibujando
+        //    (~30 cps). Sin PiP, al minimizar la animación se detiene sola y ahorra recursos.
+        let pipTicker = null;
+        function updatePipTicker() {
+            const need = _pipActive && document.hidden;
+            if (need && !pipTicker) {
+                try {
+                    const src = "let id=null;onmessage=e=>{clearInterval(id);if(e.data==='start')id=setInterval(()=>postMessage(0),33);};";
+                    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+                    const w = new Worker(url);
+                    URL.revokeObjectURL(url);
+                    w.onmessage = () => { if (_pipActive && document.hidden) frame(); };
+                    w.postMessage('start');
+                    pipTicker = { stop() { try { w.postMessage('stop'); } catch (_) {} w.terminate(); } };
+                } catch (_) {
+                    const iv = setInterval(() => { if (_pipActive && document.hidden) frame(); }, 33);
+                    pipTicker = { stop() { clearInterval(iv); } };
+                }
+            } else if (!need && pipTicker) {
+                pipTicker.stop(); pipTicker = null;
+            }
+        }
+        let _pipWin     = null;
+
+        function _pipClose(btn) {
+            _pipActive = false;
+            _pipWin    = null;
+            updatePipTicker();
+            if (btn) { btn.textContent = '📺'; btn.classList.remove('active'); }
+        }
+
+        // ── Cámara desde la ventana PiP: arrastrar = orbitar; dos dedos en touchpad = orbitar;
+        //    pellizco en touchpad o rueda del mouse = acercar/alejar ──
+        function pipOrbit(dTheta, dPhi) {
+            if (FLIGHT.active) {   // en el viaje, la ventana flotante mira alrededor sin desviar la ruta
+                FLIGHT.yaw -= dTheta; FLIGHT.pitch = Math.max(-1, Math.min(1, FLIGHT.pitch + dPhi));
+                FLIGHT.dragging = true; clearTimeout(FLIGHT._pipT);
+                FLIGHT._pipT = setTimeout(() => { FLIGHT.dragging = false; }, 600);
+                return;
+            }
+            const off = new THREE.Vector3().subVectors(camera.position, controls.target);
+            const sph = new THREE.Spherical().setFromVector3(off);
+            sph.theta -= dTheta;
+            sph.phi = Math.max(0.08, Math.min(Math.PI - 0.08, sph.phi - dPhi));
+            off.setFromSpherical(sph);
+            camera.position.copy(controls.target).add(off);
+            camera.lookAt(controls.target);
+        }
+        function pipZoom(factor) {
+            if (FLIGHT.active) { setFlightSpeed(FLIGHT.userSpeed / factor); return; }
+            const off = new THREE.Vector3().subVectors(camera.position, controls.target);
+            const len = Math.max(controls.minDistance || 1, Math.min(controls.maxDistance || 400, off.length() * factor));
+            off.setLength(len);
+            camera.position.copy(controls.target).add(off);
+        }
+        function attachPipCameraControls(d) {
+            const body = d.body;
+            body.style.cursor = 'grab';
+            body.style.touchAction = 'none';
+            let dragging = false, lx = 0, ly = 0;
+            body.addEventListener('pointerdown', e => {
+                dragging = true; lx = e.clientX; ly = e.clientY;
+                body.style.cursor = 'grabbing';
+                try { body.setPointerCapture(e.pointerId); } catch (_) {}
+            });
+            body.addEventListener('pointermove', e => {
+                if (!dragging) return;
+                const w = d.documentElement.clientWidth || 320;
+                pipOrbit((e.clientX - lx) / w * Math.PI, (e.clientY - ly) / w * Math.PI);
+                lx = e.clientX; ly = e.clientY;
+            });
+            const end = () => { dragging = false; body.style.cursor = 'grab'; };
+            body.addEventListener('pointerup', end);
+            body.addEventListener('pointercancel', end);
+            body.addEventListener('wheel', e => {
+                e.preventDefault();
+                const isMouseWheel = e.deltaMode === 1 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 50 && Number.isInteger(e.deltaY));
+                if (e.ctrlKey || isMouseWheel) {
+                    pipZoom(Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0012)));  // pellizco o rueda: zoom
+                } else {
+                    pipOrbit(e.deltaX * 0.004, e.deltaY * 0.004);                 // dos dedos: orbitar
+                }
+            }, { passive: false });
+        }
+
+        async function togglePiP() {
+            const btn = document.getElementById('btn-pip');
+            const vid = document.getElementById('pip-video');
+            const cnv = renderer.domElement;
+
+            if (_pipActive) {
+                if (_pipWin && !_pipWin.closed) _pipWin.close();
+                if (document.pictureInPictureElement) {
+                    await document.exitPictureInPicture().catch(() => {});
+                }
+                _pipClose(btn);
+                return;
+            }
+
+            try {
+                if (!_pipStream) {
+                    _pipStream    = cnv.captureStream(30);
+                    vid.srcObject = _pipStream;
+                }
+                await vid.play().catch(() => {});
+
+                _pipActive = true;
+                updatePipTicker();
+                btn.textContent = '✖';
+                btn.classList.add('active');
+
+                if ('documentPictureInPicture' in window) {
+                    _pipWin = await window.documentPictureInPicture.requestWindow({
+                        width: 320, height: 320,
+                        disallowReturnToOpener: false,
+                    });
+                    const d = _pipWin.document;
+                    d.head.innerHTML = `<style>
+                        *{margin:0;padding:0;box-sizing:border-box}
+                        body{background:#03030d;overflow:hidden;width:100%;height:100%}
+                        video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
+                        body::after{content:'';position:fixed;inset:0;
+                          border:1px solid rgba(99,245,161,.12);border-radius:6px;
+                          pointer-events:none;z-index:20}
+                    </style>`;
+                    const pipVid = d.createElement('video');
+                    pipVid.srcObject = _pipStream;
+                    pipVid.muted = true; pipVid.autoplay = true; pipVid.playsinline = true;
+                    pipVid.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:cover';
+                    d.body.appendChild(pipVid);
+                    pipVid.play().catch(() => {});
+                    attachPipCameraControls(d);
+                    _pipWin.addEventListener('pagehide', () => _pipClose(btn));
+                    return;
+                }
+
+                await vid.requestPictureInPicture();
+                vid.addEventListener('leavepictureinpicture', () => _pipClose(btn), { once: true });
+
+            } catch (err) {
+                console.warn('[Blackhole] PiP no disponible:', err);
+                _pipClose(btn);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // SINTETIZADOR ESTELAR POLIFÓNICO + MÚSICA DE LAS ESFERAS (FIBONACCI / 432Hz)
+        // ═══════════════════════════════════════════════════════════════════
+        // ══ MODO LIVIANO: en teléfonos (y con Bluetooth) el audio necesita búfer holgado y menos carga ══
+        const IS_MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+                          (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+        let LITE = IS_MOBILE;
+        try { const sv = localStorage.getItem('esferas_lite'); if (sv !== null) LITE = sv === '1'; } catch (_) {}
+
+        function ensureAudioContext() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                // 'playback' = búfer grande (estable en Bluetooth y móviles); 'interactive' = respuesta inmediata al MIDI
+                try { audioCtx = new AudioContextClass({ latencyHint: LITE ? 'playback' : 'interactive' }); }
+                catch (_) { audioCtx = new AudioContextClass(); }
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 512;
+                analyser.smoothingTimeConstant = 0.82;
+                freqData = new Uint8Array(analyser.frequencyBinCount);
+
+                // Bus de voces (sintetizador) → seco + reverb + delay → outBus → compresor → parlantes
+                masterBus = audioCtx.createGain();
+                masterBus.gain.value = 0.85;
+
+                // outBus: todo lo que SUENA. El analizador es solo un "oído" (tap), no está en la cadena de salida,
+                // así el micrófono puede alimentar las visuales sin salir por los parlantes (sin acople).
+                outBus = audioCtx.createGain();
+                outBus.gain.value = 1.0;
+                const comp = audioCtx.createDynamicsCompressor();
+                comp.threshold.value = -16;
+                comp.knee.value = 18;
+                comp.ratio.value = 3;
+                comp.attack.value = 0.02;
+                comp.release.value = 0.35;
+                outBus.connect(comp);
+                // En el teléfono el sonido sale por un elemento <audio> del sistema: Android/iOS lo tratan
+                // como reproducción multimedia y no lo silencian al minimizar o cambiar de app
+                // (aparece el control de reproducción en la notificación). En PC, salida directa (menor latencia).
+                if (IS_MOBILE && audioCtx.createMediaStreamDestination) {
+                    const md = audioCtx.createMediaStreamDestination();
+                    comp.connect(md);
+                    bgAudioEl = document.createElement('audio');
+                    bgAudioEl.setAttribute('playsinline', '');
+                    bgAudioEl.srcObject = md.stream;
+                    const p = bgAudioEl.play();
+                    if (p && p.catch) p.catch(() => {           // si el sistema no lo permite: salida directa
+                        try { comp.disconnect(md); } catch (_) {}
+                        comp.connect(audioCtx.destination);
+                        bgAudioEl = null;
+                    });
+                } else {
+                    comp.connect(audioCtx.destination);
+                }
+                outBus.connect(analyser);
+
+                // Respuesta al impulso: catedral cósmica (4.6 s), estéreo decorrelado con pre-delay de 25 ms
+                reverbNode = audioCtx.createConvolver();
+                const revLen = Math.floor(audioCtx.sampleRate * (LITE ? 2.4 : 4.6)); // la convolución es lo más costoso
+                const preDelay = Math.floor(audioCtx.sampleRate * 0.025);
+                const impulse = audioCtx.createBuffer(2, revLen, audioCtx.sampleRate);
+                for (let ch = 0; ch < 2; ch++) {
+                    const chData = impulse.getChannelData(ch);
+                    for (let i = preDelay; i < revLen; i++) {
+                        chData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / revLen, 2.8);
+                    }
+                }
+                reverbNode.buffer = impulse;
+
+                // Amortiguación de agudos en la cola: la reverb suena a espacio, no a metal
+                const revDamp = audioCtx.createBiquadFilter();
+                revDamp.type = 'lowpass';
+                revDamp.frequency.value = 5200;
+                const reverbGain = audioCtx.createGain();
+                reverbGain.gain.value = 0.6;
+
+                // Delay sintonizado a la proporción áurea (0.618s), más discreto para no emborronar las cuerdas
+                delayNode = audioCtx.createDelay(2.0);
+                delayNode.delayTime.value = 0.618;
+                const delayFeedback = audioCtx.createGain();
+                delayFeedback.gain.value = 0.32;
+                const delayFilter = audioCtx.createBiquadFilter();
+                delayFilter.type = 'lowpass';
+                delayFilter.frequency.value = 2400;
+
+                delayNode.connect(delayFilter);
+                delayFilter.connect(delayFeedback);
+                delayFeedback.connect(delayNode);
+
+                const delayWet = audioCtx.createGain();
+                delayWet.gain.value = 0.2;
+
+                masterBus.connect(outBus);
+                masterBus.connect(reverbNode);
+                reverbNode.connect(revDamp);
+                revDamp.connect(reverbGain);
+                reverbGain.connect(outBus);
+
+                masterBus.connect(delayNode);
+                delayNode.connect(delayWet);
+                delayWet.connect(outBus);
+
+                // Buses de las muestras grabadas: el piano va seco + catedral (sin el eco áureo, que emborrona
+                // los arpegios); las cuerdas grabadas pasan por la misma cadena que las sintetizadas
+                pianoBus = audioCtx.createGain();
+                pianoBus.gain.value = PIANO_GAIN;
+                pianoBus.connect(outBus);
+                const pianoRev = audioCtx.createGain();
+                pianoRev.gain.value = 0.5;
+                pianoBus.connect(pianoRev);
+                pianoRev.connect(reverbNode);
+                stringsBus = audioCtx.createGain();
+                stringsBus.gain.value = STRINGS_GAIN;
+                stringsBus.connect(masterBus);
+
+                // Ruido compartido para el "arco" (roce de crin al iniciar cada nota)
+                const nLen = audioCtx.sampleRate;
+                bowNoiseBuffer = audioCtx.createBuffer(1, nLen, audioCtx.sampleRate);
+                const nd = bowNoiseBuffer.getChannelData(0);
+                for (let i = 0; i < nLen; i++) nd[i] = Math.random() * 2 - 1;
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            loadSamples();
+        }
+
+        // ══════════════ ORQUESTA GRABADA: paletas de instrumentos reales ══════════════
+        // Cada capa de las Esferas (melodía, mano izquierda, pedal y acordes, ornamentos) suena con
+        // instrumentos grabados. Las grabaciones se afinan nota a nota con precisión de centésimas: las
+        // razones puras de las Esferas se conservan. Las de sonido sostenido (cuerdas, coro) se prolongan
+        // con un bucle de fundido cruzado sin costuras; arpa, celesta y piano resuenan con su caída natural.
+        //  · Piano de cola: Steinway "Splendid Grand Piano" (smplr).
+        //  · Arpa de concierto y vibráfono con arco: Versilian Community Sample Library (dominio público, CC0).
+        //  · Violín, chelo, contrabajo, ensambles de cuerdas, coro y celesta: soundfont MusyngKite.
+        const SAMPLE_SRC = {
+            vcsl: 'https://smpldsnds.github.io/sgossner-vcsl',
+            smplr: 'https://cdn.jsdelivr.net/npm/smplr@1.2.0/dist/index.mjs',
+            gm: (name) => 'https://gleitz.github.io/midi-js-soundfonts/MusyngKite/' + name + '-mp3.js'
+        };
+        const INSTR = {
+            piano:      { type: 'piano', label: 'Piano de cola' },
+            // Arpa de concierto: lector propio del SFZ (una sola grabación por nota según la fuerza;
+            // la librería genérica sonaba las capas suave y fuerte encimadas → arpa "doble" que flanchea)
+            harp:       { type: 'sfz', path: 'Chordophones/Composite Chordophones/Concert Harp', release: 2.8, trim: 6.0, tuneFix: 10, label: 'Arpa de concierto' },
+            vibesBowed: { type: 'vcsl', path: 'Idiophones/Struck Idiophones/Vibraphone - Bowed', release: 2.6, label: 'Vibráfono con arco' },
+            strings:    { type: 'gm', gm: 'string_ensemble_1', sustain: true, stereo: true, range: [26, 98], label: 'Ensamble de cuerdas' },
+            stringsSlow:{ type: 'gm', gm: 'string_ensemble_2', sustain: true, stereo: true, range: [36, 96], label: 'Cuerdas lentas' },
+            violin:     { type: 'gm', gm: 'violin', sustain: true, range: [52, 100], label: 'Violines' },
+            cello:      { type: 'gm', gm: 'cello', sustain: true, range: [30, 79], label: 'Chelos' },
+            contrabass: { type: 'gm', gm: 'contrabass', sustain: true, range: [22, 60], label: 'Contrabajos' },
+            choir:      { type: 'gm', gm: 'choir_aahs', sustain: true, stereo: true, range: [43, 88], label: 'Coro angelical' },
+            celesta:    { type: 'gm', gm: 'celesta', sustain: false, range: [48, 108], label: 'Celesta' }
+        };
+        // Paletas: qué instrumento toca cada capa ([instrumento, ganancia]); padLow = pedal grave (< 160 Hz);
+        // halo = brillo sobre los acordes agudos
+        const PALETTES = {
+            angelical: { name: 'Dimensión angelical',
+                mel: [['violin', 0.8], ['strings', 0.45]], lh: [['harp', 0.9]], orn: [['celesta', 0.55]],
+                pad: [['strings', 0.75], ['choir', 0.55]], padLow: [['cello', 0.6], ['contrabass', 0.55], ['strings', 0.35]],
+                halo: [['vibesBowed', 0.4]] },
+            cuerdas: { name: 'Orquesta de cuerdas',
+                mel: [['violin', 0.75], ['strings', 0.5]], lh: [['cello', 0.7]], orn: [['violin', 0.6]],
+                pad: [['strings', 0.85]], padLow: [['contrabass', 0.6], ['strings', 0.45]] },
+            arpa: { name: 'Arpa y coro celestial',
+                mel: [['harp', 0.95], ['celesta', 0.22]], lh: [['harp', 0.8]], orn: [['celesta', 0.5]],
+                pad: [['choir', 0.7], ['stringsSlow', 0.5]], padLow: [['cello', 0.5], ['choir', 0.35]] },
+            estelar: null   // cuerdas estelares sintetizadas
+        };
+        const PIANO_LAYERS = { mel: [['piano', 1]], lh: [['piano', 1]], orn: [['piano', 0.9]] };
+        const PIANO_GAIN = 0.85, STRINGS_GAIN = 1.4;
+        let pianoBus = null, stringsBus = null;
+        let PALETTE = 'angelical', PIANO_ON = false, USER_KEYS_SOUND = 'synth';
+        try {
+            const old = localStorage.getItem('esferas_motor');
+            PALETTE = localStorage.getItem('esferas_paleta') || (old === 'synth' ? 'estelar' : 'angelical');
+            if (!(PALETTE in PALETTES)) PALETTE = 'angelical';
+            const pn = localStorage.getItem('esferas_piano');
+            PIANO_ON = pn !== null ? pn === '1' : old === 'samples';   // quien ya usaba piano y cuerdas lo conserva
+            USER_KEYS_SOUND = localStorage.getItem('esferas_teclas') || 'synth';
+        } catch (_) {}
+        let SOUND_ENGINE = PALETTE === 'estelar' ? 'synth' : 'samples';
+        const SAMPLER = { st: {}, loading: false, failed: false, smplr: null, scheduler: null };
+        Object.keys(INSTR).forEach(id => { SAMPLER.st[id] = { status: 'idle', prog: 0 }; });
+        Object.defineProperty(SAMPLER, 'pianoReady', { get: () => SAMPLER.st.piano.status === 'ready' });
+        Object.defineProperty(SAMPLER, 'stringsReady', { get: () => SAMPLER.st.strings.status === 'ready' });
+
+        function layerList(layer) {
+            if (PIANO_ON && PIANO_LAYERS[layer]) return PIANO_LAYERS[layer];
+            const pal = PALETTES[PALETTE];
+            return pal ? (pal[layer] || []) : [];
+        }
+        function instrReady(id) { return SAMPLER.st[id] && SAMPLER.st[id].status === 'ready'; }
+        // ¿Hay un instrumento real que toque la mano izquierda? (MIDI conectado o la orquesta grabada)
+        function pianoSounding() {
+            if (midiOutputs().length > 0) return true;
+            if (SOUND_ENGINE !== 'samples') return false;
+            return layerList('lh').some(([id]) => instrReady(id));
+        }
+        function requiredInstruments() {
+            const ids = new Set();
+            if (SOUND_ENGINE === 'samples') ['mel', 'lh', 'orn', 'pad', 'padLow', 'halo'].forEach(l => layerList(l).forEach(([id]) => ids.add(id)));
+            if (USER_KEYS_SOUND !== 'synth' && INSTR[USER_KEYS_SOUND]) ids.add(USER_KEYS_SOUND);
+            return [...ids];
+        }
+        // Lo esencial: el primer instrumento de la melodía y del pedal
+        function coreReady() {
+            if (SOUND_ENGINE !== 'samples') return false;
+            const m = layerList('mel')[0], p = layerList('pad')[0];
+            return (!m || instrReady(m[0])) && (!p || instrReady(p[0]));
+        }
+        function updateSampleStatus() {
+            const el = document.getElementById('lbl-sample-status');
+            const req = requiredInstruments();
+            const loading = req.filter(id => SAMPLER.st[id].status === 'loading');
+            const failed = req.filter(id => SAMPLER.st[id].status === 'failed');
+            const pct = Math.round(100 * req.reduce((a, id) => a + (SAMPLER.st[id].status === 'ready' ? 1 : SAMPLER.st[id].prog), 0) / Math.max(1, req.length));
+            let txt = '';
+            if (loading.length && coreReady()) txt = '· sonando · completando ' + pct + '%';
+            else if (loading.length) txt = '· cargando ' + pct + '%';
+            else if (failed.length && failed.length === req.length) txt = '· sin conexión: suenan las cuerdas estelares';
+            else if (req.length && req.some(id => instrReady(id))) txt = '· listo';
+            if (el) el.textContent = txt;
+            const lbl = document.getElementById('lbl-spheres');
+            if (lbl && isSpheresPlaying) lbl.textContent = 'Esferas #' + SPHERE_SEED + (loading.length && !coreReady() ? ' ' + txt : '');
+        }
+        const NOTE_PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+        function noteNameToMidi(name) {
+            const m = /^([A-G])(b|#)?(-?\d)$/.exec(name);
+            if (!m) return null;
+            return 12 * (parseInt(m[3], 10) + 1) + NOTE_PC[m[1]] + (m[2] === 'b' ? -1 : m[2] === '#' ? 1 : 0);
+        }
+        // Bucle sin costura (sostenidos) o recorte (caída natural); mono salvo los ensambles (ahorra memoria)
+        function prepareBuffer(buf, sustain, stereo) {
+            const sr = buf.sampleRate, nch = stereo ? Math.min(2, buf.numberOfChannels) : 1;
+            if (!sustain) {
+                const out = audioCtx.createBuffer(nch, buf.length, sr);
+                for (let ch = 0; ch < nch; ch++) {
+                    const dst = out.getChannelData(ch);
+                    if (nch === 1 && buf.numberOfChannels > 1) { const a = buf.getChannelData(0), b = buf.getChannelData(1); for (let i = 0; i < dst.length; i++) dst[i] = 0.5 * (a[i] + b[i]); }
+                    else dst.set(buf.getChannelData(ch));
+                }
+                return { buf: out };
+            }
+            const L1 = Math.min(buf.length - 1, Math.floor(Math.min(3.0, buf.duration - 0.05) * sr)), L0 = Math.floor(0.75 * sr), X = Math.floor(0.6 * sr);
+            const span = L1 - L0;
+            const out = audioCtx.createBuffer(nch, L1, sr);
+            for (let ch = 0; ch < nch; ch++) {
+                let src = buf.getChannelData(Math.min(ch, buf.numberOfChannels - 1));
+                if (nch === 1 && buf.numberOfChannels > 1) {
+                    const a = buf.getChannelData(0), b = buf.getChannelData(1);
+                    src = new Float32Array(buf.length); for (let i = 0; i < buf.length; i++) src[i] = 0.5 * (a[i] + b[i]);
+                }
+                const dst = out.getChannelData(ch);
+                dst.set(src.subarray(0, L1));
+                for (let i = L1 - X; i < L1; i++) {
+                    const w = (i - (L1 - X)) / X;
+                    dst[i] = src[i] * Math.cos(w * Math.PI / 2) + src[i - span] * Math.sin(w * Math.PI / 2);
+                }
+            }
+            return { buf: out, loopStart: L0 / sr, loopEnd: L1 / sr };
+        }
+        // Descarga con caché permanente del navegador: la primera visita baja los instrumentos; las
+        // siguientes cargan al instante (también sin internet). Fuera de https, descarga normal.
+        const SOUND_CACHE = 'esferas-sonidos-v1';
+        async function cachedFetch(url) {
+            let cache = null;
+            try { if (window.isSecureContext && window.caches) cache = await caches.open(SOUND_CACHE); } catch (_) { cache = null; }
+            if (cache) {
+                try { const hit = await cache.match(url); if (hit) return hit; } catch (_) {}
+            }
+            const res = await fetch(url);
+            if (cache && res.ok) { try { await cache.put(url, res.clone()); } catch (_) {} }
+            return res;
+        }
+        async function loadSFZ(id) {
+            const def = INSTR[id], st = SAMPLER.st[id];
+            const enc = (p) => p.split('/').map(encodeURIComponent).join('/');
+            const res = await cachedFetch(SAMPLE_SRC.vcsl + '/' + enc(def.path) + '.sfz');
+            if (!res.ok) throw new Error('sfz ' + res.status);
+            const txt = await res.text();
+            const regions = [];
+            txt.split('<region>').slice(1).forEach(block => {
+                const g = (k) => { const m = new RegExp('(?:^|\\n)\\s*' + k + '=([^\\n]+)').exec(block); return m ? m[1].trim() : undefined; };
+                const sample = g('sample');
+                if (!sample) return;
+                regions.push({
+                    sample, key: +g('pitch_keycenter'), lo: +g('lokey'), hi: +g('hikey'),
+                    tune: +(g('tune') || 0), vol: +(g('volume') || 0), offset: +(g('offset') || 0),
+                    layer: g('xfin_lovel') !== undefined ? 'loud' : g('xfout_lovel') !== undefined ? 'soft' : 'both'
+                });
+            });
+            // En el teléfono, solo la capa suave (mitad de descarga y memoria)
+            const use = regions.filter(r => !LITE || r.layer !== 'loud');
+            const a = document.createElement('audio');
+            const fmt = a.canPlayType('audio/ogg; codecs="opus"') ? 'ogg' : 'm4a';
+            const dir = def.path.slice(0, def.path.lastIndexOf('/') + 1);
+            const list = [];
+            for (let i = 0; i < use.length; i++) {
+                const r = use[i];
+                const url = SAMPLE_SRC.vcsl + '/' + enc(dir + r.sample.replace(/\.wav$/i, '.' + fmt));
+                const rr = await cachedFetch(url);
+                if (!rr.ok) throw new Error('muestra ' + rr.status);
+                const decoded = await audioCtx.decodeAudioData(await rr.arrayBuffer());
+                // Mono y recortado (el arpa ya casi se extinguió): memoria liviana; fundido final suave
+                const sr = decoded.sampleRate, off = Math.min(decoded.length - 1, r.offset);
+                const len = Math.min(decoded.length - off, Math.floor(def.trim * sr));
+                const out = audioCtx.createBuffer(1, len, sr), dst = out.getChannelData(0);
+                const c0 = decoded.getChannelData(0), c1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : c0;
+                const fade = Math.floor(0.6 * sr);
+                for (let k = 0; k < len; k++) {
+                    let v = 0.5 * (c0[off + k] + c1[off + k]);
+                    if (k > len - fade) v *= (len - k) / fade;
+                    dst[k] = v;
+                }
+                list.push({ buf: out, key: r.key, lo: r.lo, hi: r.hi, tune: r.tune, gain: Math.pow(10, r.vol / 20), layer: r.layer });
+                st.prog = (i + 1) / use.length;
+                updateSampleStatus();
+            }
+            // Nivelación respecto de las cuerdas (RMS de la nota central, primer medio segundo)
+            const mid = list.reduce((x, y) => Math.abs(y.key - 60) < Math.abs(x.key - 60) ? y : x, list[0]);
+            const d = mid.buf.getChannelData(0), n = Math.min(d.length, Math.floor(0.5 * mid.buf.sampleRate));
+            let acc = 0; for (let k = 0; k < n; k++) acc += d[k] * d[k];
+            const rms = Math.sqrt(acc / n) * mid.gain || 0.05;
+            st.data = { list, norm: Math.max(0.05, Math.min(8, 0.06 / rms)) };
+        }
+        // Arpa: elige la grabación de esa tecla y de esa fuerza; la afina a la razón pura exacta
+        function createSFZVoice(id, freq, velocity, now, gain) {
+            const def = INSTR[id], data = SAMPLER.st[id].data;
+            const vel = Math.max(0.05, Math.min(1, velocity));
+            const v127 = 20 + vel * 107;
+            const exact = 69 + 12 * Math.log2(freq / 440);
+            const key = Math.round(exact);
+            const wantLoud = v127 >= 85;
+            const cands = data.list.filter(r => key >= r.lo && key <= r.hi);
+            const pool = cands.length ? cands : data.list.slice().sort((x, y) => Math.abs(x.key - exact) - Math.abs(y.key - exact)).slice(0, 2);
+            const reg = pool.find(r => r.layer === (wantLoud ? 'loud' : 'soft')) || pool.find(r => r.layer === 'both') || pool[0];
+            const src = audioCtx.createBufferSource();
+            src.buffer = reg.buf;
+            // Afinación: la nota pura pedida respecto de la tecla grabada. El arpa se grabó ~10 cents baja
+            // (La ≈ 436 Hz, medido sobre las grabaciones; el 'tune' del SFZ no coincide con la medición)
+            src.playbackRate.value = Math.pow(2, (exact - reg.key + (def.tuneFix || 0) / 100) / 12);
+            const g = audioCtx.createGain();
+            const peak = Math.min(3, gain * data.norm * reg.gain * Math.pow(vel, 1.1) * 1.3);
+            g.gain.setValueAtTime(peak, now);
+            const lp = audioCtx.createBiquadFilter();
+            lp.type = 'lowpass'; lp.Q.value = 0.4;
+            lp.frequency.value = 2500 + vel * 9000;              // pulsación suave = cuerda más cálida
+            src.connect(lp); lp.connect(g);
+            if (audioCtx.createStereoPanner) {
+                const pan = audioCtx.createStereoPanner();
+                pan.pan.value = Math.max(-0.45, Math.min(0.45, Math.log2(freq / 260) * 0.3));
+                g.connect(pan); pan.connect(pianoBus);
+            } else g.connect(pianoBus);
+            src.start(now);
+            const endAt = now + reg.buf.duration / src.playbackRate.value;
+            try { src.stop(endAt + 0.05); } catch (_) {}
+            let relAt = Infinity;
+            const damp = (t, tc) => {
+                if (t >= relAt) return;
+                relAt = t;
+                g.gain.cancelScheduledValues(t);
+                g.gain.setTargetAtTime(0.0001, t, tc);
+                try { src.stop(Math.min(endAt, t + tc * 7) + 0.05); } catch (_) {}
+            };
+            return {
+                // La cuerda sigue vibrando: al "soltar" se apaga con su resonancia natural (~3 s)
+                scheduleRelease(at) { damp(Math.max(at, now + 1.5), def.release / 3); },
+                release(tau, at) { damp(Math.max(audioCtx.currentTime, at || 0), Math.max(0.08, tau || 0.6)); }
+            };
+        }
+
+        async function loadGM(id) {
+            const def = INSTR[id], st = SAMPLER.st[id];
+            const res = await cachedFetch(SAMPLE_SRC.gm(def.gm));
+            if (!res.ok) throw new Error(def.gm + ' ' + res.status);
+            const txt = await res.text();
+            const re = /"([A-G]b?-?\d)":\s*"data:audio\/mp3;base64,([^"]+)"/g;
+            const step = LITE ? 4 : 3;   // una grabación cada 3–4 semitonos (el resto se transpone ≤ 2 st)
+            const wanted = [];
+            let m;
+            while ((m = re.exec(txt))) {
+                const midi = noteNameToMidi(m[1]);
+                if (midi !== null && midi >= def.range[0] && midi <= def.range[1] && midi % step === 0) wanted.push([midi, m[2]]);
+            }
+            const list = [];
+            for (let i = 0; i < wanted.length; i++) {
+                const [midi, b64] = wanted[i];
+                const bin = atob(b64);
+                const bytes = new Uint8Array(bin.length);
+                for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+                const decoded = await audioCtx.decodeAudioData(bytes.buffer);
+                list.push(Object.assign({ midi }, prepareBuffer(decoded, def.sustain, def.stereo)));
+                st.prog = (i + 1) / wanted.length;
+                updateSampleStatus();
+            }
+            // Nivelación: cada instrumento a la misma sonoridad que el ensamble de cuerdas (RMS ≈ 0.05)
+            const ref = list.reduce((a, b) => Math.abs(b.midi - 64) < Math.abs(a.midi - 64) ? b : a, list[0]);
+            const d = ref.buf.getChannelData(0), sr = ref.buf.sampleRate;
+            const i0 = Math.floor((def.sustain ? 0.3 : 0.0) * sr), i1 = Math.min(d.length, Math.floor((def.sustain ? 2.0 : 0.6) * sr));
+            let acc = 0; for (let i = i0; i < i1; i++) acc += d[i] * d[i];
+            const rms = Math.sqrt(acc / Math.max(1, i1 - i0)) || 0.05;
+            st.data = { list, norm: Math.max(0.3, Math.min(4, 0.05 / rms)) };
+        }
+        async function smplrModule() {
+            if (!SAMPLER.smplr) SAMPLER.smplr = import(SAMPLE_SRC.smplr);
+            const mod = await SAMPLER.smplr;
+            // Despacha de inmediato todo lo que las Esferas agendan (también en segundo plano)
+            if (!SAMPLER.scheduler) SAMPLER.scheduler = mod.Scheduler(audioCtx, { lookaheadMs: 4000, intervalMs: 25 });
+            return mod;
+        }
+        async function loadPiano(id) {
+            const mod = await smplrModule(), st = SAMPLER.st[id];
+            const notes = [];
+            for (let mm = 28; mm <= 100; mm++) if (!LITE || mm % 2 === 0) notes.push(mm);
+            const opts = {
+                destination: pianoBus, volume: 100, decayTime: 0.7, scheduler: SAMPLER.scheduler,
+                notesToLoad: { notes, velocityRange: LITE ? [41, 84] : [41, 100] },
+                onLoadProgress: ({ loaded, total }) => { st.prog = total ? loaded / total : 0; updateSampleStatus(); }
+            };
+            // Caché del navegador: la segunda visita no vuelve a descargar (solo en https)
+            try { if (window.isSecureContext && window.caches) opts.storage = mod.CacheStorage('esferas-piano'); } catch (_) {}
+            const inst = mod.SplendidGrandPiano(audioCtx, opts);
+            await inst.ready;
+            st.data = { inst };
+        }
+        async function loadVCSL(id) {
+            const mod = await smplrModule(), st = SAMPLER.st[id];
+            const opts = { instrument: INSTR[id].path, destination: pianoBus, volume: 105, scheduler: SAMPLER.scheduler,
+                           onLoadProgress: ({ loaded, total }) => { st.prog = total ? loaded / total : 0; updateSampleStatus(); } };
+            try { if (window.isSecureContext && window.caches) opts.storage = mod.CacheStorage('esferas-vcsl'); } catch (_) {}
+            const inst = mod.Versilian(audioCtx, opts);
+            await inst.ready;
+            st.data = { inst };
+        }
+        function loadSamples() {
+            if (!audioCtx) return;
+            const todo = requiredInstruments().filter(id => SAMPLER.st[id].status === 'idle' || SAMPLER.st[id].status === 'failed');
+            if (!todo.length) { updateSampleStatus(); return; }
+            // De a uno (el teléfono no se ahoga decodificando todo a la vez); lo de la melodía primero
+            const order = ['mel', 'pad', 'lh', 'padLow', 'orn', 'halo'];
+            // Primero lo esencial (el primer instrumento de la melodía y del pedal: suena en segundos),
+            // después el resto mientras la música ya corre
+            const rank = id => {
+                let best = 99;
+                order.forEach((l, li) => layerList(l).forEach(([x], pi) => { if (x === id) best = Math.min(best, pi * 10 + li); }));
+                return best;
+            };
+            todo.sort((a, b) => rank(a) - rank(b));
+            todo.forEach(id => { SAMPLER.st[id].status = 'loading'; SAMPLER.st[id].prog = 0; });
+            updateSampleStatus();
+            (async () => {
+                for (const id of todo) {
+                    const t = INSTR[id].type;
+                    try {
+                        await (t === 'piano' ? loadPiano(id) : t === 'vcsl' ? loadVCSL(id) : t === 'sfz' ? loadSFZ(id) : loadGM(id));
+                        SAMPLER.st[id].status = 'ready';
+                    } catch (e) {
+                        SAMPLER.st[id].status = 'failed';
+                        console.warn('Instrumento no disponible (' + id + '):', e);
+                    }
+                    updateSampleStatus();
+                    if (coreReady() && !SAMPLER.announcedCore && SOUND_ENGINE === 'samples') {
+                        SAMPLER.announcedCore = true;
+                        const pal = PALETTES[PALETTE];
+                        showFloatingNote('🎻 ' + (PIANO_ON ? 'Piano · ' : '') + (pal ? pal.name : 'Orquesta'), 'Instrumentos grabados · afinación pura');
+                    }
+                }
+                SAMPLER.announcedCore = false;
+            })();
+        }
+
+        // ── Voces grabadas ──
+        // Rol de la voz → lista de instrumentos; si ninguno está listo, null (suena el sintetizador)
+        function createSampledVoice(freq, velocity, opts, now, midiH, pure) {
+            let list;
+            if (opts.userKeys) {
+                if (USER_KEYS_SOUND === 'synth') return null;
+                list = [[USER_KEYS_SOUND, 1]];
+            } else {
+                if (!pure || SOUND_ENGINE !== 'samples') return null;
+                let role = opts.orn ? 'orn' : (opts.layer || (opts.pad ? 'pad' : 'mel'));
+                if (role === 'pad' && freq < 160) role = 'padLow';
+                list = layerList(role).slice();
+                if (role === 'pad' && opts.chord && freq >= 260) list = list.concat(layerList('halo'));
+            }
+            const parts = [];
+            list.forEach(([id, gain]) => {
+                if (!instrReady(id)) return;
+                const t = INSTR[id].type;
+                const v = t === 'gm' ? createGMVoice(id, freq, velocity, opts, now, gain)
+                        : t === 'sfz' ? createSFZVoice(id, freq, velocity, now, gain)
+                                      : createSmplrVoice(id, freq, velocity, now, gain);
+                if (v) parts.push(v);
+            });
+            if (!parts.length) return null;
+            return {
+                freq, released: false, startAt: now, sampled: true,
+                scheduleRelease(at, tau) {
+                    this.autoRelAt = at; this.autoTau = tau || 0.6;
+                    parts.forEach(p => p.scheduleRelease(at, tau));
+                    if (midiH) sphereMidiOff(midiH, at);
+                },
+                release(tau, at) {
+                    const t = Math.max(audioCtx.currentTime, at || 0);
+                    if (this.released && t >= this.relAt && (tau || 0.6) >= this.tau) return;
+                    this.released = true; this.tau = tau || 0.6; this.relAt = t;
+                    parts.forEach(p => p.release(tau, t));
+                    if (midiH) sphereMidiOff(midiH, t);
+                }
+            };
+        }
+
+        // Piano / arpa / vibráfono con arco (smplr): afinados por nota con 'detune'
+        function createSmplrVoice(id, freq, velocity, now, gain) {
+            const inst = SAMPLER.st[id].data.inst, def = INSTR[id];
+            const exact = 69 + 12 * Math.log2(freq / 440);
+            const note = Math.round(exact);
+            const v127 = Math.max(1, Math.min(127, Math.round((20 + Math.max(0, Math.min(1, velocity)) * 107) * Math.sqrt(gain))));
+            const ev = { note, velocity: v127, time: now, detune: (exact - note) * 100 };
+            if (def.release) ev.ampRelease = def.release;           // el arpa resuena ~3 s al soltarla
+            let stop = null;
+            try { stop = inst.start(ev); } catch (_) {}
+            const stopAt = (t) => { try { if (typeof stop === 'function') stop(t); } catch (_) {} };
+            // El arpa y el vibráfono no se apagan antes de ~1.5 s: sus cuerdas siguen vibrando
+            const minRing = def.type === 'vcsl' ? 1.5 : 0;
+            return {
+                scheduleRelease(at) { stopAt(Math.max(at, now + minRing)); },
+                release(tau, at) { stopAt(at); }
+            };
+        }
+
+        // Instrumentos General MIDI grabados (cuerdas, coro, celesta…): bucle sostenido o caída natural
+        function createGMVoice(id, freq, velocity, opts, now, gain) {
+            const def = INSTR[id], data = SAMPLER.st[id].data;
+            const vel = Math.max(0.05, Math.min(1, velocity));
+            const exact = 69 + 12 * Math.log2(freq / 440);
+            let best = data.list[0];
+            for (const sm of data.list) if (Math.abs(sm.midi - exact) < Math.abs(best.midi - exact)) best = sm;
+            const src = audioCtx.createBufferSource();
+            src.buffer = best.buf;
+            if (def.sustain) { src.loop = true; src.loopStart = best.loopStart; src.loopEnd = best.loopEnd; }
+            src.playbackRate.value = freq / (440 * Math.pow(2, (best.midi - 69) / 12));   // afinación exacta
+            const lp = audioCtx.createBiquadFilter();
+            lp.type = 'lowpass'; lp.Q.value = 0.5;
+            const bright = Math.min(12000, 1800 + vel * 6500 + freq * 2);
+            const pad = !!opts.pad || opts.layer === 'pad';
+            const attack = !def.sustain ? 0.004 : (opts.attack || (pad ? 1.1 : 0.16 + (1 - vel) * 0.3));
+            lp.frequency.setValueAtTime(def.sustain ? bright * 0.45 : bright, now);
+            if (def.sustain) lp.frequency.linearRampToValueAtTime(bright, now + attack * 1.2);
+            const env = audioCtx.createGain();
+            const peak = Math.min(2.5, gain * data.norm * (opts.isBass ? 1.0 : 0.85) * Math.pow(vel, 0.9));
+            env.gain.setValueAtTime(0.0001, now);
+            env.gain.linearRampToValueAtTime(peak, now + attack);
+            if (def.sustain) env.gain.setTargetAtTime(peak * 0.8, now + attack, 2.5);
+            const relG = audioCtx.createGain();
+            relG.gain.value = 1;
+            src.connect(lp); lp.connect(env); env.connect(relG);
+            if (audioCtx.createStereoPanner) {
+                const pan = audioCtx.createStereoPanner();
+                pan.pan.value = Math.max(-0.5, Math.min(0.5, Math.log2(freq / 260) * 0.22)) + (Math.random() - 0.5) * 0.12;
+                relG.connect(pan); pan.connect(stringsBus);
+            } else relG.connect(stringsBus);
+            src.start(now, def.sustain ? Math.random() * 0.04 : 0);
+            if (!def.sustain) try { src.stop(now + best.buf.duration / src.playbackRate.value + 0.05); } catch (_) {}
+            const minRing = def.sustain ? 0 : 1.2;   // la celesta y el arpa suenan hasta apagarse solas
+            let relAt = Infinity, relTau = 1, relLevel = 1;
+            const doRelease = (t, tc) => {
+                const level = relAt < Infinity ? relLevel * Math.exp(-Math.max(0, t - relAt) / relTau) : 1;
+                if (relAt < Infinity && t >= relAt && tc >= relTau) return;
+                relAt = t; relTa
