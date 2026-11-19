@@ -297,7 +297,13 @@
             font-size: 0.85rem;
         }
 
-        .dock-btn.dock-mini { padding: 7px 9px; font-size: 0.9rem; margin-left: -4px; }
+        /* Fila del panel: botón principal + botón chico a su lado (no ocupa una fila entera) */
+        .dock-row { display: flex; align-items: stretch; gap: 6px; }
+        .dock-row > .dock-btn:not(.dock-mini) { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .dock-btn.dock-mini { flex: 0 0 auto; padding: 6px 9px; font-size: 0.85rem; justify-content: center; }
+        .dock-volume { align-items: center; }
+        .dock-volume input[type=range] { flex: 1 1 auto; min-width: 0; accent-color: #b9a2ff; height: 4px; }
+        .dock-volume .vol-val { flex: 0 0 auto; width: 2.2em; text-align: right; font-size: 0.72rem; color: #c9bfff; font-family: 'Space Grotesk', sans-serif; }
         .dock-btn {
             background: rgba(255, 255, 255, 0.06);
             border: 1px solid rgba(255, 255, 255, 0.14);
@@ -680,10 +686,17 @@
 
     <!-- CONSOLA (esquina superior izquierda, inicia minimizada): AUDIO, ESFERAS, MIDI Y LAGRANGE -->
     <div id="audio-dock" class="dock-hidden">
-        <button id="btn-spheres" class="dock-btn" title="Generador Procedural Infinito: Música de las Esferas (Fibonacci / Proporción Áurea / 432Hz)">
-            <span>✨</span> <span id="lbl-spheres">Música de las Esferas</span>
-        </button>
-        <button id="btn-sound-cfg" class="dock-btn dock-mini" title="Instrumentos de las Esferas: paleta, piano, mano izquierda">⚙</button>
+        <div class="dock-row dock-volume" title="Volumen general">
+            <button id="btn-mute" class="dock-btn dock-mini" title="Silenciar / restaurar">🔊</button>
+            <input type="range" id="vol-master" min="0" max="1" step="0.01" value="0.8" aria-label="Volumen">
+            <span id="val-vol" class="vol-val">80</span>
+        </div>
+        <div class="dock-row">
+            <button id="btn-spheres" class="dock-btn" title="Generador Procedural Infinito: Música de las Esferas (Fibonacci / Proporción Áurea / 432Hz)">
+                <span>✨</span> <span id="lbl-spheres">Música de las Esferas</span>
+            </button>
+            <button id="btn-sound-cfg" class="dock-btn dock-mini" title="Instrumentos de las Esferas: paleta, piano, mano izquierda">⚙</button>
+        </div>
 
         <button id="btn-mic" class="dock-btn" title="Conectar Piano Acústico / Tarjeta de Sonido / Micrófono">
             <span>🎙️</span> <span id="lbl-mic">Mic / Línea</span>
@@ -693,6 +706,10 @@
             <span>📂</span> <span id="lbl-file">Cargar Audio</span>
             <input type="file" id="audio-file-input" accept="audio/*" style="display:none;">
         </label>
+
+        <button id="btn-radio" class="dock-btn" title="Radio Tagua Tagua · en vivo">
+            <span>📻</span> <span id="lbl-radio">Radio Tagua Tagua</span>
+        </button>
 
         <button id="btn-play-pause" class="dock-btn" style="display:none;" title="Reproducir / Pausar canción">
             <span id="icon-play">⏸️</span> <span id="lbl-track-short">Pista</span>
@@ -855,6 +872,10 @@
                 <div class="setting-group">
                     <label>Amplitud de la Ola Galáctica (Altura de Marea) <span id="val-wave-amp" class="highlight">1.6</span></label>
                     <input type="range" id="slider-wave-amp" min="0" max="6.0" step="0.1" value="1.6">
+                </div>
+                <div class="setting-group">
+                    <label>🌊 Oleaje con la música (los golpes fuertes levantan la ola y vuelve a la amplitud de arriba) <span id="val-surge" class="highlight">1.0</span></label>
+                    <input type="range" id="slider-surge" min="0" max="2.5" step="0.1" value="1.0">
                 </div>
                 <div class="setting-group">
                     <label>Crestas de la Ola (entero, sin costura) <span id="val-wave-freq" class="highlight">3</span></label>
@@ -1047,6 +1068,7 @@
         // pero la forma (pozo, ola, giro) se mueve como fluido → estelas sin quiebres tipo electrocardiograma
         let slowBass = 0.0;
         let visWaveAmp = WAVE_AMPLITUDE * WAVE_AMP_SCALE;
+        let baseWaveAmp = visWaveAmp;
         let visWaveSpeed = 0.25;
         let visSpin = 3.2;
 
@@ -1173,6 +1195,19 @@
         let _pipStream  = null;
         let _pipActive  = false;
         let bgAudioEl = null; // salida multimedia del teléfono (sigue sonando en segundo plano)
+        // ── Volumen general (curva perceptual: la mitad del control ≈ −12 dB) ──
+        let masterVol = null, MASTER_VOL = 0.8, VOL_BEFORE_MUTE = 0.8;
+        try { const v = parseFloat(localStorage.getItem('esferas_volumen')); if (v >= 0 && v <= 1) MASTER_VOL = v; } catch (_) {}
+        function volCurve(v) { return v * v; }
+        function setMasterVolume(v) {
+            MASTER_VOL = Math.max(0, Math.min(1, v));
+            if (masterVol && audioCtx) masterVol.gain.setTargetAtTime(volCurve(MASTER_VOL), audioCtx.currentTime, 0.04);
+            if (typeof RADIO !== 'undefined' && RADIO.el && RADIO.plain) RADIO.el.volume = volCurve(MASTER_VOL);
+            const sl = document.getElementById('vol-master'); if (sl && +sl.value !== MASTER_VOL) sl.value = MASTER_VOL;
+            const lb = document.getElementById('val-vol'); if (lb) lb.textContent = Math.round(MASTER_VOL * 100);
+            const bm = document.getElementById('btn-mute'); if (bm) bm.textContent = MASTER_VOL === 0 ? '🔇' : MASTER_VOL < 0.4 ? '🔉' : '🔊';
+            try { localStorage.setItem('esferas_volumen', String(MASTER_VOL)); } catch (_) {}
+        }
 
         // Al volver a la página, reanuda el audio si el sistema lo hubiera pausado
         document.addEventListener('visibilitychange', () => {
@@ -1376,23 +1411,27 @@
                 comp.attack.value = 0.02;
                 comp.release.value = 0.35;
                 outBus.connect(comp);
+                // Volumen general (después del compresor; los visuales no dependen de él)
+                masterVol = audioCtx.createGain();
+                masterVol.gain.value = volCurve(MASTER_VOL);
+                comp.connect(masterVol);
                 // En el teléfono el sonido sale por un elemento <audio> del sistema: Android/iOS lo tratan
                 // como reproducción multimedia y no lo silencian al minimizar o cambiar de app
                 // (aparece el control de reproducción en la notificación). En PC, salida directa (menor latencia).
                 if (IS_MOBILE && audioCtx.createMediaStreamDestination) {
                     const md = audioCtx.createMediaStreamDestination();
-                    comp.connect(md);
+                    masterVol.connect(md);
                     bgAudioEl = document.createElement('audio');
                     bgAudioEl.setAttribute('playsinline', '');
                     bgAudioEl.srcObject = md.stream;
                     const p = bgAudioEl.play();
                     if (p && p.catch) p.catch(() => {           // si el sistema no lo permite: salida directa
-                        try { comp.disconnect(md); } catch (_) {}
-                        comp.connect(audioCtx.destination);
+                        try { masterVol.disconnect(md); } catch (_) {}
+                        masterVol.connect(audioCtx.destination);
                         bgAudioEl = null;
                     });
                 } else {
-                    comp.connect(audioCtx.destination);
+                    masterVol.connect(audioCtx.destination);
                 }
                 outBus.connect(analyser);
 
@@ -2733,6 +2772,7 @@
             liftBowsAgainst(freq);
             spheres.live.push(playCelestialVoice(freq, vel, ring, false, { pad: false, pure: true }));
             registerFreqColor(freq, vel);
+            waterSurgeKick(Math.pow(vel, 2.2) * 0.9);   // los acentos de frase levantan la marea
             // Mano izquierda (bajo, arpegios, Alberti) y ornamentos de la línea, sobre la misma nota
             scheduleLeftHand(world, ratio, dur, isLong, vel, toEnd);
             scheduleOrnament(world, idx, dur, dir, vel, toEnd);
@@ -2835,6 +2875,112 @@
                 console.warn('Error al acceder al micrófono:', err);
                 lblMic.textContent = 'Sin Permiso';
             }
+        }
+
+        // ══════════════ RADIO TAGUA TAGUA (en vivo) ══════════════
+        // Pasa por la misma cadena que todo (reverbera con el cosmos, la analiza la galaxia, respeta el
+        // volumen). Si el servidor no permite analizar el audio (CORS), suena directo sin análisis.
+        const TAGUA_TAGUA_STREAM_URL = 'https://stream.zeno.fm/lsthmognp16uv';
+        const RADIO = { el: null, src: null, an: null, playing: false, plain: false, probeT: null };
+        function setRadioUI(state) {
+            const btn = document.getElementById('btn-radio'), lbl = document.getElementById('lbl-radio');
+            if (!btn) return;
+            btn.classList.toggle('active-source', state === 'live' || state === 'live-plain');
+            lbl.textContent = state === 'connecting' ? 'Conectando…' : state === 'live' ? 'En vivo · Tagua Tagua'
+                            : state === 'live-plain' ? 'En vivo (sin análisis)' : state === 'error' ? 'Sin señal · reintentar' : 'Radio Tagua Tagua';
+        }
+        function stopRadio() {
+            clearTimeout(RADIO.probeT);
+            if (RADIO.el) { try { RADIO.el.pause(); RADIO.el.removeAttribute('src'); RADIO.el.load(); } catch (_) {} }
+            if (RADIO.src) { try { RADIO.src.disconnect(); } catch (_) {} }
+            RADIO.el = RADIO.src = RADIO.an = null; RADIO.playing = false; RADIO.plain = false;
+            setRadioUI('off');
+        }
+        function startRadio(plain) {
+            ensureAudioContext();
+            stopRadio();
+            setRadioUI('connecting');
+            const el = new Audio();
+            el.preload = 'none';
+            if (!plain) el.crossOrigin = 'anonymous';
+            el.src = TAGUA_TAGUA_STREAM_URL;
+            RADIO.el = el; RADIO.plain = !!plain;
+            if (!plain) {
+                RADIO.src = audioCtx.createMediaElementSource(el);
+                RADIO.src.connect(outBus);
+                RADIO.an = audioCtx.createAnalyser(); RADIO.an.fftSize = 256;
+                RADIO.src.connect(RADIO.an);
+            } else el.volume = volCurve(MASTER_VOL);
+            const fail = () => {
+                if (RADIO.el !== el) return;
+                if (!plain) startRadio(true);        // segundo intento: directo
+                else { stopRadio(); setRadioUI('error'); }
+            };
+            el.addEventListener('error', fail, { once: true });
+            el.play().then(() => {
+                if (RADIO.el !== el) return;
+                RADIO.playing = true;
+                setRadioUI(plain ? 'live-plain' : 'live');
+                showFloatingNote('📻 Radio Tagua Tagua', 'En vivo');
+                if (!plain) {
+                    // Si el audio llega pero el análisis da silencio absoluto, el servidor bloquea el análisis
+                    const buf = new Float32Array(RADIO.an.fftSize);
+                    let checks = 0, heard = false;
+                    const probe = () => {
+                        if (RADIO.el !== el) return;
+                        RADIO.an.getFloatTimeDomainData(buf);
+                        for (let i = 0; i < buf.length; i++) if (Math.abs(buf[i]) > 1e-5) { heard = true; break; }
+                        if (heard) return;
+                        if (++checks >= 8 && el.currentTime > 1.5) { startRadio(true); return; }
+                        RADIO.probeT = setTimeout(probe, 600);
+                    };
+                    RADIO.probeT = setTimeout(probe, 1200);
+                }
+            }).catch(fail);
+        }
+        function toggleRadio() { (RADIO.playing || RADIO.el) ? stopRadio() : startRadio(false); }
+
+        // ══════════════ OLEAJE: la ola responde como el agua ══════════════
+        // Cada golpe empuja la superficie: sube, se hunde un poco bajo el nivel, oscila y se asienta en la
+        // amplitud configurada (oscilador amortiguado: ~0.42 Hz, amortiguamiento 0.32). Lo empujan las
+        // notas MIDI, las Esferas y los golpes detectados en la radio, los archivos y el micrófono.
+        const SURGE = { x: 0, v: 0, gain: 1.0, eAvg: 0.05, ePrev: 0, lastOnset: 0 };
+        try { const g = parseFloat(localStorage.getItem('esferas_oleaje')); if (g >= 0) SURGE.gain = g; } catch (_) {}
+        function waterSurgeKick(strength) {
+            SURGE.v += Math.max(0, Math.min(2.5, strength)) * 3.8;
+        }
+        function updateWaterSurge(delta, energy, freqBins, binHz) {
+            // Golpes en audio externo (radio / archivo / micrófono): energía que salta sobre su media móvil
+            const external = isFilePlaying || isMicActive || (RADIO.playing && !RADIO.plain);
+            if (external) {
+                SURGE.eAvg += (energy - SURGE.eAvg) * (1 - Math.exp(-delta / 1.2));
+                const now = performance.now();
+                if (energy > SURGE.eAvg * 1.3 + 0.05 && energy > SURGE.ePrev && now - SURGE.lastOnset > 180) {
+                    const st = Math.min(1.6, (energy - SURGE.eAvg) / Math.max(0.08, SURGE.eAvg));
+                    waterSurgeKick(st * 0.55);
+                    SURGE.lastOnset = now;
+                    // Onda de color con el tono dominante del golpe
+                    if (freqBins && st > 0.35) {
+                        let bi = 1, bv = 0;
+                        for (let i = 1; i < 60; i++) if (freqBins[i] > bv) { bv = freqBins[i]; bi = i; }
+                        registerFreqColor(Math.max(55, bi * binHz), Math.min(1, 0.4 + st * 0.4));
+                    }
+                }
+            }
+            SURGE.ePrev = energy;
+            const w = 2 * Math.PI * 0.42, z = 0.32;
+            let t = Math.min(delta, 0.2);
+            while (t > 0) {
+                const h = Math.min(t, 0.02);
+                const a = -w * w * SURGE.x - 2 * z * w * SURGE.v;
+                SURGE.v += a * h; SURGE.x += SURGE.v * h;
+                t -= h;
+            }
+        }
+        // Cresta con saturación suave (como el agua: crece, pero no se desborda); el valle, poco profundo
+        function surgeMultiplier() {
+            const x = SURGE.x;
+            return 1 + SURGE.gain * (x > 0 ? 1.5 * Math.tanh(x / 1.5) : Math.max(-0.4, x));
         }
 
         function handleAudioFileSelect(e) {
@@ -3221,6 +3367,7 @@
 
             // Dinámica orgánica: la fuerza sube la marea (luego vuelve al basal), la densidad acelera el giro
             midiEnergy = Math.min(2.0, midiEnergy + Math.pow(normVel, 1.8) * 0.9);
+            waterSurgeKick(Math.pow(normVel, 1.8) * 1.1);
             noteTimes.push(performance.now());
             registerFreqColor(freq, normVel);
 
@@ -3333,6 +3480,7 @@
                 }
             }
 
+            updateWaterSurge(delta, rawBass * 0.65 + rawMid * 0.35, freqData, audioCtx ? audioCtx.sampleRate / (analyser ? analyser.fftSize : 512) : 86);
             midiBoostBass = Math.max(0, midiBoostBass - delta * 2.2);
             midiBoostMid  = Math.max(0, midiBoostMid  - delta * 2.0);
             midiBoostHigh = Math.max(0, midiBoostHigh - delta * 2.6);
@@ -4275,6 +4423,22 @@
             // Tocar el indicador 🎹 del panel abre Configuración en el selector de salida
             document.getElementById('midi-indicator').addEventListener('click', () => openSettingsAt(['sel-midi-out']));
             // ⚙ junto a las Esferas: instrumentos (paleta, piano, mano izquierda)
+            document.getElementById('btn-radio').addEventListener('click', toggleRadio);
+            const volSl = document.getElementById('vol-master');
+            volSl.addEventListener('input', (e) => setMasterVolume(parseFloat(e.target.value)));
+            document.getElementById('btn-mute').addEventListener('click', () => {
+                if (MASTER_VOL > 0) { VOL_BEFORE_MUTE = MASTER_VOL; setMasterVolume(0); }
+                else setMasterVolume(VOL_BEFORE_MUTE || 0.8);
+            });
+            setMasterVolume(MASTER_VOL);
+            const slSurge = document.getElementById('slider-surge');
+            slSurge.value = SURGE.gain;
+            document.getElementById('val-surge').textContent = SURGE.gain.toFixed(1);
+            slSurge.addEventListener('input', (e) => {
+                SURGE.gain = parseFloat(e.target.value);
+                document.getElementById('val-surge').textContent = SURGE.gain.toFixed(1);
+                try { localStorage.setItem('esferas_oleaje', String(SURGE.gain)); } catch (_) {}
+            });
             document.getElementById('btn-sound-cfg').addEventListener('click', () =>
                 openSettingsAt(['sel-palette', 'chk-piano-on', 'slider-lh-level']));
             btnAudioDock.addEventListener('click', () => {
@@ -5794,8 +5958,11 @@
 
             // 4. Amplitud de la Ola (escala de la ola previa), graves lentos, Lagrange y modo plano
             // Marea: las notas fuertes la levantan (fuerza^1.8, decae ~1.6 s al basal)
-            const targetWaveAmp = WAVE_AMPLITUDE * WAVE_AMP_SCALE * (1.0 + Math.min(1.2, slowBass * 0.6) + midiEnergy * 0.9) * lagrangeDamping * waveMix;
-            visWaveAmp += (targetWaveAmp - visWaveAmp) * kSlow;
+            // Nivel de reposo = amplitud configurada (+ un poco con los graves sostenidos); el oleaje la
+            // levanta con cada golpe y la devuelve oscilando como el agua
+            const targetWaveAmp = WAVE_AMPLITUDE * WAVE_AMP_SCALE * (1.0 + Math.min(1.2, slowBass * 0.5)) * lagrangeDamping * waveMix;
+            baseWaveAmp += (targetWaveAmp - baseWaveAmp) * kSlow;
+            visWaveAmp = baseWaveAmp * surgeMultiplier();
             const effectiveWaveAmp = visWaveAmp;
             const effectiveWaveFreq = WAVE_FREQUENCY;
 
