@@ -154,10 +154,22 @@
         body.movil #ph-toasts { top: 58px; width: min(300px, 60vw); }
         body.movil #settings-panel, body.movil #music-panel, body.movil #radio-panel, body.movil #terrain-editor {
             left: 8px !important; right: 8px !important; width: auto !important; top: 52px !important; bottom: auto !important; max-height: 72vh; overflow-y: auto; }
-        body.movil .ui-overlay, body.movil .top-buttons, body.movil #piki-hud, body.movil #view-chip, body.movil #mob-actions,
-        body.movil #mob-inst, body.movil #launch-chip { transition: opacity .6s; }
-        body.movil.ui-idle .ui-overlay, body.movil.ui-idle .top-buttons, body.movil.ui-idle #piki-hud, body.movil.ui-idle #view-chip,
-        body.movil.ui-idle #mob-actions, body.movil.ui-idle #mob-inst, body.movil.ui-idle #launch-chip { opacity: 0; pointer-events: none; }
+        .ui-overlay, .top-buttons, #piki-hud, #view-chip, #mob-actions, #mob-inst, #launch-chip, #controls { transition: opacity .6s; }
+        body.ui-idle .ui-overlay, body.ui-idle .top-buttons, body.ui-idle #piki-hud, body.ui-idle #view-chip,
+        body.ui-idle #mob-actions, body.ui-idle #mob-inst, body.ui-idle #launch-chip, body.ui-idle #controls { opacity: 0; pointer-events: none; }
+        /* paneles de información y teclas: minimizables */
+        .pn-tog { pointer-events: auto; cursor: pointer; font-size: 9px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #94a3b8; }
+        .pn-tog:hover { color: #e2e8f0; }
+        .ui-overlay h1 { display: inline-block; }
+        .ui-overlay .pn-tog { display: inline-block; vertical-align: middle; margin-left: 14px; white-space: nowrap; text-shadow: none; }
+        .ui-overlay.min p:not(#mode-status) { display: none; }
+        .ui-overlay.min h1 { font-size: 1.15rem; }
+        #controls .pn-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 6px;
+            font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #cbd5e1; }
+        #controls.min #controls-body { display: none; }
+        #controls.min .pn-head { margin-bottom: 0; }
+        #controls.min { padding: 9px 14px; }
+        body.movil .ui-overlay .pn-tog { display: none; }
         body.movil.ui-idle .joy-base { opacity: .28; }
         #piki-hud { position: absolute; left: 20px; top: 205px; width: 200px; z-index: 12; background: rgba(6, 10, 22, 0.72); color: #e2e8f0;
             border: 1px solid rgba(99, 245, 161, 0.35); border-radius: 12px; padding: 10px 12px; font-size: 11px; backdrop-filter: blur(8px); }
@@ -214,7 +226,7 @@
     </div>
 
     <div class="ui-overlay">
-        <h1 class="text-4xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-300 drop-shadow-md">AeroCosmos</h1>
+        <h1 class="text-4xl font-black tracking-tighter uppercase text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-300 drop-shadow-md">AeroCosmos</h1><span class="pn-tog" id="info-tog">ocultar información</span>
         <p class="text-[11px] uppercase tracking-widest text-amber-300 font-bold">Cartógrafo · un mundo hecho solo de tus dibujos</p>
         <p class="text-[10px] opacity-70 font-mono" id="tinta-load"></p>
         <p class="text-xs opacity-90 mt-1 font-mono" id="coords">Lat: 0 | Lon: 0</p>
@@ -277,6 +289,7 @@
         </div>
         <div class="control-group">
             <label class="te-chk" style="font-size:12px;color:#e2e8f0"><input type="checkbox" id="cfg-corrientes" checked> Ver corrientes de aire (rojo sube, azul baja)</label>
+            <label class="te-chk" style="font-size:12px;color:#e2e8f0"><input type="checkbox" id="cfg-estable" checked> Cámara estable en vuelo (horizonte nivelado)</label>
         </div>
         <div class="control-group">
             <label>Curvas de nivel: <span id="val-contour">85</span>%</label>
@@ -338,6 +351,8 @@
     </div>
 
     <div class="controls-hint" id="controls">
+        <div class="pn-head"><span>Teclas</span><span class="pn-tog" id="keys-tog">ocultar</span></div>
+        <div id="controls-body">
         <p><strong>Click + arrastrar:</strong> mirar</p>
         <p><strong>WASD:</strong> moverse</p>
         <p><strong>Z / X:</strong> subir / bajar</p>
@@ -345,6 +360,7 @@
                     <p><strong>5:</strong> águila · <strong>M:</strong> mapa · <strong>E:</strong> editor</p>
                     <p><strong>Vista de ave:</strong> arrastra o WASD para recorrer · <strong>H:</strong> acariciar</p>
                     <p><strong>En parapente:</strong> arrastrar gira la cámara en torno a Pikitipu · <strong>N:</strong> groove on/off</p>
+        </div>
     </div>
 
     <div id="terrain-editor">
@@ -1911,7 +1927,7 @@
                 inst.style.display = 'block';
                 setModeUI('fly');
                 pg.velocity.set(0, 0, 0);
-                pg.pitchAngle = 0; pg.rollAngle = 0; pg.targetRoll = 0; pg.targetPitch = 0;
+                pg.pitchAngle = 0; pg.rollAngle = 0; pg.targetRoll = 0; pg.targetPitch = 0; LAND.on = false; LAND.k = 0;
                 cameraRotX = 0;
                 Object.assign(PGX, { ears: 0, spiral: 0, V: launching ? 4 : 10.5, bank: 0, brake: 0, bar: 0, stall: 0, stallT: 0, pitchOsc: 0, pitchVel: 0, vz: 0, launchT: launching ? 4.0 : 0 });
                 if (launching) { pkToast && pkToast('Despegue', 'Corre ladera abajo… la vela se infla.', '#63f5a1'); document.getElementById('launch-chip').style.display = 'none'; }
@@ -1965,7 +1981,30 @@
             lastMousePos = { x: e.clientX, y: e.clientY };
         }
 
+        // Cámara estable: como un gimbal, el horizonte queda casi nivelado; la vela y Pikitipu sí se inclinan
+        let CAM_STABLE = (() => { try { return localStorage.getItem('aerocosmos.estable') !== 'off'; } catch (_) { return true; } })();
+        // Aterrizaje: recogida (flare) automática en los últimos metros y carrera de salida con la vela cayendo atrás
+        const LAND = { on: false, t: 0, dur: 1.8, v: 0, dx: 0, dz: 0, k: 0, step: 0 };
+        function landRunout(dt) {
+            const P = camera.position;
+            LAND.t += dt; const k = Math.min(1, LAND.t / LAND.dur); LAND.k = k;
+            const v = LAND.v * Math.pow(1 - k, 1.6) + 1.2 * (1 - k);          // frena corriendo hasta quedar de pie
+            P.x += LAND.dx * v * dt; P.z += LAND.dz * v * dt;
+            const g = Math.max(SEA_LEVEL, noise.get(P.x, P.z));
+            LAND.step += v * dt * 1.9;
+            P.y = g + 1.7 + Math.sin(LAND.step * 2) * 0.06 * Math.min(1, v / 3);
+            camera.rotation.order = 'YXZ';
+            camera.rotation.z *= Math.max(0, 1 - dt * 6);
+            camera.rotation.x += (THREE.MathUtils.clamp(cameraRotX, -0.4, 0.2) - camera.rotation.x) * Math.min(1, dt * 3);
+            camera.rotation.y = cameraRotY;
+            const st = Math.floor(LAND.step / Math.PI); if (st !== WALK.step && v > 0.6) { WALK.step = st; footstep(false); }
+            pg.rollAngle *= Math.max(0, 1 - dt * 4);
+            document.getElementById('inst-spd').innerText = (v * 3.6).toFixed(0);
+            document.getElementById('inst-var').innerText = '0.0';
+            if (k >= 1) { LAND.on = false; LAND.k = 0; WALK.phase = LAND.step; enterWalk(); }
+        }
         function updateParaglider(dt) {
+            if (LAND.on) { landRunout(dt); return; }
             // =================================================================
             // VUELO REAL DE PARAPENTE
             // -----------------------------------------------------------------
@@ -2010,7 +2049,9 @@
             if (PGX.brake > 0.93) PGX.stallT += dt; else PGX.stallT = Math.max(0, PGX.stallT - dt * 2);
             if (PGX.stallT > 1.3 && !PGX.stall) { PGX.stall = 1; pkMood && pkMood('¡Pérdida! Suelta los frenos'); }
             if (PGX.stall && PGX.brake < 0.45) { PGX.stall = Math.max(0, PGX.stall - dt * 0.7); if (PGX.stall === 0) PGX.pitchVel -= 0.9; }   // recuperación: abatida
-            const Vt = PGX.stall ? 4 : 10.5 + 3.6 * PGX.bar - 3.6 * PGX.brake - 0.8 * PGX.ears + 5.5 * PGX.spiral;
+            // recogida: en los últimos metros el piloto frena a fondo y el ala flota
+            const flare = PGX.launchT > 0 || PGX.spiral > 0.3 ? 0 : 1 - smoothstep(2.2, 7, agl);
+            const Vt = PGX.stall ? 4 : 10.5 + 3.6 * PGX.bar - 3.6 * PGX.brake - 0.8 * PGX.ears + 5.5 * PGX.spiral - 4.5 * flare;
             const dV = Vt - PGX.V;
             PGX.V += dV * Math.min(1, dt * 1.1);
             // péndulo: el piloto bajo la vela se balancea al cambiar de velocidad
@@ -2025,6 +2066,7 @@
             let sink = PGX.stall ? THREE.MathUtils.lerp(sinkPolar, 5.8, PGX.stall) : sinkPolar * Math.pow(load, 1.5);
             sink += 2.4 * PGX.ears;
             sink = THREE.MathUtils.lerp(sink, 3 + 11 * PGX.spiral, smoothstep(0.15, 0.9, PGX.spiral));
+            sink *= 1 - 0.6 * flare;
             const omega = 9.81 * Math.tan(bank) / Math.max(5, PGX.V);
             cameraRotY += omega * dt;
 
@@ -2038,8 +2080,9 @@
 
             // --- cámara del piloto ---
             pg.rollAngle = bank;                                      // lo usan el avatar y la vela
-            camera.rotation.z = THREE.MathUtils.clamp(bank * 0.85, -0.75, 0.75) + tb * 0.04;
-            const totalPitch = THREE.MathUtils.clamp(cameraRotX - PGX.pitchOsc * 0.9 + tb * 0.03, -Math.PI / 2, Math.PI / 2);
+            const rollT = CAM_STABLE ? THREE.MathUtils.clamp(bank * 0.12, -0.12, 0.12) : THREE.MathUtils.clamp(bank * 0.85, -0.75, 0.75) + tb * 0.04;
+            camera.rotation.z += (rollT - camera.rotation.z) * Math.min(1, dt * (CAM_STABLE ? 1.5 : 8));
+            const totalPitch = THREE.MathUtils.clamp(cameraRotX - PGX.pitchOsc * (CAM_STABLE ? 0.2 : 0.9) + (CAM_STABLE ? 0 : tb * 0.03), -Math.PI / 2, Math.PI / 2);
             camera.rotation.x = THREE.MathUtils.lerp(camera.rotation.x, totalPitch, dt * 6);
             camera.rotation.y = cameraRotY;
 
@@ -2049,7 +2092,8 @@
                 PGX.launchT -= dt;
                 if (P.y < gNow + 1.7) { P.y = gNow + 1.7; PGX.V = Math.min(PGX.V + dt * 2.5, 10.5); }
                 if (PGX.launchT <= 0 && P.y - gNow < 1.8) { pkToast && pkToast('Despegue abortado', 'Faltó pendiente o viento de frente. Busca una ladera más empinada.', '#f59e0b'); enterWalk(); return; }
-            } else if (P.y < gNow + 1.0) {
+            } else if (P.y < gNow + 1.7) {
+                P.y = gNow + 1.7;
                 const gs = Math.hypot(pg.velocity.x, pg.velocity.z), hit = Math.max(-vz, 0);
                 const water = gNow <= SEA_LEVEL + 0.01;
                 const [tt, tx, col] = water ? ['Amerizaje', 'Estás nadando. Busca la orilla y sube un cerro para volver a volar.', '#5ce6ff']
@@ -2057,7 +2101,12 @@
                     : ['Aterrizaje', 'A pie. Sube un cerro y despega de cara al viento (T).', '#63f5a1'];
                 pkToast && pkToast(tt, tx, col);
                 if (!water && hit > 4.2 && AV.piki) AV.piki.squish = .26;
-                enterWalk(); return;
+                if (water) { enterWalk(); return; }
+                // carrera de salida: se corre unos pasos en la dirección de avance mientras la vela cae detrás
+                LAND.on = true; LAND.t = 0; LAND.k = 0; LAND.step = 0;
+                LAND.v = Math.min(gs, 9); LAND.dur = hit > 4.2 ? 1.1 : 1.4 + Math.min(1, gs / 9) * 0.8;
+                LAND.dx = gs > 0.1 ? pg.velocity.x / gs : -Math.sin(cameraRotY); LAND.dz = gs > 0.1 ? pg.velocity.z / gs : -Math.cos(cameraRotY);
+                PGX.vz = 0; return;
             }
 
             // --- instrumentos ---
@@ -2708,7 +2757,8 @@
             if (TE.open) {
                 // abre con el dibujo que estás sobrevolando
                 const isl = birdIsland(camera.position.x, camera.position.z);
-                teSelect(isl ? isl.d : (TE.d || TINTA.drawings[0]));
+                const pick = [isl && isl.d, TE.d, ...TINTA.drawings].find(x => x && x.cfg);
+                if (pick) teSelect(pick); else teInfo('Los dibujos aún se están preparando; vuelve a abrir el editor en unos segundos.');
             }
         }
         function teSelect(d) {
@@ -3143,12 +3193,22 @@
             curInit();
             const cc = document.getElementById('cfg-corrientes'); cc.checked = CUR.on; curSet(CUR.on);
             cc.addEventListener('change', e => curSet(e.target.checked));
+            const ce = document.getElementById('cfg-estable'); ce.checked = CAM_STABLE;
+            ce.addEventListener('change', e => { CAM_STABLE = e.target.checked; try { localStorage.setItem('aerocosmos.estable', CAM_STABLE ? 'on' : 'off'); } catch (_) {} });
             // panel de Pikitipu: minimizable (se recuerda); en celular parte minimizado
             const ph = document.getElementById('piki-hud');
             let phMin = IS_MOBILE; try { const v = localStorage.getItem('aerocosmos.pikihud'); if (v) phMin = v === 'min'; } catch (_) {}
             const phSet = m => { ph.classList.toggle('min', m); document.getElementById('ph-tog').textContent = m ? 'ver' : 'ocultar'; try { localStorage.setItem('aerocosmos.pikihud', m ? 'min' : 'open'); } catch (_) {} };
             phSet(phMin);
             ph.querySelector('.ph-head').addEventListener('click', e => { e.stopPropagation(); phSet(!ph.classList.contains('min')); });
+            // paneles de información y de teclas: también minimizables y recordados
+            [['.ui-overlay', 'info-tog', 'aerocosmos.info', 'ocultar información', 'ver información'],
+             ['#controls', 'keys-tog', 'aerocosmos.teclas', 'ocultar', 'ver']].forEach(([sel, tog, key, on, off]) => {
+                const el = document.querySelector(sel), tg = document.getElementById(tog);
+                const set = m => { el.classList.toggle('min', m); tg.textContent = m ? off : on; try { localStorage.setItem(key, m ? 'min' : 'open'); } catch (_) {} };
+                let m0 = false; try { m0 = localStorage.getItem(key) === 'min'; } catch (_) {}
+                set(m0); tg.addEventListener('click', e => { e.stopPropagation(); set(!el.classList.contains('min')); uiWake(); });
+            });
             VIEW.focusX = camera.position.x; VIEW.focusZ = camera.position.z;
 
             // Rueda: subir = acercarse (hacia 1ª persona) · bajar = alejarse (hacia vista de ave)
@@ -3939,7 +3999,9 @@ void main(){
             pkEvoUpdate(dt);
             // la vela existe solo en modo parapente; si no, Pikitipu flota y respira en el aire
             AV.wing.visible = isParagliding && AV.pikiHolder.visible && (PK.evoPhase !== 'materialize' || PK.evoTimer < 1.0);
-            AV.pikiHolder.position.y = isParagliding ? 0 : isWalking ? 1.15 + WALK.hop : 0.6;
+            AV.pikiHolder.position.y = isParagliding ? (LAND.on ? 1.15 * smoothstep(0, 0.6, LAND.k) : 0) : isWalking ? 1.15 + WALK.hop : 0.6;
+            const wk = LAND.on ? smoothstep(0.05, 1, LAND.k) : 0;              // la vela pierde presión y cae hacia atrás
+            AV.wing.position.set(0, -2.6 * wk, 5.5 * wk); AV.wing.rotation.x = -1.35 * wk;
 
             // el avatar en el mundo
             AV.root.visible = b < 1.85 || eg > 0.01;
@@ -4501,13 +4563,13 @@ void main(){
             const mag = Math.min(1, Math.hypot(mx, mz));
             const run = keys['ShiftLeft'] || keys['ShiftRight'] || (JOY.la && Math.hypot(JOY.lx, JOY.ly) > 0.92);
             const g = noise.get(P.x, P.z), water = g < SEA_LEVEL - 1.2;
-            let speed = (water ? 1.3 : run ? 6.2 : 2.6) * mag;
+            let speed = (water ? 2.2 : run ? 14 : 5.5) * mag;   // el mundo es grande: paso largo y carrera de travesía
             if (mag > 0) {
                 const s = Math.sin(cameraRotY), c = Math.cos(cameraRotY);
                 const dx = (mx * c + mz * s) / Math.max(1, Math.hypot(mx, mz)), dz = (-mx * s + mz * c) / Math.max(1, Math.hypot(mx, mz));
                 const nx = P.x + dx * speed * dt, nz = P.z + dz * speed * dt, g2 = noise.get(nx, nz);
                 const grade = (g2 - g) / Math.max(0.001, speed * dt);
-                if (grade > 1.0 && !water) speed = 0;                                   // pared: demasiado empinado (>45°)
+                if (grade > 1.2 && !water) speed = 0;                                   // pared: demasiado empinado (>45°)
                 else {
                     const k = grade > 0 ? THREE.MathUtils.clamp(1 - grade * 1.3, 0.3, 1) : Math.min(1.25, 1 - grade * 0.3);
                     P.x += dx * speed * k * dt; P.z += dz * speed * k * dt; speed *= k;
@@ -4520,7 +4582,7 @@ void main(){
             if (P.y <= eye) { if (!WALK.onGround && WALK.vy < -6) AV.piki && (AV.piki.squish = .2); P.y = eye; WALK.vy = 0; WALK.onGround = true; }
             // balanceo de la cabeza y pasos
             if (WALK.onGround && speed > 0.2) {
-                WALK.phase += speed * dt * 1.9;
+                WALK.phase += Math.min(speed, 7) * dt * 1.9;
                 P.y += Math.sin(WALK.phase * 2) * 0.05 * Math.min(1, speed / 3);
                 camera.rotation.z = Math.sin(WALK.phase) * 0.012;
                 const st = Math.floor(WALK.phase / Math.PI); if (st !== WALK.step) { WALK.step = st; footstep(water); }
@@ -4557,7 +4619,7 @@ void main(){
         const COMMON_HINT = `<p><strong>Rueda / V:</strong> ave, 3ª o 1ª persona · <strong>5:</strong> águila · <strong>M:</strong> mapa · <strong>E:</strong> editor</p>
                    <p><strong>H:</strong> acariciar · <strong>N:</strong> groove on/off</p>`;
         function setModeUI(mode) {
-            document.getElementById('controls').innerHTML = MODE_HINTS[mode] + COMMON_HINT;
+            document.getElementById('controls-body').innerHTML = MODE_HINTS[mode] + COMMON_HINT;
             document.getElementById('mode-status').innerText = { free: 'Modo: exploración libre', fly: 'Modo: piloto de parapente', walk: 'Modo: a pie' }[mode];
             document.getElementById('launch-chip').style.display = mode === 'walk' ? 'block' : 'none';
             document.body.dataset.mode = mode;
@@ -4643,7 +4705,6 @@ void main(){
         // interfaz mínima: tras 5 s sin tocar, se desvanece; un toque la trae de vuelta
         let uiTimer = null;
         function uiWake() {
-            if (!IS_MOBILE) return;
             document.body.classList.remove('ui-idle');
             clearTimeout(uiTimer);
             uiTimer = setTimeout(() => {
@@ -4657,7 +4718,16 @@ void main(){
             el.addEventListener('touchend', e => { e.preventDefault(); off && off(); });
             el.addEventListener('mousedown', on); el.addEventListener('mouseup', () => off && off());
         }
+        function desktopIdleInit() {
+            if (IS_MOBILE) return;
+            // el mouse quieto o arrastrando la cámara no cuenta; moverlo sin arrastrar, la rueda o un clic, sí
+            window.addEventListener('mousemove', () => { if (!isMouseDown) uiWake(); }, { passive: true });
+            ['wheel', 'click'].forEach(ev => window.addEventListener(ev, uiWake, { passive: true }));
+            window.addEventListener('keydown', e => { if (e.code === 'Escape' || e.code === 'Tab') uiWake(); });
+            uiWake();
+        }
         function mobileInit() {
+            desktopIdleInit();
             if (!IS_MOBILE) return;
             document.body.classList.add('movil');
             joyBind('joy-left', 'l'); joyBind('joy-right', 'r');
