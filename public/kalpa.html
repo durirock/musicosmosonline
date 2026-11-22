@@ -305,39 +305,129 @@
         #visualizer-container.minimized #visualizer-canvas { opacity: 0; height: 0; }
         #visualizer-container.minimized + .visualizer-expand { display: flex; } 
         
+        /* ── PORTAL ── controles táctiles, velo y avisos de la antesala ─────────── */
         #touch-controls {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            width: 100%; height: 100%; pointer-events: none; z-index: 999; display: none; 
+            width: 100%; height: 100%; pointer-events: none; z-index: 999; display: none;
         }
-        #joystick-container {
-            position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px;
-            background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 60%);
-            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 50%;
-            display: flex; justify-content: center; align-items: center; pointer-events: auto;
+        #touch-controls.activo { display: block; }
+        .kp-stick {
+            position: absolute; bottom: calc(28px + env(safe-area-inset-bottom));
+            width: 124px; height: 124px; border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 65%);
+            display: flex; justify-content: center; align-items: center;
+            pointer-events: auto; touch-action: none;
         }
-        #joystick-knob {
-            width: 40px; height: 40px; background-color: rgba(255, 255, 255, 0.2);
-            border-radius: 50%; position: absolute;
-            box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
-            transition: transform 0.05s; backdrop-filter: blur(2px);
+        #kp-stick-izq { left: calc(28px + env(safe-area-inset-left)); }
+        #kp-stick-der { right: calc(28px + env(safe-area-inset-right)); }
+        .kp-stick::after {
+            position: absolute; bottom: -18px; left: 0; right: 0; text-align: center;
+            font-size: 9px; letter-spacing: 3px; color: rgba(255,255,255,0.3);
         }
-        #hyperspace-btn {
-            position: absolute; bottom: 50px; right: 50px; width: 80px; height: 80px; border-radius: 50%;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, rgba(0,0,0,0) 60%);
-            pointer-events: auto; display: flex; justify-content: center; align-items: center;
-            font-size: 24px; color: rgba(255, 255, 255, 0.6);
+        #kp-stick-izq::after { content: 'MOVER'; }
+        #kp-stick-der::after { content: 'MIRAR'; }
+        .kp-knob {
+            width: 50px; height: 50px; border-radius: 50%; pointer-events: none;
+            background: rgba(255, 255, 255, 0.18);
+            box-shadow: 0 0 18px rgba(77, 219, 255, 0.25);
         }
-        
-        canvas { display: block; }
+        #kp-botones {
+            position: absolute; right: calc(28px + env(safe-area-inset-right));
+            bottom: calc(176px + env(safe-area-inset-bottom));
+            display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+            pointer-events: auto;
+        }
+        .kp-bt {
+            min-width: 86px; padding: 9px 12px; border-radius: 999px;
+            background: rgba(5, 12, 25, 0.6); border: 1px solid rgba(77, 219, 255, 0.35);
+            color: #b3ecff; font: 10px 'Courier New', monospace; letter-spacing: 2px;
+            text-transform: uppercase; touch-action: none; -webkit-tap-highlight-color: transparent;
+        }
+        .kp-bt.activo { background: rgba(77, 219, 255, 0.22); border-color: #4DDBFF; color: #fff; box-shadow: 0 0 14px -4px #4DDBFF; }
+        @media (pointer: coarse) {
+            #visualizer-container { width: 46vw; }
+        }
+
+        #kp-velo {
+            position: fixed; inset: 0; z-index: 5000; pointer-events: none; opacity: 1;
+            background: radial-gradient(circle at 50% 50%, var(--kp-velo, #000) 0%, #000 72%);
+            transition: opacity 0.9s ease;
+        }
+        #kp-velo.oculto { opacity: 0; }
+
+        #kp-avisos {
+            position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 300;
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            pointer-events: none; width: max-content; max-width: 92vw;
+        }
+        @media (pointer: coarse) { #kp-avisos { top: 74px; } }
+        .kp-aviso-titulo { white-space: nowrap; }
+        .kp-aviso {
+            display: none; align-items: center; gap: 16px;
+            padding: 9px 10px 9px 18px; border-radius: 999px;
+            background: rgba(5, 12, 25, 0.72); border: 1px solid var(--kp-c, #4DDBFF);
+            box-shadow: 0 0 24px -6px var(--kp-c, #4DDBFF);
+            backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            pointer-events: auto;
+        }
+        .kp-aviso.visible { display: flex; animation: kpEntra 0.6s ease both; }
+        #kp-aviso-destino.visible { animation: kpEntra 0.6s ease both, kpLatido 3.2s ease-in-out 0.6s infinite; }
+        .kp-aviso-txt { display: flex; flex-direction: column; gap: 2px; }
+        .kp-aviso-titulo { font-size: 12px; letter-spacing: 3px; text-transform: uppercase; color: var(--kp-c, #4DDBFF); }
+        .kp-aviso-sub { font-size: 10px; letter-spacing: 1px; color: rgba(255,255,255,0.55); }
+        .kp-aviso-btn {
+            padding: 7px 14px; border-radius: 999px; cursor: pointer;
+            background: transparent; border: 1px solid var(--kp-c, #4DDBFF); color: #fff;
+            font: 11px 'Courier New', monospace; letter-spacing: 2px; text-transform: uppercase;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .kp-aviso-btn:hover { background: var(--kp-c, #4DDBFF); color: #000; }
+        .kp-tecla { margin-left: 6px; padding: 0 4px; border: 1px solid currentColor; border-radius: 3px; font-size: 9px; opacity: 0.6; }
+        @media (pointer: coarse) { .kp-tecla { display: none; } }
+        #kp-toast {
+            font-size: 10px; letter-spacing: 3px; text-transform: uppercase; color: rgba(179, 236, 255, 0.85);
+            text-shadow: 0 0 10px rgba(77, 219, 255, 0.6); opacity: 0; transition: opacity 0.4s ease;
+        }
+        #kp-toast.visible { opacity: 1; }
+        @keyframes kpEntra { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+        @keyframes kpLatido {
+            0%, 100% { box-shadow: 0 0 24px -6px var(--kp-c, #4DDBFF); }
+            50%      { box-shadow: 0 0 34px -2px var(--kp-c, #4DDBFF); }
+        }
+        /* ── FIN PORTAL ── */
+
+        canvas { display: block; touch-action: none; }
     </style>
 </head>
 <body>
 
     <div id="debug-info">
         KALPA AUDIO-REACTIVO<br>
-        <span style="color:rgba(255,255,255,0.4)">WASD: Mover | Q/E: Pitch 360° | 3: Estereograma | 4: Nivelar Vuelo</span>
+        <span style="color:rgba(255,255,255,0.4)">WASD: Mover | Q/E: Pitch 360° | 3: Estereograma | 4: Nivelar Vuelo</span><br>
+        <span style="color:rgba(255,255,255,0.4)">P: Piloto automático | C: Centrar | Enter: Entrar al portal | R: Volver al inicio</span>
     </div>
+
+    <!-- ── PORTAL ── velo de tránsito y avisos de la antesala -->
+    <div id="kp-velo"></div>
+    <div id="kp-avisos">
+        <div class="kp-aviso" id="kp-aviso-destino">
+            <div class="kp-aviso-txt">
+                <span class="kp-aviso-titulo" id="kp-destino-nombre">Planeta Funk</span>
+                <span class="kp-aviso-sub">portal abierto · puedes seguir volando</span>
+            </div>
+            <button class="kp-aviso-btn" id="kp-btn-entrar">Entrar<span class="kp-tecla">Enter</span></button>
+        </div>
+        <div class="kp-aviso" id="kp-aviso-volver">
+            <div class="kp-aviso-txt">
+                <span class="kp-aviso-titulo" id="kp-origen-nombre">Musicosmos</span>
+                <span class="kp-aviso-sub">punto de partida · o sigue hacia atrás</span>
+            </div>
+            <button class="kp-aviso-btn" id="kp-btn-volver">Volver<span class="kp-tecla">R</span></button>
+        </div>
+        <div id="kp-toast"></div>
+    </div>
+    <!-- ── FIN PORTAL ── -->
 
     <!-- VISUALIZADOR INFERIOR ORGÁNICO -->
     <div id="visualizer-container">
@@ -428,12 +518,17 @@
         <button class="btn-reset" id="btn-reset">Reiniciar Organismo</button>
     </div>
 
+    <!-- ── PORTAL ── controles táctiles (aparecen solos en pantallas táctiles) -->
     <div id="touch-controls">
-        <div id="joystick-container">
-            <div id="joystick-knob"></div>
+        <div class="kp-stick" id="kp-stick-izq"><div class="kp-knob"></div></div>
+        <div class="kp-stick" id="kp-stick-der"><div class="kp-knob"></div></div>
+        <div id="kp-botones">
+            <button class="kp-bt" id="kp-bt-centrar">Centrar</button>
+            <button class="kp-bt" id="kp-bt-piloto">Piloto</button>
+            <button class="kp-bt" id="kp-bt-turbo">Turbo</button>
         </div>
-        <div id="hyperspace-btn">⚡</div>
     </div>
+    <!-- ── FIN PORTAL ── -->
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
@@ -629,6 +724,9 @@
                     
                     // Asignación directa para evitar glitches al volver
                     // Usamos setValueAtTime para asegurar respuesta inmediata
+                    // ── PORTAL ── fadeMul baja a 0 al cruzar un portal (fundido de salida)
+                    if (typeof this.fadeMul === 'number') vol *= this.fadeMul;
+                    // ── FIN PORTAL ──
                     this.gainNode.gain.cancelScheduledValues(this.context.currentTime);
                     this.gainNode.gain.setValueAtTime(vol, this.context.currentTime);
                 }
@@ -912,9 +1010,11 @@
 
             // Movimiento & Rotación
             let ts = isTurbo ? TURBO_SPEED : NORMAL_SPEED; ts += AudioSystem.volume*200.0*r;
-            if(moveForward) currentSpeed += (ts-currentSpeed)*0.05;
-            else if(moveBackward) currentSpeed += (-ts-currentSpeed)*0.05;
-            else currentSpeed += (0-currentSpeed)*0.05;
+            // ── PORTAL ── empuje analógico: teclas W/S + joystick táctil izquierdo
+            const tactil = KalpaPortal.tactil;
+            const thr = Math.max(-1, Math.min(1, (moveForward ? 1 : 0) - (moveBackward ? 1 : 0) + tactil.thrust));
+            currentSpeed += (thr * ts - currentSpeed) * 0.05;
+            // ── FIN PORTAL ──
 
             if(rotateLeft) camera.rotateX(2.0*dt);
             if(rotateRight) camera.rotateX(-2.0*dt);
@@ -928,7 +1028,15 @@
             if(moveRight) vel.addScaledVector(right, NORMAL_SPEED*dt);
             if(moveUp) vel.addScaledVector(up, NORMAL_SPEED*dt);
             if(moveDown) vel.addScaledVector(up, -NORMAL_SPEED*dt);
+            // ── PORTAL ── desplazamiento lateral con el joystick táctil
+            if (tactil.strafe) vel.addScaledVector(right, tactil.strafe * NORMAL_SPEED * dt);
+            // ── FIN PORTAL ──
             camera.position.add(vel);
+
+            // ── PORTAL ── piloto automático, avisos del portal, centrado y mirada táctil
+            KalpaPortal.pilotear(dt, vel, thr);
+            KalpaPortal.tick(dt);
+            // ── FIN PORTAL ──
 
             updateProceduralGeneration();
 
@@ -966,6 +1074,12 @@
                 case 'Digit4': levelFlight(); break;
                 case 'Digit9': stereoFocus=Math.max(10,stereoFocus-10); break;
                 case 'Digit0': stereoFocus+=10; break;
+                // ── PORTAL ──
+                case 'KeyP': KalpaPortal.alternarPiloto(); break;
+                case 'KeyC': KalpaPortal.centrar(); break;
+                case 'Enter': case 'NumpadEnter': KalpaPortal.entrar(); break;
+                case 'KeyR': KalpaPortal.volver(); break;
+                // ── FIN PORTAL ──
             }
         }
         function onKeyUp(e) {
@@ -989,163 +1103,343 @@
             camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        init();
-
-        /*
-        ╔══════════════════════════════════════════════════════════════════╗
-        ║  COSMOS BRIDGE v1.0                                              ║
-        ║  Pega este bloque al FINAL del <script> principal de cada        ║
-        ║  universo. Cirugía limpia — cero interferencia con tu código.    ║
-        ║                                                                  ║
-        ║  CAMBIAR _COSMOS_ID por el id de este universo:                  ║
-        ║    index.html      → 'musicosmos'                               ║
-        ║    kalpa6.0.html   → 'kalpa'                                    ║
-        ║    planetafunk.html→ 'planetafunk'                              ║
-        ║    archhtml.html   → 'mundointerior'                            ║
-        ╚══════════════════════════════════════════════════════════════════╝
-        */
-
-        // ── COSMOS BRIDGE ──────────────────────────────────────────────────
-        ;(function() {
-            const _COSMOS_ID = 'kalpa';   // ← CAMBIAR según el universo
-
-            // Solo activa el bridge si estamos dentro del cosmos-shell (como iframe)
-            // Si el archivo se abre directamente, el bridge existe pero no hace nada dañino
-            const _inShell = window.parent !== window;
-            const _channel = new BroadcastChannel('cosmos-hifa');
-
-            // ── Escucha mensajes del shell ──────────────────────────────────
-            _channel.onmessage = (e) => {
-                const d = e.data;
-
-                // El shell avisa que este universo se volvió activo
-                if (d.type === 'universe-activated' && d.universe === _COSMOS_ID) {
-                    _onActivated(d.state);
-                }
-
-                // El shell avisa que este universo va a quedar en background
-                if (d.type === 'universe-leaving' && d.universe === _COSMOS_ID) {
-                    _onBackground();
-                }
-
-                // El usuario viene viajando hacia aquí — preparar animación de llegada
-                if (d.type === 'universe-incoming' && d.universe === _COSMOS_ID) {
-                    _onIncoming(d.portalType, d.origin);
-                }
-
-                // Evento de Killer Pendiente propagado por el shell
-                if (d.type === 'cegg-event') {
-                    _onCEGGEvent(d.payload);
-                }
+        // ═══════════════════════════════════════════════════════════════════════
+        // ── PORTAL ── KALPA · ANTESALA
+        // Kalpa es el túnel entre mundos. Lee la "maleta" de la URL:
+        //     kalpa.html?desde=musicosmos&hacia=planetafunk   (+ pv, seq, color… pasan intactos)
+        // Sin parámetros: viaje de Musicosmos a Planeta Funk.
+        //
+        // · Al entrar precarga el destino (Chrome/Edge). Cuando está listo aparece el aviso
+        //   "portal abierto": se puede entrar (Enter / botón) o seguir volando.
+        // · Si vuelves al punto de partida, se ofrece volver al mundo de origen (R / botón);
+        //   si sigues hacia atrás, el túnel continúa infinito.
+        // · Piloto automático (P): avanza solo, en la última dirección que elegiste.
+        // · Centrar (C): mirada al frente y de vuelta al eje del túnel.
+        // · Táctil: joystick izquierdo = mover, derecho = mirar, botones centrar/piloto/turbo,
+        //   y arrastrar con un dedo sobre la pantalla también mira.
+        //
+        // Un mundo de destino puede avisar que ya terminó de construirse con:
+        //     new BroadcastChannel('cosmos-portal').postMessage({ tipo: 'listo', mundo: 'planetafunk' })
+        // Si no avisa, Kalpa le da unos segundos y abre el portal igual.
+        // ═══════════════════════════════════════════════════════════════════════
+        const KalpaPortal = (() => {
+            // Archivos en public/. Si renombras un mundo, cámbialo solo aquí.
+            const MUNDOS = {
+                musicosmos:    { archivo: 'index.html',                  nombre: 'Musicosmos',      color: '#6B48FF' },
+                planetafunk:   { archivo: 'planetafunk.html',            nombre: 'Planeta Funk',    color: '#FF6B35' },
+                sagitario:     { archivo: 'agunegrosinf.html',           nombre: 'Sagitario A*',    color: '#FFB347' },
+                mundointerior: { archivo: 'mundointerior_completo.html', nombre: 'Mundo Interior',  color: '#7B3FE4' },
+                sol:           { archivo: 'chamalnquimyst.html',         nombre: 'Sol de Voluntad', color: '#FFD27A' }
             };
+            const AJUSTES = {
+                esperaMinima: 4,          // s mínimos de viaje antes de abrir el portal
+                esperaPrecarga: 8,        // s que se le dan al destino si no avisa que está listo
+                salioDelInicio: 1000,     // distancia a recorrer para que el inicio cuente como "regreso"
+                inicioAdelante: 250,      // banda alrededor del punto de partida donde se ofrece volver
+                inicioAtras: 400,
+                precargaRegreso: 1200,    // a esta distancia del inicio, volviendo, se precarga el origen
+                velocidadPiloto: 120,
+                duracionVelo: 900         // ms
+            };
+            const EJE_Y = new THREE.Vector3(0, 1, 0);
 
-            // ── Handlers de ciclo de vida ───────────────────────────────────
-            // (Personalizar cada uno según el universo)
+            // ── Maleta ──
+            const qs = new URLSearchParams(location.search);
+            let desde = qs.get('desde');
+            let hacia = qs.get('hacia');
+            if (!MUNDOS[desde]) desde = 'musicosmos';
+            if (!MUNDOS[hacia] || hacia === desde) hacia = (desde === 'planetafunk') ? 'sagitario' : 'planetafunk';
 
-            function _onActivated(cosmosState) {
-                // Universo se vuelve activo (iframe visible)
-                // Reanudar audio, animaciones costosas, etc.
-                console.log(`[${_COSMOS_ID}] ⬡ Activado`);
+            function urlMundo(id) {
+                const p = new URLSearchParams(location.search);
+                p.delete('hacia');
+                p.set('desde', 'kalpa');
+                p.set('origen', desde);
+                return new URL(MUNDOS[id].archivo + '?' + p.toString(), location.href).href;
+            }
+            const urlDestino = urlMundo(hacia);
+            const urlOrigen = urlMundo(desde);
 
-                // MUSICOSMOS: reanudar audioContext si estaba suspendido
-                // if (typeof audioContext !== 'undefined' && audioContext.state === 'suspended') {
-                //     audioContext.resume();
-                // }
+            // Si llegaste desde el mundo de origen, volver es "atrás" en el historial:
+            // así ese mundo puede reaparecer tal como lo dejaste.
+            let volverPorHistoria = false;
+            try {
+                if (document.referrer && history.length > 1) {
+                    const r = new URL(document.referrer);
+                    const arch = MUNDOS[desde].archivo;
+                    volverPorHistoria = r.origin === location.origin &&
+                        (r.pathname.endsWith('/' + arch) || (arch === 'index.html' && r.pathname.endsWith('/')));
+                }
+            } catch (_) {}
 
-                // KALPA: reanudar el clock del shader
-                // if (typeof clock !== 'undefined') clock.running = true;
-
-                // TODOS: sincronizar posición desde CosmosState
-                // if (cosmosState?.position && typeof avatarObject !== 'undefined') {
-                //     avatarObject.position.set(cosmosState.position.x, cosmosState.position.y, cosmosState.position.z);
-                // }
+            // ── Precarga (Speculation Rules) ──
+            const puedePrecargar = !!(window.HTMLScriptElement && HTMLScriptElement.supports &&
+                                      HTMLScriptElement.supports('speculationrules'));
+            const precargados = new Set();
+            function precargar(url) {
+                if (!puedePrecargar || precargados.has(url)) return;
+                const s = document.createElement('script');
+                s.type = 'speculationrules';
+                s.textContent = JSON.stringify({ prerender: [{ source: 'list', urls: [url] }] });
+                document.head.appendChild(s);
+                precargados.add(url);
             }
 
-            function _onBackground() {
-                // Universo pasa a background (iframe oculto)
-                // Pausar procesos costosos para ahorrar CPU/GPU
-                console.log(`[${_COSMOS_ID}] ⬡ Background`);
+            // ── Estado ──
+            let t0 = null;               // instante en que Kalpa quedó visible
+            let senalListo = false;
+            let portalAbierto = false;
+            let volverVisible = false;
+            let maxAlejamiento = 0;
+            let distAnterior = 0;
+            let haSalido = false;
+            let cruzando = false;
+            let timerCruce = null, timerRespaldo = null;
+            let framesVistos = 0;
+            let piloto = true;
+            try { piloto = localStorage.getItem('kalpa_piloto') !== '0'; } catch (_) {}
+            let dirPiloto = 1;           // 1 = hacia adelante (-Z), -1 = hacia atrás (+Z)
+            let vPiloto = 0;
+            let centrando = null;
+            const tactil = { thrust: 0, strafe: 0, yaw: 0, pitch: 0 };
 
-                // OPCIONAL: pausar audio
-                // if (typeof audioContext !== 'undefined' && audioContext.state === 'running') {
-                //     audioContext.suspend();
-                // }
+            try {
+                const canal = new BroadcastChannel('cosmos-portal');
+                canal.onmessage = (e) => {
+                    const d = e.data || {};
+                    if (d.tipo === 'listo' && d.mundo === hacia) senalListo = true;
+                };
+            } catch (_) {}
+
+            // ── Interfaz ──
+            const $ = (id) => document.getElementById(id);
+            const velo = $('kp-velo');
+            const avisoDestino = $('kp-aviso-destino');
+            const avisoVolver = $('kp-aviso-volver');
+            const toast = $('kp-toast');
+            const btPiloto = $('kp-bt-piloto');
+            $('kp-destino-nombre').textContent = MUNDOS[hacia].nombre;
+            $('kp-origen-nombre').textContent = MUNDOS[desde].nombre;
+            avisoDestino.style.setProperty('--kp-c', MUNDOS[hacia].color);
+            avisoVolver.style.setProperty('--kp-c', MUNDOS[desde].color);
+            velo.style.setProperty('--kp-velo', MUNDOS[desde].color);
+            $('kp-btn-entrar').addEventListener('click', (e) => { e.stopPropagation(); entrar(); });
+            $('kp-btn-volver').addEventListener('click', (e) => { e.stopPropagation(); volver(); });
+
+            let timerToast = null;
+            function avisar(texto) {
+                toast.textContent = texto;
+                toast.classList.add('visible');
+                clearTimeout(timerToast);
+                timerToast = setTimeout(() => toast.classList.remove('visible'), 1800);
+            }
+            function marcarPiloto() { btPiloto.classList.toggle('activo', piloto); }
+            marcarPiloto();
+
+            // ── Velo ──
+            function ocultarVelo() { velo.classList.add('oculto'); }
+            function mostrarVelo(color) {
+                velo.style.setProperty('--kp-velo', color);
+                velo.classList.remove('oculto');
+            }
+            setTimeout(ocultarVelo, 3000);   // respaldo: nunca dejar la pantalla cubierta
+
+            // ── Cruces ──
+            function cruzar(url, color, porHistoria) {
+                if (cruzando) return;
+                cruzando = true;
+                mostrarVelo(color);
+                timerCruce = setTimeout(() => {
+                    if (porHistoria) {
+                        history.back();
+                        timerRespaldo = setTimeout(() => { location.href = url; }, 1500);
+                    } else {
+                        location.href = url;
+                    }
+                }, AJUSTES.duracionVelo);
+            }
+            function entrar() {
+                if (!portalAbierto) return;
+                cruzar(urlDestino, MUNDOS[hacia].color, false);
+            }
+            function volver() {
+                if (!volverVisible) return;
+                cruzar(urlOrigen, MUNDOS[desde].color, volverPorHistoria);
             }
 
-            function _onIncoming(portalType, origin) {
-                // El usuario viene viajando hacia este universo
-                // Puedes preparar una animación especial de "llegada"
-                console.log(`[${_COSMOS_ID}] ⬡ Llegada via ${portalType} desde ${origin}`);
+            // Al volver a Kalpa con el botón atrás del navegador, levantar el velo otra vez
+            window.addEventListener('pageshow', (e) => {
+                if (!e.persisted) return;
+                cruzando = false;
+                AudioSystem.fadeMul = 1;
+                ocultarVelo();
+            });
+            window.addEventListener('pagehide', () => {
+                clearTimeout(timerCruce);
+                clearTimeout(timerRespaldo);
+            });
 
-                // Ejemplo por universo:
-                // MUSICOSMOS: hacer que las nebulosas "respiren" más rápido al recibir al viajero
-                // KALPA: hacer que el túnel se abra suavemente
-                // PLANETAFUNK: comenzar desde la atmósfera alta
-                // MUNDOINTERIOR: encender las partículas de bienvenida
+            // El reloj del portal parte cuando Kalpa es visible (también si fue precargada)
+            function alActivarse() {
+                t0 = performance.now();
+                precargar(urlDestino);
+            }
+            if (document.prerendering) document.addEventListener('prerenderingchange', alActivarse, { once: true });
+            else alActivarse();
+
+            // ── Piloto automático ──
+            function alternarPiloto() {
+                piloto = !piloto;
+                try { localStorage.setItem('kalpa_piloto', piloto ? '1' : '0'); } catch (_) {}
+                marcarPiloto();
+                avisar(piloto ? 'Piloto automático · activo' : 'Piloto automático · apagado');
+            }
+            function pilotear(dt, velManual, thr) {
+                // Recuerda hacia dónde avanzas en el túnel (no qué tecla): si das la vuelta
+                // o retrocedes, el piloto sigue en esa dirección.
+                if (Math.abs(thr) > 0.2 && Math.abs(velManual.z) > 0.01) dirPiloto = velManual.z < 0 ? 1 : -1;
+                let objetivo = 0;
+                if (piloto && Math.abs(thr) < 0.2 && !cruzando) {
+                    objetivo = (isTurbo ? TURBO_SPEED : AJUSTES.velocidadPiloto) +
+                               AudioSystem.volume * 80.0 * ConfigManager.current.audioReactivity;
+                }
+                vPiloto += (objetivo - vPiloto) * Math.min(1, dt * 1.5);
+                camera.position.z -= dirPiloto * vPiloto * dt;
             }
 
-            function _onCEGGEvent(payload) {
-                // Evento de Killer Pendiente (tarea completada, PV ganado, etc.)
-                // Cada universo decide cómo reaccionar
-                console.log(`[${_COSMOS_ID}] ⬡ CEGG event:`, payload);
-
-                // Ejemplos:
-                // if (payload.type === 'TASK_COMPLETE') {
-                //     // MUSICOSMOS: explotar una nebulosa
-                //     // KALPA: acelerar el pulso del túnel
-                //     // PLANETAFUNK: crear una nueva montaña en el terreno
-                //     // MUNDOINTERIOR: añadir un nuevo nodo en el árbol de archivos
-                // }
+            // ── Centrar ──
+            function centrar() {
+                centrando = {
+                    t: 0,
+                    q0: camera.quaternion.clone(),
+                    q1: new THREE.Quaternion(),      // identidad: mirar por el túnel hacia adelante
+                    x0: camera.position.x,
+                    y0: camera.position.y
+                };
+                avisar('Centrado');
             }
 
-            // ── API pública del bridge ──────────────────────────────────────
-            // Llama a _cosmosPortal() desde el loop 3D cuando el usuario llegue
-            // a las coordenadas de un portal.
+            // ── Cada cuadro ──
+            function tick(dt) {
+                if (framesVistos < 2 && ++framesVistos === 2) ocultarVelo();
 
-            window._cosmosPortal = function(destino, tipoOpcional) {
-                _channel.postMessage({
-                    type: 'portal-request',
-                    from: _COSMOS_ID,
-                    to: destino,
-                    portalType: tipoOpcional || null
+                if (cruzando) AudioSystem.fadeMul = Math.max(0, (AudioSystem.fadeMul ?? 1) - dt / (AJUSTES.duracionVelo / 1000));
+
+                // Mirada táctil (joystick derecho)
+                if (tactil.yaw || tactil.pitch) {
+                    centrando = null;
+                    camera.rotateOnWorldAxis(EJE_Y, -tactil.yaw * 1.8 * dt);
+                    camera.rotateX(-tactil.pitch * 1.4 * dt);
+                }
+                if (centrando) {
+                    centrando.t = Math.min(1, centrando.t + dt / 0.9);
+                    const k = centrando.t * centrando.t * (3 - 2 * centrando.t);
+                    camera.quaternion.copy(centrando.q0).slerp(centrando.q1, k);
+                    camera.position.x = centrando.x0 * (1 - k);
+                    camera.position.y = centrando.y0 * (1 - k);
+                    if (centrando.t >= 1) centrando = null;
+                }
+
+                if (t0 === null) return;
+                const t = (performance.now() - t0) / 1000;
+
+                // Portal al destino
+                if (!portalAbierto && t >= AJUSTES.esperaMinima && (senalListo || t >= AJUSTES.esperaPrecarga)) {
+                    portalAbierto = true;
+                    avisoDestino.classList.add('visible');
+                }
+
+                // Regreso al punto de partida
+                const progreso = -camera.position.z;           // > 0 adelante, < 0 detrás del inicio
+                const distInicio = Math.abs(progreso);
+                maxAlejamiento = Math.max(maxAlejamiento, distInicio);
+                if (maxAlejamiento > AJUSTES.salioDelInicio) haSalido = true;
+                // Zona tibia del regreso: solo si vas acercándote al inicio
+                const acercandose = distInicio < distAnterior - 0.01;
+                distAnterior = distInicio;
+                if (haSalido && acercandose && !volverPorHistoria && distInicio < AJUSTES.precargaRegreso) precargar(urlOrigen);
+                const enInicio = haSalido && progreso < AJUSTES.inicioAdelante && progreso > -AJUSTES.inicioAtras;
+                if (enInicio !== volverVisible) {
+                    volverVisible = enInicio;
+                    avisoVolver.classList.toggle('visible', enInicio);
+                }
+            }
+
+            // ── Táctil ──
+            function stick(el, alMover) {
+                const knob = el.querySelector('.kp-knob');
+                const R = 50;
+                let id = null, cx = 0, cy = 0;
+                function mover(e) {
+                    let dx = e.clientX - cx, dy = e.clientY - cy;
+                    const d = Math.hypot(dx, dy);
+                    if (d > R) { dx *= R / d; dy *= R / d; }
+                    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+                    let x = dx / R, y = dy / R;
+                    if (Math.hypot(x, y) < 0.12) { x = 0; y = 0; }   // zona muerta
+                    alMover(x, y);
+                }
+                el.addEventListener('pointerdown', (e) => {
+                    if (id !== null) return;
+                    id = e.pointerId;
+                    try { el.setPointerCapture(id); } catch (_) {}
+                    const r = el.getBoundingClientRect();
+                    cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+                    mover(e);
+                    e.preventDefault(); e.stopPropagation();
                 });
-            };
+                el.addEventListener('pointermove', (e) => { if (e.pointerId === id) mover(e); });
+                const soltar = (e) => {
+                    if (e.pointerId !== id) return;
+                    id = null;
+                    knob.style.transform = '';
+                    alMover(0, 0);
+                };
+                el.addEventListener('pointerup', soltar);
+                el.addEventListener('pointercancel', soltar);
+            }
+            stick($('kp-stick-izq'), (x, y) => { tactil.strafe = x; tactil.thrust = -y; });
+            stick($('kp-stick-der'), (x, y) => { tactil.yaw = x; tactil.pitch = y; });
 
-            window._cosmosStateUpdate = function(partial) {
-                // Envía actualizaciones de estado al shell (posición, PV, etc.)
-                _channel.postMessage({
-                    type: partial.position ? 'position-update' : 'stats-update',
-                    ...partial
-                });
-            };
+            $('kp-bt-centrar').addEventListener('click', (e) => { e.stopPropagation(); centrar(); });
+            btPiloto.addEventListener('click', (e) => { e.stopPropagation(); alternarPiloto(); });
+            const btTurbo = $('kp-bt-turbo');
+            btTurbo.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); isTurbo = true; btTurbo.classList.add('activo'); });
+            ['pointerup', 'pointercancel', 'pointerleave'].forEach((tipo) =>
+                btTurbo.addEventListener(tipo, () => { isTurbo = false; btTurbo.classList.remove('activo'); }));
 
-            // ── Detección de zonas de portal en el loop Three.js ───────────
-            // Copia y adapta este bloque dentro de tu función animate() / render()
-            //
-            // const PORTALES_COORDS = {
-            //   kalpa:         new THREE.Vector3(0, 0, -500),   // ← ajustar coords reales
-            //   planetafunk:   new THREE.Vector3(500, 0, 0),
-            //   mundointerior: new THREE.Vector3(-500, 0, 0),
-            //   musicosmos:    new THREE.Vector3(0, 0, 500),
-            // };
-            // const PORTAL_RADIO = 60;
-            // let _portalTimeout = null;
-            //
-            // function checkPortals() {
-            //   if (!avatarObject || _portalTimeout) return;
-            //   for (const [dest, pos] of Object.entries(PORTALES_COORDS)) {
-            //     if (avatarObject.position.distanceTo(pos) < PORTAL_RADIO) {
-            //       _portalTimeout = setTimeout(() => { _portalTimeout = null; }, 4000); // cooldown
-            //       window._cosmosPortal(dest);
-            //       break;
-            //     }
-            //   }
-            // }
-            // // Llamar checkPortals() dentro de tu animate() loop.
+            // Arrastrar con un dedo fuera de los controles también mira
+            let arrastre = null;
+            const SIN_ARRASTRE = '#config-panel, #config-toggle, #visualizer-container, .visualizer-expand, #kp-avisos, .kp-stick, #kp-botones';
+            document.addEventListener('pointerdown', (e) => {
+                if (e.pointerType !== 'touch' || arrastre) return;
+                if (e.target.closest && e.target.closest(SIN_ARRASTRE)) return;
+                arrastre = { id: e.pointerId, x: e.clientX, y: e.clientY };
+            });
+            document.addEventListener('pointermove', (e) => {
+                if (!arrastre || e.pointerId !== arrastre.id || !camera) return;
+                const dx = e.clientX - arrastre.x, dy = e.clientY - arrastre.y;
+                arrastre.x = e.clientX; arrastre.y = e.clientY;
+                centrando = null;
+                camera.rotateOnWorldAxis(EJE_Y, -dx * 0.004);
+                camera.rotateX(-dy * 0.004);
+            });
+            ['pointerup', 'pointercancel'].forEach((tipo) => document.addEventListener(tipo, (e) => {
+                if (arrastre && e.pointerId === arrastre.id) arrastre = null;
+            }));
 
-            console.log(`%c⬡ Cosmos Bridge activo: ${_COSMOS_ID}`, 'color:#00D4AA;font-size:11px;');
+            function activarTactil() { $('touch-controls').classList.add('activo'); }
+            if ((window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0) activarTactil();
+            else window.addEventListener('touchstart', activarTactil, { once: true, passive: true });
+
+            return { tactil, tick, pilotear, alternarPiloto, centrar, entrar, volver,
+                     _estado: () => ({ desde, hacia, urlDestino, urlOrigen, volverPorHistoria, puedePrecargar,
+                                       portalAbierto, volverVisible, haSalido, piloto, dirPiloto,
+                                       precargados: [...precargados] }) };
         })();
-        // ── FIN COSMOS BRIDGE ──────────────────────────────────────────────
+        // ── FIN PORTAL ──
+
+        init();
     </script>
 
 </body>
