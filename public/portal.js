@@ -102,6 +102,14 @@
         font:10px 'Courier New',monospace;letter-spacing:2px;text-transform:uppercase;white-space:nowrap;opacity:0;
         transform:translateX(-6px);transition:opacity .5s,transform .5s;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
     .pt-radio-txt.on{opacity:1;transform:none}
+    .pt-btn.crear{color:#ffd9a0;border-color:rgba(255,200,120,.3);box-shadow:none;font-size:18px;opacity:.45}
+    .pt-btn.crear.listo{opacity:1;box-shadow:0 0 16px -6px rgba(255,210,120,.8)}
+    .pt-crear{display:none;color:rgba(255,236,190,.75)}
+    .pt-astro.crear .pt-crear{display:block}
+    .pt-astro.crear .pt-pie>span{display:none}
+    .pt-astro.crear .pt-m i{box-shadow:0 0 0 2px rgba(255,236,190,.55),0 0 14px var(--c)}
+    .pt-pie .pt-crear button{border-color:rgba(255,106,90,.7);color:#ffb3a8;margin-top:8px}
+    .pt-aviso{bottom:132px}
     .pt-btn.grieta{color:#c9a3ff;border-color:rgba(150,90,255,.55);box-shadow:0 0 16px -6px #7b3fe4;font-size:13px}
     .pt-astro{position:fixed;inset:0;z-index:2147482995;display:none;align-items:center;justify-content:center;
         background:radial-gradient(circle at 50% 50%,rgba(10,8,24,.55),rgba(0,0,0,.82));backdrop-filter:blur(7px);
@@ -422,7 +430,8 @@
     window.addEventListener('pagehide', () => clearTimeout(timerSalida));
 
     // ══ Astrolabio y grieta ═════════════════════════════════════════════════
-    let astro = null, btnAstro = null, btnGrieta = null;
+    let astro = null, btnAstro = null, btnGrieta = null, btnCrear = null, pieCrear = null, modoCrear = false;
+    const puedeCrearAqui = ds.crear === 'si';
     const grietaHacia = MUNDOS[ds.grieta] ? ds.grieta : null;
 
     function construirAstrolabio() {
@@ -433,7 +442,10 @@
         const sol = nodo('div', 'pt-sol', rueda);
         sol.innerHTML = maleta.pv ? `<b>${Number(maleta.pv).toLocaleString('es-CL')}</b>PV` : '<b>✦</b>';
         sol.title = MUNDOS.sol.nombre;
-        sol.addEventListener('click', () => { cerrarAstrolabio(); if (AQUI !== 'sol') ir('sol'); });
+        sol.addEventListener('click', () => {
+            if (modoCrear) { crearPortal('sol'); return; }
+            cerrarAstrolabio(); if (AQUI !== 'sol') ir('sol');                 // volver al Sol no cuesta
+        });
         const lista = ORDEN.filter(id => id !== 'sol');
         lista.forEach((id, i) => {
             const a = -Math.PI / 2 + i * (2 * Math.PI / lista.length);
@@ -443,12 +455,27 @@
             b.style.setProperty('--c', MUNDOS[id].color);
             b.innerHTML = `<i></i>${MUNDOS[id].nombre}${id === AQUI ? '<br>· aquí ·' : ''}`;
             if (id === AQUI) return;
-            const pre = () => precargar(url(id, { via: 'directo' }));
+            const pre = () => { if (!modoCrear) precargar(url(id, { via: 'directo' })); };
             b.addEventListener('pointerenter', pre);
             b.addEventListener('focus', pre);
-            b.addEventListener('click', () => { cerrarAstrolabio(); ir(id); });
+            b.addEventListener('click', () => {
+                if (modoCrear) { crearPortal(id); return; }
+                cerrarAstrolabio();
+                pagarYIr(id, {}, 'Astrolabio → ' + MUNDOS[id].nombre);
+            });
         });
         const pie = nodo('div', 'pt-pie', rueda);
+        if (puedeCrearAqui) {
+            pieCrear = nodo('div', 'pt-crear', pie);
+            const txt = nodo('span', '', pieCrear);
+            txt.textContent = 'elige el destino del portal · ' + PRECIO.crear + ' Mu';
+            nodo('br', '', pieCrear);
+            const dv = nodo('button', '', pieCrear);
+            dv.textContent = 'Deriva por Kalpa';
+            dv.title = 'Un túnel sin destino: Kalpa te devuelve a ' + MUNDOS[AQUI].nombre + ', a un lugar desconocido';
+            dv.addEventListener('click', () => crearPortal(AQUI, true));
+            nodo('br', '', pieCrear);
+        }
         if (grietaHacia) {
             const g = nodo('button', '', pie);
             g.textContent = 'Grieta → ' + MUNDOS[grietaHacia].nombre;
@@ -459,8 +486,13 @@
         t.textContent = 'astrolabio · º para cerrar';
         astro.addEventListener('click', e => { if (e.target === astro) cerrarAstrolabio(); });
     }
-    function abrirAstrolabio() { if (!astro) construirAstrolabio(); astro.classList.add('on'); }
-    function cerrarAstrolabio() { if (astro) astro.classList.remove('on'); }
+    function abrirAstrolabio(crear) {
+        if (!astro) construirAstrolabio();
+        modoCrear = !!crear && puedeCrearAqui;
+        astro.classList.toggle('crear', modoCrear);
+        astro.classList.add('on');
+    }
+    function cerrarAstrolabio() { if (astro) astro.classList.remove('on'); modoCrear = false; }
     function alternarAstrolabio() { if (astro && astro.classList.contains('on')) cerrarAstrolabio(); else abrirAstrolabio(); }
 
     function escribiendo(e) {
@@ -493,6 +525,13 @@
             btnGrieta.title = 'Grieta → ' + MUNDOS[grietaHacia].nombre + ' (Shift+º)';
             btnGrieta.style.left = '12px'; btnGrieta.style.top = 'calc(50% + 28px)';
             btnGrieta.addEventListener('click', e => { e.stopPropagation(); abrirGrieta(); });
+        }
+        if (puedeCrearAqui) {
+            btnCrear = nodo('button', 'pt-btn crear');
+            btnCrear.textContent = '◎';
+            btnCrear.style.left = '12px'; btnCrear.style.top = grietaHacia ? 'calc(50% + 74px)' : 'calc(50% + 28px)';
+            btnCrear.addEventListener('click', e => { e.stopPropagation(); pedirCrear(); });
+            setTimeout(pintarCrear, 0);
         }
     }
     if (!enMarco) { if (document.body) ponerBotones(); else document.addEventListener('DOMContentLoaded', ponerBotones); }
@@ -557,11 +596,12 @@
         return { g, aro, disco: tunel };
     }
 
-    // Fractura: una grieta viva en el espacio, de violetas e índigos
+    // Fractura: una grieta fina en el espacio, de violetas e índigos, que se ramifica como rayos
     function hacerFractura(T, R) {
         const g = new T.Group();
         const semilla = Math.random() * 100;
-        const plano = new T.Mesh(new T.PlaneGeometry(R * 1.4, R * 2.6), new T.ShaderMaterial({
+        const AN = 2.6, AL = 3.0;                                   // el plano: ancho y alto en radios
+        const plano = new T.Mesh(new T.PlaneGeometry(R * AN, R * AL), new T.ShaderMaterial({
             transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending, fog: false,
             uniforms: { uT: { value: 0 }, uA: { value: 0 }, uS: { value: semilla }, uK: { value: 0 } },
             vertexShader: VS,
@@ -569,28 +609,49 @@
                 'uniform float uT; uniform float uA; uniform float uS; uniform float uK; varying vec2 vUv;',
                 'float h(float n){ return fract(sin(n)*43758.5453); }',
                 'float ruido(float x){ float i=floor(x); float f=fract(x); f=f*f*(3.0-2.0*f); return mix(h(i+uS),h(i+1.0+uS),f); }',
-                'float zig(float y){ return (ruido(y*9.0)-0.5)*0.16+(ruido(y*27.0)-0.5)*0.06+(ruido(y*71.0)-0.5)*0.02; }',
+                'float zig(float y){ return (ruido(y*9.0)-0.5)*0.10+(ruido(y*27.0)-0.5)*0.045+(ruido(y*71.0)-0.5)*0.018; }',
+                // un rayo: segmento quebrado desde o, en dirección a, largo L; devuelve su brillo en p
+                'float rayo(vec2 p, vec2 o, float a, float L, float sd, float w){',
+                '  vec2 d=vec2(cos(a),sin(a)); vec2 n=vec2(-d.y,d.x); vec2 v=p-o;',
+                '  float t=dot(v,d); if(t<0.0||t>L) return 0.0;',
+                '  float off=dot(v,n)-((ruido(t*14.0+sd)-0.5)*0.09+(ruido(t*41.0+sd)-0.5)*0.03)*min(1.0,t*6.0);',
+                '  float ww=w*(1.0-0.75*t/L);',                                            // se afina hacia la punta
+                '  return exp(-pow(off/ww,2.0));',
+                '}',
                 'void main(){',
-                '  vec2 p=vUv; float y=p.y;',
-                '  float env=smoothstep(0.0,0.18,y)*smoothstep(1.0,0.82,y);',
-                '  float cx=0.5+zig(y+uT*0.03)*env;',
-                '  float ancho=uA*(0.012+0.15*pow(sin(y*3.14159),1.6))*(0.85+0.3*uK);',     // se abre como una herida de luz
-                '  float d=abs(p.x-cx);',
-                '  float dentro=1.0-smoothstep(ancho*0.75,ancho,d);',
-                '  float borde=exp(-pow((d-ancho)/(0.004+0.012*uA),2.0))*env;',
-                '  float rama=0.0;',                                                         // grietas secundarias
-                '  for(int i=0;i<4;i++){ float fi=float(i); float yb=0.2+0.6*h(fi*7.3+uS); float lado=h(fi*3.1+uS)<0.5?-1.0:1.0;',
-                '    float t=(p.x-cx)*lado; if(t>0.0){ float yy=yb+t*(0.8*h(fi+uS)-0.4)+zig(t*3.0+fi)*0.4; float L=0.08+0.18*h(fi*1.7+uS);',
-                '      rama+=exp(-pow((y-yy)/0.0035,2.0))*smoothstep(L*uA,0.0,t)*uA; } }',
-                '  vec2 q=vec2((p.x-cx)/(ancho+1e-3),y);',
-                '  float e1=sin(q.y*24.0-uT*3.2+sin(q.x*4.0+uT*1.3)*2.2)*0.5+0.5;',
-                '  float e2=sin(q.y*9.0+uT*1.7+q.x*3.0)*0.5+0.5;',
-                '  vec3 indigo=vec3(0.29,0.0,0.62), violeta=vec3(0.62,0.18,1.0), magenta=vec3(0.95,0.32,1.0), lila=vec3(0.86,0.74,1.0);',
-                '  vec3 interior=mix(indigo,violeta,e1); interior=mix(interior,magenta,pow(e2,3.0)*0.8);',
-                '  interior+=lila*pow(max(0.0,1.0-abs(q.x)),5.0)*0.9;',
-                '  float halo=exp(-d*16.0)*uA*env*0.65;',
-                '  vec3 col=interior*dentro*env+vec3(1.0,0.88,1.0)*(borde+rama)*1.4+violeta*halo;',
-                '  float al=clamp(dentro*env+borde+rama+halo,0.0,1.0);',
+                '  vec2 p=vec2((vUv.x-0.5)*' + (AN / AL).toFixed(4) + ', vUv.y-0.5);',          // espacio isótropo
+                '  float y=vUv.y;',
+                '  float env=smoothstep(0.08,0.24,y)*smoothstep(0.92,0.76,y);',
+                '  float cx=zig(y+uT*0.02)*env;',
+                '  float ancho=uA*(0.002+0.022*pow(sin((y-0.08)/0.84*3.14159),1.8))*(0.85+0.3*uK);',   // herida fina
+                '  float dx=abs(p.x-cx);',
+                '  float dentro=(1.0-smoothstep(ancho*0.6,ancho,dx))*env;',
+                '  float borde=exp(-pow((dx-ancho)/(0.0025+0.004*uA),2.0))*env;',
+                '  float rayos=0.0;',
+                '  for(int i=0;i<9;i++){',
+                '    float fi=float(i);',
+                '    float yb=0.20+0.6*h(fi*7.3+uS);',
+                '    float lado=h(fi*3.1+uS)<0.5?-1.0:1.0;',
+                '    vec2 o=vec2(zig(yb)*smoothstep(0.08,0.24,yb)*smoothstep(0.92,0.76,yb), yb-0.5);',
+                '    float a=(lado>0.0?0.0:3.14159)+(h(fi*5.7+uS)-0.5)*1.5;',
+                '    float L=(0.10+0.22*h(fi*1.7+uS))*uA;',
+                '    float parpadeo=0.55+0.45*step(0.25,h(floor(uT*7.0+fi*1.3)+fi));',        // titila como descarga
+                '    float sd=fi*13.1+uS;',
+                '    rayos+=rayo(p,o,a,L,sd,0.0045)*parpadeo;',
+                '    for(int j=0;j<2;j++){',                                                 // cada rayo se bifurca
+                '      float fj=float(j);',
+                '      float tj=L*(0.35+0.35*h(fi*2.3+fj*9.1+uS));',
+                '      vec2 oj=o+vec2(cos(a),sin(a))*tj;',
+                '      float aj=a+(fj<0.5?1.0:-1.0)*(0.45+0.5*h(fi*4.1+fj+uS));',
+                '      rayos+=rayo(p,oj,aj,L*0.45,sd+fj*7.7,0.003)*parpadeo*0.8;',
+                '    }',
+                '  }',
+                '  float e1=sin(y*60.0-uT*3.2)*0.5+0.5;',
+                '  vec3 indigo=vec3(0.29,0.0,0.62), violeta=vec3(0.62,0.18,1.0), magenta=vec3(0.95,0.32,1.0), lila=vec3(0.88,0.78,1.0);',
+                '  vec3 interior=mix(indigo,magenta,e1)+lila*0.6;',
+                '  float halo=exp(-dx*38.0)*uA*env*0.5+rayos*0.25;',
+                '  vec3 col=interior*dentro+lila*borde*1.5+mix(violeta,lila,0.55)*rayos*1.3+violeta*halo;',
+                '  float al=clamp(dentro+borde+rayos+halo,0.0,1.0);',
                 '  gl_FragColor=vec4(col,al);',
                 '}'].join('\n')
         }));
@@ -703,7 +764,8 @@
         const p = {
             o, grupo, partes, puntos, R, via, estilo: estiloP, escena: esc,
             tibio: o.tibio || R * 14, cruce: o.cruce || R * 0.8,
-            urlDestino: via === 'kalpa' ? url('kalpa', { hacia: o.destino }) : url(o.destino, { via: via }),
+            urlDestino: o.urlPropia || (via === 'kalpa' ? url('kalpa', { hacia: o.destino }) : url(o.destino, { via: via })),
+            prepagado: !!o.prepagado, sinMu: false, cobrando: false,
             etiqueta: o.etiqueta || (via === 'kalpa' ? 'Kalpa → ' + MUNDOS[o.destino].nombre
                 : estiloP === 'fractura' ? 'Grieta → ' + MUNDOS[o.destino].nombre : MUNDOS[o.destino].nombre),
             cColor: estiloP === 'fractura' ? '#9b5cff' : estiloP === 'kalpa' ? MUNDOS.kalpa.color : '#' + color.getHexString(),
@@ -798,7 +860,7 @@
                 if (pa.lente) pa.lente.lookAt(posV);
                 // Absorción gravitacional: te atrae, y desde el punto sin retorno ya no hay escape
                 const gv = p.gravedad;
-                if (gv && !saliendo && !enMarco && s > 0.9) {
+                if (gv && !saliendo && !enMarco && s > 0.9 && !p.sinMu && !p.cobrando) {
                     const rel = d / p.R;
                     if (rel < gv.alcance) {
                         const kk = 1 - (rel - gv.sinRetorno) / (gv.alcance - gv.sinRetorno);
@@ -818,14 +880,14 @@
             }
             if (enMarco || s < 0.8) continue;
             if (!p.activo) {
-                if (!saliendo && d > p.cruce * 2.5) p.activo = true;
+                if (!saliendo && !p.cobrando && d > p.cruce * 2.5) { p.activo = true; p.sinMu = false; }
                 else continue;
             }
             if (d < p.tibio) precargar(p.urlDestino);
             if (d < dMin) { dMin = d; masCercano = p; }
             if (d < p.cruce && !saliendo) {
                 p.activo = false;
-                ir(p.o.destino, { via: p.via });
+                cruzarPortal(p);
             }
         }
         const mostrar = masCercano && dMin < masCercano.tibio;
@@ -834,7 +896,8 @@
             if (mostrar) {
                 const gv = masCercano.gravedad;
                 const sinVuelta = gv && dMin / masCercano.R < gv.sinRetorno;
-                pista.textContent = (sinVuelta ? '◆ ' : '◇ ') + masCercano.etiqueta + (sinVuelta ? ' · sin retorno' : '');
+                pista.textContent = (sinVuelta ? '◆ ' : '◇ ') + masCercano.etiqueta + (sinVuelta ? ' · sin retorno' : '') +
+                    (masCercano.sinMu ? ' · te falta Mu' : (!masCercano.prepagado && mu.conectado) ? ' · ' + PRECIO.cruzar + ' Mu' : '');
                 pista.style.setProperty('--c', masCercano.cColor);
             }
             pista.classList.toggle('on', !!mostrar);
@@ -884,6 +947,18 @@
             const dist = azar(tipo.distancia ? tipo.distancia[0] : c.distancia[0], tipo.distancia ? tipo.distancia[1] : c.distancia[1]);
             const alto = tipo.altura ? azar(tipo.altura[0], tipo.altura[1]) : azar(c.altura[0], c.altura[1]);
             const donde = pos.clone().addScaledVector(fwd, dist); donde.y = pos.y + alto;
+            const Rt = tipo.radio || 10;
+            if (c.suelo) {                                  // nunca enterrado en el relieve
+                const gs = c.suelo(donde.x, donde.z), m = Rt * 1.6;
+                if (donde.y < gs + m) donde.y = gs + m + azar(0, Rt);
+            }
+            if (c.plano) {                                  // ni atravesado por la malla: arriba o abajo de ella
+                const m = Rt * 1.35 + (c.plano.margen || 0);
+                if (Math.abs(donde.y - c.plano.y) < m) {
+                    const lado = donde.y === c.plano.y ? (Math.random() < 0.65 ? 1 : -1) : Math.sign(donde.y - c.plano.y);
+                    donde.y = c.plano.y + lado * (m + azar(0, Rt * 1.5));
+                }
+            }
             const h = anillo(Object.assign({}, tipo, { posicion: donde, dNace: tipo.estilo === 'agujero' ? 4000 : 2200 }));
             if (!h) return;
             h.vence = ahora + azar(tipo.vida ? tipo.vida[0] : c.vida[0], tipo.vida ? tipo.vida[1] : c.vida[1]) * 1000;
@@ -909,19 +984,179 @@
         }
     }
 
-    // La grieta: se abre una fractura frente a ti y se acerca hasta tragarte
+    // La grieta: se abre una fractura a lo lejos, frente a ti; eres tú quien se acerca.
+    // Pedirla de nuevo la cierra.
     let grietaAbierta = null;
     function abrirGrieta() {
         if (!grietaHacia || saliendo) return;
-        if (!escena3D || !escena3D.camara) { ir(grietaHacia, { via: 'grieta' }); return; }
-        if (grietaAbierta && portales.includes(grietaAbierta.portal)) return;
+        if (!escena3D || !escena3D.camara) { pagarYIr(grietaHacia, { via: 'grieta' }, 'Grieta → ' + MUNDOS[grietaHacia].nombre); return; }
+        if (grietaAbierta && portales.includes(grietaAbierta.portal)) {
+            if (!grietaAbierta.portal.muere) grietaAbierta.cerrar();
+            grietaAbierta = null;
+            return;
+        }
         const T = escena3D.THREE || window.THREE, cam = escena3D.camara;
         const fwd = new T.Vector3(); cam.getWorldDirection(fwd);
         const pos = posViajero({}).clone();
         const R = escena3D.radioGrieta || 8, D = escena3D.distanciaGrieta || 14;
+        const lejos = Math.max(D * 4, R * 9);
         grietaAbierta = anillo({ destino: grietaHacia, estilo: 'fractura', radio: R,
-            posicion: pos.addScaledVector(fwd, D), dNace: 1600, acercar: D * 0.55, tibio: D * 3, cruce: R * 0.35 });
+            posicion: pos.addScaledVector(fwd, lejos), dNace: 2600, tibio: lejos * 1.3, cruce: R * 0.35 });
         precargar(url(grietaHacia, { via: 'grieta' }));
+    }
+
+    // ══ Mu · la moneda universal de Killer Pendiente ═════════════════════════
+    // Cruzar un portal, la grieta o saltar con el astrolabio cuesta Mu; abrir un portal
+    // propio también (y cruzarlo ya va pagado). Volver al Sol y la salida de Kalpa no cobran.
+    // Si KP no está abierto, no tiene la ruta /api/gastar o no hay un aspecto en sesión,
+    // el viaje es libre: los universos nunca dependen de KP para funcionar.
+    const PRECIO = { cruzar: 1, crear: 2 };
+    const mu = (function () {
+        const KP = ds.kp || 'http://127.0.0.1:5000';
+        const estado = { conectado: false, saldo: null, aspecto: null };
+        async function pedir(ruta, cuerpo, ms) {
+            const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms || 1800);
+            try {
+                const r = await fetch(KP + ruta, cuerpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cuerpo), signal: ctl.signal, cache: 'no-store' } : { signal: ctl.signal, cache: 'no-store' });
+                let j = {}; try { j = await r.json(); } catch (_) {}
+                return { status: r.status, j };
+            } finally { clearTimeout(t); }
+        }
+        async function consultar() {
+            if (enMarco) return;
+            try {
+                const r = await pedir('/api/mu');
+                estado.conectado = r.status === 200 && typeof r.j.mu === 'number';
+                if (estado.conectado) { estado.saldo = r.j.mu; estado.aspecto = r.j.aspecto; }
+            } catch (_) { estado.conectado = false; }
+        }
+        // → { ok, libre, saldo }
+        async function cobrar(cantidad, motivo) {
+            if (!estado.conectado) await consultar();
+            if (!estado.conectado) return { ok: true, libre: true };
+            try {
+                const r = await pedir('/api/gastar', { cantidad, motivo: String(motivo || '').slice(0, 80), mundo: AQUI });
+                if (r.status === 200 && r.j.ok) { estado.saldo = r.j.mu; return { ok: true, saldo: r.j.mu, cantidad }; }
+                if (r.status === 402) { estado.saldo = r.j.mu; return { ok: false, saldo: r.j.mu, falta: cantidad - (r.j.mu || 0) }; }
+                return { ok: true, libre: true };                     // sin aspecto en sesión u otro tropiezo: viaje libre
+            } catch (_) { estado.conectado = false; return { ok: true, libre: true }; }
+        }
+        if (!enMarco) {
+            if (document.prerendering) document.addEventListener('prerenderingchange', consultar, { once: true });
+            else setTimeout(consultar, 1500);
+            setInterval(() => { if (!document.hidden) consultar(); }, 60000);
+        }
+        return { cobrar, consultar, get conectado() { return estado.conectado; }, get saldo() { return estado.saldo; } };
+    })();
+
+    let avisoNodo = null, tAviso = null;
+    function avisar(texto, color, ms) {
+        if (enMarco) return;
+        if (!avisoNodo) avisoNodo = nodo('div', 'pt-pista pt-aviso', raiz);
+        avisoNodo.textContent = texto;
+        avisoNodo.style.setProperty('--c', color || '#ffd27a');
+        avisoNodo.classList.add('on');
+        clearTimeout(tAviso);
+        tAviso = setTimeout(() => avisoNodo.classList.remove('on'), ms || 3200);
+    }
+    const quedan = r => (r && !r.libre && typeof r.saldo === 'number') ? ' · quedan ' + r.saldo + ' Mu' : '';
+
+    // Cruce de un portal 3D: primero el pago, después el viaje
+    function cruzarPortal(p) {
+        const viajar = () => p.o.urlPropia ? salir(p.o.urlPropia, { color: MUNDOS.kalpa.color, color2: MUNDOS.kalpa.c2 })
+                                           : ir(p.o.destino, { via: p.via });
+        if (p.prepagado || p.o.destino === 'sol') { viajar(); return; }
+        p.cobrando = true;
+        mu.cobrar(PRECIO.cruzar, 'Portal → ' + p.etiqueta).then(r => {
+            p.cobrando = false;
+            if (r.ok) {
+                if (!r.libre) avisar('◆ −' + PRECIO.cruzar + ' Mu' + quedan(r), p.cColor, 2400);
+                viajar();
+            } else {
+                p.sinMu = true;
+                avisar('◇ Te falta Mu para cruzar · tienes ' + (r.saldo || 0), '#ff8a7a', 4200);
+            }
+        });
+    }
+    // Salto del astrolabio (o de la grieta sin escena)
+    function pagarYIr(destino, opciones, motivo) {
+        if (destino === 'sol') { ir(destino, opciones); return; }
+        mu.cobrar(PRECIO.cruzar, motivo || ('Viaje → ' + MUNDOS[destino].nombre)).then(r => {
+            if (!r.ok) { avisar('◇ Te falta Mu para viajar · tienes ' + (r.saldo || 0), '#ff8a7a', 4200); return; }
+            if (!r.libre) avisar('◆ −' + PRECIO.cruzar + ' Mu' + quedan(r), MUNDOS[destino].color, 2400);
+            ir(destino, opciones);
+        });
+    }
+
+    // ══ Viaje iniciático ═════════════════════════════════════════════════════
+    // Kalpa, Planeta Funk, Sagitario A* y Mundo Interior, y de vuelta a Musicosmos:
+    // quien completa ese circuito puede abrir sus propios portales.
+    const INICIACION = ['kalpa', 'planetafunk', 'sagitario', 'mundointerior'];
+    const K_VIAJE = 'cosmos-viaje-iniciatico';
+    function viaje() { try { return JSON.parse(localStorage.getItem(K_VIAJE)) || { visto: {}, iniciado: false }; } catch (_) { return { visto: {}, iniciado: false }; } }
+    function guardarViaje(v) { try { localStorage.setItem(K_VIAJE, JSON.stringify(v)); } catch (_) {} }
+    const faltan = () => { const v = viaje(); return INICIACION.filter(id => !v.visto[id]); };
+    const iniciado = () => viaje().iniciado;
+    function anotarVisita() {
+        if (enMarco || !AQUI) return;
+        const v = viaje();
+        if (INICIACION.includes(AQUI)) v.visto[AQUI] = Date.now();
+        let recien = false;
+        if (AQUI === 'musicosmos' && !v.iniciado && INICIACION.every(id => v.visto[id])) { v.iniciado = true; recien = true; }
+        guardarViaje(v);
+        if (recien) setTimeout(() => avisar('✦ Viaje iniciático completo · ya puedes abrir portales con ◎', '#ffd27a', 7000), 4200);
+        pintarCrear();
+    }
+    if (document.prerendering) document.addEventListener('prerenderingchange', anotarVisita, { once: true });
+    else anotarVisita();
+
+    function pintarCrear() {
+        if (!btnCrear) return;
+        const ok = iniciado();
+        btnCrear.classList.toggle('listo', ok);
+        btnCrear.title = ok ? 'Abrir un portal frente a ti (' + PRECIO.crear + ' Mu)'
+                            : 'Viaje iniciático · faltan: ' + faltan().map(id => MUNDOS[id].nombre).join(', ');
+    }
+    function pedirCrear() {
+        if (!iniciado()) {
+            avisar('◇ Viaje iniciático · faltan ' + faltan().map(id => MUNDOS[id].nombre).join(' · ') + ' · y volver aquí', '#ffd27a', 5200);
+            return;
+        }
+        abrirAstrolabio(true);
+    }
+
+    // Un portal propio, frente al viajero
+    function fueraDelPlano(donde, R, plano, ref) {
+        if (!plano) return donde;
+        const m = R * 1.35 + (plano.margen || 0);
+        if (Math.abs(donde.y - plano.y) < m) {
+            const base = ref !== undefined ? ref : donde.y;
+            const lado = base >= plano.y ? 1 : -1;
+            donde.y = plano.y + lado * m;
+        }
+        return donde;
+    }
+    async function crearPortal(destino, deriva) {
+        if (!puedeCrearAqui || !iniciado() || !escena3D || !escena3D.camara || saliendo) return;
+        cerrarAstrolabio();
+        const nombre = deriva ? 'Deriva por Kalpa' : MUNDOS[destino].nombre;
+        const r = await mu.cobrar(PRECIO.crear, 'Abrir portal → ' + nombre);
+        if (!r.ok) { avisar('◇ Te falta Mu para abrir un portal · tienes ' + (r.saldo || 0), '#ff8a7a', 4200); return; }
+        const T = escena3D.THREE || window.THREE, cam = escena3D.camara;
+        const estilo = (deriva || destino === 'kalpa') ? 'kalpa' : destino === 'mundointerior' ? 'fractura'
+                     : destino === 'sagitario' ? 'agujero' : 'anillo';
+        const R = estilo === 'agujero' ? 14 : estilo === 'fractura' ? 9 : 12;
+        const fwd = new T.Vector3(); cam.getWorldDirection(fwd);
+        const pos = posViajero({}).clone();
+        const donde = pos.clone().addScaledVector(fwd, R * (estilo === 'agujero' ? 9 : 6));
+        fueraDelPlano(donde, R, escena3D.plano, pos.y);
+        anillo({ destino: deriva ? AQUI : destino, estilo, radio: R, posicion: donde, dNace: 2600, prepagado: true,
+            urlPropia: deriva ? url('kalpa', { hacia: AQUI, deriva: '1' }) : null,
+            etiqueta: deriva ? 'Deriva por Kalpa · lugar desconocido' : undefined,
+            tibio: R * 16, cruce: estilo === 'fractura' ? R * 0.5 : estilo === 'agujero' ? R * 0.8 : undefined,
+            gravedad: estilo === 'agujero' ? { alcance: 5, sinRetorno: 1.6, tiron: 1.1, caida: 3 } : null });
+        avisar('◆ Portal abierto · ' + nombre + (r.libre ? '' : ' · −' + PRECIO.crear + ' Mu' + quedan(r)), deriva ? MUNDOS.kalpa.color : MUNDOS[destino].color, 3600);
     }
 
     // ══ Radio continua · la clara que envuelve a los mundos ═══════════════════
@@ -1106,7 +1341,8 @@
     // ══ API ══════════════════════════════════════════════════════════════════
     window.Portal = {
         MUNDOS, ORDEN, aqui: AQUI, maleta, url, ir, irUrl, salir, precargar, listo, audio, radio,
-        anillo, sembrar, escenario, abrirGrieta, abrirAstrolabio, cerrarAstrolabio,
+        anillo, sembrar, escenario, abrirGrieta, abrirAstrolabio, cerrarAstrolabio, crearPortal, mu, PRECIO,
+        get iniciado() { return iniciado(); },
         get saliendo() { return saliendo; },
         _portales: portales   // para depurar
     };

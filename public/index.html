@@ -1302,7 +1302,7 @@
     </div>
 
     <!-- ── PORTAL ── entrelazamiento de mundos (antes que los demás scripts) -->
-    <script src="portal.js" data-mundo="musicosmos" data-grieta="mundointerior"></script>
+    <script src="portal.js" data-mundo="musicosmos" data-grieta="mundointerior" data-crear="si"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
@@ -17691,16 +17691,22 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
         function crear() {
             if (typeof scene === 'undefined' || !scene || typeof avatarObject === 'undefined' || !avatarObject || !camera) return setTimeout(crear, 300);
             Portal.escenario({ escena: scene, camara: camera, renderer: renderer,
-                               viajero: () => avatarObject.position, radioGrieta: 7, distanciaGrieta: 16 });
-            Portal.sembrar({ max: 3, distancia: [140, 330], altura: [0, 3], vida: [70, 150], intervalo: [8, 22], primero: 2.5, abanico: 65,
+                               viajero: () => avatarObject.position, radioGrieta: 7, distanciaGrieta: 16, plano: { y: 0, margen: 4 } });
+            // Llegada en deriva por Kalpa: un lugar al azar, lejos del inicio
+            if (Portal.maleta.deriva === '1') {
+                const ang = Math.random() * Math.PI * 2, dist = 3000 + Math.random() * 5000;
+                avatarObject.position.set(Math.cos(ang) * dist, (Math.random() * 2 - 1) * 400, Math.sin(ang) * dist);
+                if (typeof updateCameraPosition === 'function') updateCameraPosition();
+            }
+            Portal.sembrar({ max: 3, distancia: [320, 700], altura: [-30, 45], plano: { y: 0, margen: 4 }, vida: [70, 150], intervalo: [8, 22], primero: 2.5, abanico: 65,
                 tipos: [
                     { destino: 'planetafunk',   estilo: 'anillo',   radio: 12, peso: 3 },
                     { destino: 'planetafunk',   estilo: 'kalpa',    radio: 12, peso: 1 },
                     { destino: 'sagitario',     estilo: 'kalpa',    radio: 12, peso: 1 },
                     { destino: 'mundointerior', estilo: 'fractura', radio: 9,  peso: 2, cruce: 6 }
                 ] });
-            Portal.sembrar({ max: 1, primero: 1, intervalo: [25, 45], vida: [300, 600], abanico: 85,
-                tipos: [{ destino: 'sagitario', estilo: 'agujero', radio: 40, distancia: [760, 920], altura: [14, 22],
+            Portal.sembrar({ max: 1, primero: 1, intervalo: [25, 45], vida: [300, 600], abanico: 85, plano: { y: 0, margen: 30 },
+                tipos: [{ destino: 'sagitario', estilo: 'agujero', radio: 40, distancia: [1300, 1700], altura: [70, 150],
                           tibio: 520, cruce: 34, etiqueta: 'Sagitario A*',
                           gravedad: { alcance: 6, sinRetorno: 1.6, tiron: 1.3, caida: 3 } }] });
         }

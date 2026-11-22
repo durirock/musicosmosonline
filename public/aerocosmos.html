@@ -5240,15 +5240,16 @@ void main(){
         const llegaPorKalpa = !!Portal.maleta.desde;
         // Portales que aparecen al azar en el cielo: a Musicosmos (directo) y túneles de Kalpa
         Portal.escenario({ escena: scene, camara: camera, renderer: renderer, viajero: () => camera.position });
-        Portal.sembrar({ max: 3, distancia: [600, 1500], altura: [-120, 80], vida: [80, 160], intervalo: [10, 24], primero: 3, abanico: 60,
+        const sueloPF = (x, z) => Math.max(SEA_LEVEL, noise.get(x, z));
+        Portal.sembrar({ max: 3, distancia: [900, 2100], altura: [-60, 160], suelo: sueloPF, vida: [80, 160], intervalo: [10, 24], primero: 3, abanico: 60,
             tipos: [
                 { destino: 'musicosmos', estilo: 'anillo', radio: 40, peso: 3, tibio: 700, cruce: 34 },
                 { destino: 'sagitario',  estilo: 'kalpa',  radio: 40, peso: 1, tibio: 700, cruce: 34 },
                 { destino: 'musicosmos', estilo: 'kalpa',  radio: 40, peso: 1, tibio: 700, cruce: 34 }
             ] });
         // El agujero negro, lejos y en otro lugar cada vez: lente gravitacional y absorción → Sagitario A*
-        Portal.sembrar({ max: 1, primero: 1, intervalo: [30, 60], vida: [300, 600], abanico: 80,
-            tipos: [{ destino: 'sagitario', estilo: 'agujero', radio: 220, distancia: [3200, 4500], altura: [300, 700],
+        Portal.sembrar({ max: 1, primero: 1, intervalo: [30, 60], vida: [300, 600], abanico: 80, suelo: sueloPF,
+            tipos: [{ destino: 'sagitario', estilo: 'agujero', radio: 220, distancia: [4200, 5600], altura: [300, 700],
                       tibio: 2600, cruce: 176, etiqueta: 'Sagitario A*',
                       gravedad: { alcance: 6, sinRetorno: 1.6, tiron: 1.2, caida: 3 } }] });
         if (llegaPorKalpa) {
