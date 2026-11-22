@@ -362,6 +362,8 @@
             pointer-events: none; width: max-content; max-width: 92vw;
         }
         @media (pointer: coarse) { #kp-avisos { top: 74px; } }
+        #kp-avisos { transition: opacity 1.6s ease; }
+        #kp-avisos.dormido { opacity: 0.07; }
         .kp-aviso-titulo { white-space: nowrap; }
         .kp-aviso {
             display: none; align-items: center; gap: 16px;
@@ -405,11 +407,11 @@
     <div id="debug-info">
         KALPA AUDIO-REACTIVO<br>
         <span style="color:rgba(255,255,255,0.4)">WASD: Mover | Q/E: Pitch 360° | 3: Estereograma | 4: Nivelar Vuelo</span><br>
-        <span style="color:rgba(255,255,255,0.4)">P: Piloto automático | C: Centrar | Enter: Entrar al portal | R: Volver al inicio</span>
+        <span style="color:rgba(255,255,255,0.4)">P: Piloto automático | Shift+Enter: Hipersalto / normal | C: Centrar | Enter: Entrar al portal | R: Volver al inicio</span>
     </div>
 
     <!-- ── PORTAL ── velo de tránsito y avisos de la antesala -->
-    <div id="kp-velo"></div>
+    <div id="kp-velo" class="oculto"></div><!-- la llegada la hace portal.js (difuminado de la escena) -->
     <div id="kp-avisos">
         <div class="kp-aviso" id="kp-aviso-destino">
             <div class="kp-aviso-txt">
@@ -531,7 +533,7 @@
     <!-- ── FIN PORTAL ── -->
 
     <!-- ── PORTAL ── entrelazamiento de mundos (antes que los demás scripts) -->
-    <script src="portal.js" data-mundo="kalpa" data-velo="no"></script>
+    <script src="portal.js" data-mundo="kalpa"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
@@ -1079,7 +1081,7 @@
                 // ── PORTAL ──
                 case 'KeyP': KalpaPortal.alternarPiloto(); break;
                 case 'KeyC': KalpaPortal.centrar(); break;
-                case 'Enter': case 'NumpadEnter': KalpaPortal.entrar(); break;
+                case 'Enter': case 'NumpadEnter': if (e.shiftKey) KalpaPortal.alternarVelocidad(); else KalpaPortal.entrar(); break;
                 case 'KeyR': KalpaPortal.volver(); break;
                 // ── FIN PORTAL ──
             }
@@ -1233,8 +1235,20 @@
             $('kp-btn-entrar').addEventListener('click', (e) => { e.stopPropagation(); entrar(); });
             $('kp-btn-volver').addEventListener('click', (e) => { e.stopPropagation(); volver(); });
 
+            // Los avisos se desvanecen tras unos segundos para no estorbar el túnel;
+            // vuelven al mover el mouse, tocar la pantalla o cuando aparece uno nuevo.
+            const avisos = $('kp-avisos');
+            let timerAvisos = null;
+            function despertarAvisos() {
+                avisos.classList.remove('dormido');
+                clearTimeout(timerAvisos);
+                timerAvisos = setTimeout(() => avisos.classList.add('dormido'), 4000);
+            }
+            ['mousemove', 'pointerdown', 'touchstart'].forEach(ev => window.addEventListener(ev, despertarAvisos, { passive: true }));
+
             let timerToast = null;
             function avisar(texto) {
+                despertarAvisos();
                 toast.textContent = texto;
                 toast.classList.add('visible');
                 clearTimeout(timerToast);
@@ -1302,17 +1316,25 @@
                 marcarPiloto();
                 avisar(piloto ? 'Piloto automático · activo' : 'Piloto automático · apagado');
             }
+            // Velocidad del piloto: arranca en hipersalto; Shift+Enter alterna con la velocidad normal.
+            let hiper = true;
+            function alternarVelocidad() {
+                hiper = !hiper;
+                avisar(hiper ? 'Hipersalto' : 'Velocidad normal');
+            }
             function pilotear(dt, velManual, thr) {
                 // Recuerda hacia dónde avanzas en el túnel (no qué tecla): si das la vuelta
-                // o retrocedes, el piloto sigue en esa dirección.
+                // o retrocedes, el piloto sigue en esa dirección. El teclado sigue activo:
+                // tus movimientos se suman al avance automático.
                 if (Math.abs(thr) > 0.2 && Math.abs(velManual.z) > 0.01) dirPiloto = velManual.z < 0 ? 1 : -1;
                 let objetivo = 0;
-                if (piloto && Math.abs(thr) < 0.2 && !cruzando) {
-                    objetivo = (isTurbo ? TURBO_SPEED : AJUSTES.velocidadPiloto) +
-                               AudioSystem.volume * 80.0 * ConfigManager.current.audioReactivity;
+                if (piloto && !cruzando) {
+                    const base = hiper ? TURBO_SPEED : AJUSTES.velocidadPiloto;
+                    objetivo = dirPiloto * ((isTurbo && !hiper ? TURBO_SPEED : base) +
+                               AudioSystem.volume * 80.0 * ConfigManager.current.audioReactivity);
                 }
-                vPiloto += (objetivo - vPiloto) * Math.min(1, dt * 1.5);
-                camera.position.z -= dirPiloto * vPiloto * dt;
+                vPiloto += (objetivo - vPiloto) * Math.min(1, dt * 1.2);   // con signo: al dar la vuelta frena y retoma suave
+                camera.position.z -= vPiloto * dt;
             }
 
             // ── Centrar ──
@@ -1356,6 +1378,7 @@
                     portalAbierto = true;
                     if (breve) setTimeout(entrar, 1400);   // desde el astrolabio: el túnel se abre solo
                     avisoDestino.classList.add('visible');
+                    despertarAvisos();
                 }
 
                 // Regreso al punto de partida
@@ -1371,6 +1394,7 @@
                 if (enInicio !== volverVisible) {
                     volverVisible = enInicio;
                     avisoVolver.classList.toggle('visible', enInicio);
+                    if (enInicio) despertarAvisos();
                 }
             }
 
@@ -1441,7 +1465,7 @@
             if ((window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0) activarTactil();
             else window.addEventListener('touchstart', activarTactil, { once: true, passive: true });
 
-            return { tactil, tick, pilotear, alternarPiloto, centrar, entrar, volver,
+            return { tactil, tick, pilotear, alternarPiloto, alternarVelocidad, centrar, entrar, volver,
                      _estado: () => ({ desde, hacia, urlDestino, urlOrigen, volverPorHistoria, puedePrecargar,
                                        portalAbierto, volverVisible, haSalido, piloto, dirPiloto,
                                        precargados: [...precargados] }) };

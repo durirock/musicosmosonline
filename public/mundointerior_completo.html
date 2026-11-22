@@ -5277,5 +5277,19 @@
 })();
 
 </script>
+    <!-- ── PORTAL ── la grieta nace en el espacio de Mundo Interior -->
+    <script>
+    (function () {
+        if (!window.Portal) return;
+        function crear() {
+            if (typeof scene === 'undefined' || !scene || !camera || typeof avatarObject === 'undefined' || !avatarObject) return setTimeout(crear, 300);
+            Portal.escenario({ escena: scene, camara: camera, renderer: typeof webglRenderer !== 'undefined' ? webglRenderer : null,
+                               viajero: () => avatarObject.position, radioGrieta: 6, distanciaGrieta: 12,
+                               difuminar: [typeof cssRenderer !== 'undefined' && cssRenderer ? cssRenderer.domElement : null] });
+        }
+        crear();
+    })();
+    </script>
+    <!-- ── FIN PORTAL ── -->
 </body>
 </html>
