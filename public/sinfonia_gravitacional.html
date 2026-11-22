@@ -6565,6 +6565,11 @@
             document.getElementById('btn-flight').classList.remove('active');
         }
         function toggleFlight() { FLIGHT.active ? stopFlight() : startFlight(); }
+        // ── PORTAL · Viaje por los universos ── durante la estadía aquí vuela el Modo Viaje
+        if (window.Portal && Portal.viaje) Portal.viaje.registrar({
+            iniciar: () => { if (!FLIGHT.active) startFlight(); },
+            detener: () => { if (FLIGHT.active) stopFlight(); }
+        });
 
         function updateFlight(delta) {
             // Velocidad: con música, el tempo del mundo y la intensidad; en silencio, una deriva serena

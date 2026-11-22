@@ -1157,7 +1157,7 @@
             // Musicosmos, a un lugar al azar y lejos de donde empezaste.
             const deriva = new URLSearchParams(location.search).get('deriva') === '1';
             const AJUSTES = {
-                esperaMinima: breve ? 2.5 : deriva ? 18 + Math.random() * 24 : 4,   // s mínimos de viaje antes de abrir el portal
+                esperaMinima: breve ? (window.Portal && Portal.viaje && Portal.viaje.activo ? 12 + Math.random() * 14 : 2.5) : deriva ? 18 + Math.random() * 24 : 4,   // s mínimos de viaje antes de abrir el portal
                 esperaPrecarga: 30,       // s que se le dan al destino si no avisa que está listo
                 margenListo: 2,           // s extra tras el aviso: que también la gráfica quede asentada
                 salioDelInicio: 1000,     // distancia a recorrer para que el inicio cuente como "regreso"

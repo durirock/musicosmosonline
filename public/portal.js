@@ -142,6 +142,18 @@
         color:#fff;font:11px 'Courier New',monospace;letter-spacing:3px;text-transform:uppercase;opacity:0;
         transition:opacity .6s ease;box-shadow:0 0 22px -8px var(--c,#fff);white-space:nowrap}
     .pt-pista.on{opacity:1}
+    .pt-viaje{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:2147482985;display:flex;align-items:center;gap:12px;
+        padding:7px 8px 7px 18px;border-radius:999px;background:rgba(5,8,20,.62);border:1px solid rgba(200,162,255,.5);color:#e6d8ff;
+        font:10px 'Courier New',monospace;letter-spacing:2px;text-transform:uppercase;white-space:nowrap;backdrop-filter:blur(6px)}
+    .pt-viaje button{background:none;border:1px solid rgba(200,162,255,.4);color:#e6d8ff;border-radius:50%;width:24px;height:24px;cursor:pointer}
+    .pt-entrar{position:fixed;left:50%;bottom:140px;transform:translate(-50%,10px);z-index:2147482985;cursor:pointer;
+        padding:12px 26px;border-radius:999px;background:rgba(5,8,20,.72);border:1px solid var(--c,#fff);color:#fff;
+        font:12px 'Courier New',monospace;letter-spacing:3px;text-transform:uppercase;white-space:nowrap;opacity:0;
+        pointer-events:none;transition:opacity .5s,transform .5s;box-shadow:0 0 28px -6px var(--c,#fff);
+        backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+    .pt-entrar.on{opacity:1;pointer-events:auto;transform:translate(-50%,0);animation:ptLatido 2.2s ease-in-out infinite}
+    .pt-entrar small{margin-left:12px;opacity:.5;font-size:9px;letter-spacing:2px}
+    @keyframes ptLatido{50%{box-shadow:0 0 40px -2px var(--c,#fff)}}
     @keyframes ptGiro{to{transform:rotate(360deg)}}
     @keyframes ptOnda{0%,100%{box-shadow:0 0 10px -4px rgba(120,255,210,.6)}50%{box-shadow:0 0 22px -2px rgba(120,255,210,.9)}}
     @keyframes ptLlama{0%,100%{opacity:.55}50%{opacity:1}}
@@ -408,6 +420,7 @@
             estaListo = true;
             try { new BroadcastChannel('cosmos-portal').postMessage({ tipo: 'listo', mundo: AQUI }); } catch (_) {}
             setTimeout(() => radio.llegar(), 1200);        // margen para que el mundo registre su radio
+            setTimeout(() => travesia.llegar(), 1600);
         }
         revelar();
     }
@@ -465,6 +478,10 @@
             });
         });
         const pie = nodo('div', 'pt-pie', rueda);
+        const bv = nodo('button', 'pt-btn-viaje', pie);
+        bv.textContent = travesia.activo ? '◈ Detener el viaje' : '◈ Viaje por los universos';
+        bv.addEventListener('click', () => { travesia.activo ? travesia.detener() : travesia.iniciar(); bv.textContent = travesia.activo ? '◈ Detener el viaje' : '◈ Viaje por los universos'; });
+        nodo('br', '', pie);
         if (puedeCrearAqui) {
             pieCrear = nodo('div', 'pt-crear', pie);
             const txt = nodo('span', '', pieCrear);
@@ -766,6 +783,7 @@
             tibio: o.tibio || R * 14, cruce: o.cruce || R * 0.8,
             urlDestino: o.urlPropia || (via === 'kalpa' ? url('kalpa', { hacia: o.destino }) : url(o.destino, { via: via })),
             prepagado: !!o.prepagado, sinMu: false, cobrando: false,
+            zona: o.zona || Math.max((o.cruce || R * 0.8) * 3, R * 3.5),
             etiqueta: o.etiqueta || (via === 'kalpa' ? 'Kalpa → ' + MUNDOS[o.destino].nombre
                 : estiloP === 'fractura' ? 'Grieta → ' + MUNDOS[o.destino].nombre : MUNDOS[o.destino].nombre),
             cColor: estiloP === 'fractura' ? '#9b5cff' : estiloP === 'kalpa' ? MUNDOS.kalpa.color : '#' + color.getHexString(),
@@ -806,7 +824,7 @@
         const dt = Math.min(0.25, (ahora - tPrevio) / 1000); tPrevio = ahora;
         const t = ahora / 1000;
         sembrarTick(ahora);
-        let masCercano = null, dMin = Infinity;
+        let masCercano = null, dMin = Infinity, puerta = null, dPuerta = Infinity;
         for (let i = portales.length - 1; i >= 0; i--) {
             const p = portales[i];
             const pos = posViajero(p); if (!pos) continue;
@@ -880,16 +898,15 @@
             }
             if (enMarco || s < 0.8) continue;
             if (!p.activo) {
-                if (!saliendo && !p.cobrando && d > p.cruce * 2.5) { p.activo = true; p.sinMu = false; }
+                if (!saliendo && !p.cobrando && d > p.zona * 1.1) { p.activo = true; p.sinMu = false; }
                 else continue;
             }
             if (d < p.tibio) precargar(p.urlDestino);
             if (d < dMin) { dMin = d; masCercano = p; }
-            if (d < p.cruce && !saliendo) {
-                p.activo = false;
-                cruzarPortal(p);
-            }
+            // Ya no se cruza al pasar: dentro del área aparece el botón para entrar (como en Kalpa)
+            if (d < p.zona && d < dPuerta && !p.sinMu) { dPuerta = d; puerta = p; }
         }
+        mostrarPuerta(saliendo ? null : puerta);
         const mostrar = masCercano && dMin < masCercano.tibio;
         if (mostrar && !pista) pista = nodo('div', 'pt-pista', raiz);
         if (pista) {
@@ -902,6 +919,37 @@
             }
             pista.classList.toggle('on', !!mostrar);
         }
+    }
+
+    // ── Botón de entrada: aparece al estar dentro del área de un portal ──
+    let btnEntrar = null, puertaActual = null;
+    function mostrarPuerta(p) {
+        if (p === puertaActual) return;
+        puertaActual = p;
+        if (!btnEntrar) {
+            if (!p) return;
+            btnEntrar = nodo('button', 'pt-entrar', raiz);
+            btnEntrar.addEventListener('click', e => { e.stopPropagation(); entrarPuerta(); });
+            // Enter entra solo mientras el botón está a la vista (lejos de un portal, Enter es del mundo)
+            window.addEventListener('keydown', e => {
+                if (!puertaActual || (e.code !== 'Enter' && e.code !== 'NumpadEnter') || e.shiftKey || e.ctrlKey) return;
+                if (e.target && /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+                e.preventDefault(); e.stopImmediatePropagation(); entrarPuerta();
+            }, true);
+        }
+        if (p) {
+            const precio = (!p.prepagado && p.o.destino !== 'sol' && mu.conectado) ? ' · ' + PRECIO.cruzar + ' Mu' : '';
+            btnEntrar.innerHTML = '◆ Entrar · ' + p.etiqueta + precio + '<small>Enter</small>';
+            btnEntrar.style.setProperty('--c', p.cColor);
+        }
+        btnEntrar.classList.toggle('on', !!p);
+    }
+    function entrarPuerta() {
+        const p = puertaActual;
+        if (!p || saliendo || !p.activo) return;
+        p.activo = false;
+        mostrarPuerta(null);
+        cruzarPortal(p);
     }
 
     // ── Siembra de portales: aparecen al azar alrededor del viajero ──
@@ -1163,6 +1211,93 @@
         avisar('◆ Portal abierto · ' + nombre + (r.libre ? '' : ' · −' + PRECIO.crear + ' Mu' + quedan(r)), deriva ? MUNDOS.kalpa.color : MUNDOS[destino].color, 3600);
     }
 
+    // ══ Viaje por los universos ══════════════════════════════════════════════
+    // Como el Modo Viaje del agujero negro, pero entre mundos: un itinerario que nunca se
+    // repite. Cada estadía dura un tiempo al azar; el siguiente destino evita los últimos
+    // visitados y la ruta cambia (directo, túnel de Kalpa, la grieta, el horizonte).
+    // Cada mundo puede sumar su propio piloto: Portal.viaje.registrar({ iniciar, detener }).
+    const travesia = (function () {
+        const K = 'cosmos-viaje-auto';
+        const POOL = ['musicosmos', 'planetafunk', 'sagitario', 'mundointerior', 'pikitipu', 'kairos', 'sol'];
+        const leer = () => { try { return JSON.parse(sessionStorage.getItem(K)); } catch (_) { return null; } };
+        const guardar = v => { try { v ? sessionStorage.setItem(K, JSON.stringify(v)) : sessionStorage.removeItem(K); } catch (_) {} };
+        let chip = null, reloj = null, salida = 0, plan = null, piloto = null, enMarcha = false;
+
+        function elegir(v) {
+            const recientes = v.historial.slice(-3);
+            let opciones = POOL.filter(id => id !== AQUI && !recientes.includes(id) && MUNDOS[id]);
+            if (!opciones.length) opciones = POOL.filter(id => id !== AQUI);
+            const hacia = opciones[Math.floor(Math.random() * opciones.length)];
+            let via = 'directo';
+            const par = [AQUI, hacia].sort().join('|');
+            if (par === 'mundointerior|musicosmos' && Math.random() < 0.6) via = 'grieta';
+            else if (AQUI === 'sagitario' && hacia === 'mundointerior') via = 'horizonte';
+            else if (Math.random() < 0.4) via = 'kalpa';
+            return { hacia, via };
+        }
+        function urlPlan(pl) { return pl.via === 'kalpa' ? url('kalpa', { hacia: pl.hacia, breve: '1' }) : url(pl.hacia, { via: pl.via }); }
+        function pintar() {
+            if (!chip) return;
+            const seg = Math.max(0, Math.round((salida - performance.now()) / 1000));
+            const ruta = plan ? (plan.via === 'kalpa' ? ' · por Kalpa' : plan.via === 'grieta' ? ' · por la grieta' : plan.via === 'horizonte' ? ' · por el horizonte' : '') : '';
+            chip.firstChild.textContent = '◈ Viaje por los universos · ' + (plan ? MUNDOS[plan.hacia].nombre + ruta + ' en ' + Math.floor(seg / 60) + ':' + String(seg % 60).padStart(2, '0') : '…');
+        }
+        function ponerChip() {
+            if (chip) return;
+            chip = nodo('div', 'pt-viaje', raiz);
+            nodo('span', '', chip);
+            const x = nodo('button', '', chip); x.textContent = '✕'; x.title = 'Detener el viaje';
+            x.addEventListener('click', e => { e.stopPropagation(); detener(); });
+        }
+        function marchar() {
+            if (enMarcha || enMarco || AQUI === 'kalpa') return;      // en Kalpa el propio túnel lleva al siguiente
+            const v = leer(); if (!v) return;
+            enMarcha = true;
+            if (!v.historial.length || v.historial[v.historial.length - 1] !== AQUI) v.historial.push(AQUI);
+            v.historial = v.historial.slice(-8); guardar(v);
+            plan = elegir(v);
+            salida = performance.now() + (45 + Math.random() * 55) * 1000;
+            ponerChip(); pintar();
+            if (piloto) { try { piloto.iniciar(); } catch (_) {} }
+            clearInterval(reloj);
+            reloj = setInterval(() => {
+                pintar();
+                const falta = salida - performance.now();
+                if (falta < 12000) precargar(urlPlan(plan));
+                if (falta <= 0) { clearInterval(reloj); partir(); }
+            }, 1000);
+        }
+        function partir() {
+            if (saliendo || !leer()) return;
+            mu.cobrar(PRECIO.cruzar, 'Viaje por los universos → ' + MUNDOS[plan.hacia].nombre).then(r => {
+                if (!r.ok) { avisar('◇ El viaje se detiene: te falta Mu', '#ff8a7a', 5000); detener(); return; }
+                if (plan.via === 'kalpa') salir(urlPlan(plan), { color: MUNDOS.kalpa.color, color2: MUNDOS.kalpa.c2 });
+                else ir(plan.hacia, { via: plan.via });
+            });
+        }
+        function iniciar() {
+            if (enMarco) return;
+            guardar({ historial: [AQUI], desde: Date.now() });
+            cerrarAstrolabio();
+            avisar('◈ Viaje por los universos · ✕ arriba para detenerlo', '#c8a2ff', 4200);
+            enMarcha = false; marchar();
+        }
+        function detener() {
+            guardar(null); enMarcha = false; plan = null;
+            clearInterval(reloj);
+            if (chip) { chip.remove(); chip = null; }
+            if (piloto) { try { piloto.detener(); } catch (_) {} }
+        }
+        function llegar() {
+            if (enMarco || !leer()) return;
+            if (document.prerendering) { document.addEventListener('prerenderingchange', () => setTimeout(llegar, 800), { once: true }); return; }
+            marchar();
+        }
+        function registrar(p) { piloto = p; if (enMarcha && p) { try { p.iniciar(); } catch (_) {} } }
+        if (!enMarco) setTimeout(() => { if (!document.prerendering) llegar(); }, 9000);
+        return { iniciar, detener, llegar, registrar, get activo() { return !!leer(); } };
+    })();
+
     // ══ Radio continua · la clara que envuelve a los mundos ═══════════════════
     // Una página que se va se lleva su sonido: ningún navegador deja audio vivo sin
     // página. Lo que sí viaja es la intención. Esta capa recuerda si la radio estaba
@@ -1345,7 +1480,7 @@
     // ══ API ══════════════════════════════════════════════════════════════════
     window.Portal = {
         MUNDOS, ORDEN, aqui: AQUI, maleta, url, ir, irUrl, salir, precargar, listo, audio, radio,
-        anillo, sembrar, escenario, abrirGrieta, abrirAstrolabio, cerrarAstrolabio, crearPortal, mu, PRECIO,
+        anillo, sembrar, escenario, abrirGrieta, abrirAstrolabio, cerrarAstrolabio, crearPortal, mu, PRECIO, viaje: travesia,
         get iniciado() { return iniciado(); },
         get saliendo() { return saliendo; },
         _portales: portales   // para depurar
