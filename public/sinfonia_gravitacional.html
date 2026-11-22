@@ -214,6 +214,10 @@
         #btn-geo { left: 12.5rem; font-size: 1.05rem; line-height: 1; }
         #btn-flight { left: 16rem; font-size: 1.15rem; line-height: 1; }
         #btn-gaze { left: 19.5rem; font-size: 1.05rem; line-height: 1; }
+        /* ── PORTAL ── */
+        #btn-horizonte { left: 23rem; font-size: 1.1rem; line-height: 1; }
+        #btn-horizonte.active { border-color: #ffb37a; color: #ffe2c8; box-shadow: 0 0 18px rgba(255, 140, 80, 0.5); }
+        /* ── FIN PORTAL ── */
         #btn-gaze.active { border-color: #a5f3fc; color: #e0fbff; box-shadow: 0 0 18px rgba(165, 243, 252, 0.4); }
         #btn-flight.active { border-color: #c4b5fd; color: #e9d5ff; box-shadow: 0 0 18px rgba(196, 181, 253, 0.45); }
         .top-icon-btn, #ws-badge, #btn-back { transition: opacity 0.8s ease, transform 0.3s, background 0.3s, border-color 0.3s, color 0.3s; }
@@ -584,6 +588,7 @@
             #btn-geo { left: 9.2rem; }
             #btn-flight { left: 12rem; }
             #btn-gaze { left: 14.8rem; }
+            #btn-horizonte { left: 17.6rem; }   /* ── PORTAL ── */
             #btn-settings { right: 0.8rem; }
             #btn-stereo { right: 3.6rem; }
             #btn-pip { right: 6.4rem; }
@@ -688,6 +693,7 @@
     <div id="btn-geo" class="top-icon-btn" title="Galaxia fiel (ecuador) / Sombrero artístico (G)">◎</div>
     <div id="btn-flight" class="top-icon-btn" title="Viaje por la galaxia (V) · arrastrar = mirar libre · rueda o pellizco = acercar/alejar · C o doble clic = recentrar · W/S = velocidad">✧</div>
     <div id="btn-gaze" class="top-icon-btn" title="Mirada libre (L): quedas flotando y giras la vista despacio, como con lentes · rueda = acercar">◉</div>
+    <div id="btn-horizonte" class="top-icon-btn" title="Cruzar el horizonte de sucesos → Mundo Interior">◐</div><!-- ── PORTAL ── -->
     <div id="planet-labels"></div>
 
     <div id="btn-stereo" class="top-icon-btn" title="Modo Estereoscópico (VR / 3D)">
@@ -1017,6 +1023,8 @@
     </div>
 
     <!-- Three.js and Dependencies via CDN -->
+    <!-- ── PORTAL ── entrelazamiento de mundos (antes que los demás scripts) -->
+    <script src="portal.js" data-mundo="sagitario"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
@@ -3252,7 +3260,7 @@
             const world = SPHERE_WORLDS[spheres.w];
             const n = spheres.n + (spheres.nOff || 0); // lectura desde la semilla
             const isLong = fibWord(n) === 1;
-            const beat = 0.46 / world.tempo;                 // segundos
+            const beat = 0.46 / (world.tempo * (window.HORIZONTE ? HORIZONTE.tiempo : 1));   // segundos · ── PORTAL ── el tiempo se dilata cerca del horizonte
             let dur = isLong ? beat * PHI : beat;
 
             // Acorde del mundo al inicio de cada frase (pad suave, se suelta solo)
@@ -7192,5 +7200,103 @@
         init();
         animate();
     </script>
+    <!-- ── PORTAL ── EL HORIZONTE DE SUCESOS ─────────────────────────────────
+         Tres umbrales, medidos desde el centro del agujero negro:
+           1. Zona tibia (≈ borde del disco): empieza a precargarse Mundo Interior.
+           2. Anillo de fotones (2,6 radios, el mismo radio que el seguro del Modo Viaje):
+              la gravedad toma el control mientras avanzas hacia el centro; la imagen se
+              tiñe de rojo, la Música de las Esferas se ralentiza (dilatación del tiempo)
+              y el sonido se oscurece. Si dejas de avanzar o retrocedes, escapas.
+              Más adentro (1,6 radios) ya no hay vuelta.
+           3. El horizonte: la sombra lo llena todo, queda una nota grave y entras a
+              Mundo Interior, que nace desde un punto de luz.
+         Nunca es accidental: hace falta volar hacia el centro (W / joystick) o pulsar ◐.
+    -->
+    <script>
+    window.HORIZONTE = { tiempo: 1, k: 0 };
+    (function () {
+        if (!window.Portal) return;
+        const R_TIBIO = BH_R * 14, R_FOTONES = BH_R * 2.6, R_SIN_VUELTA = BH_R * 1.6, R_HORIZONTE = BH_R;
+        const tinte = document.createElement('div');
+        tinte.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147482900;opacity:0;' +
+            'background:radial-gradient(circle at 50% 50%,rgba(0,0,0,0) 18%,rgba(140,24,0,.5) 58%,rgba(14,0,0,.96) 100%)';
+        document.body.appendChild(tinte);
+        const btn = document.getElementById('btn-horizonte');
+        const urlMI = Portal.url('mundointerior', { via: 'horizonte' });
+        const UP = new THREE.Vector3(0, 1, 0), dir = new THREE.Vector3(), tang = new THREE.Vector3();
+        let caidaElegida = false, cruzado = false, ultimoCorte = null, tPrev = performance.now();
+
+        function caer() {
+            if (cruzado) return;
+            if (typeof FLIGHT !== 'undefined' && FLIGHT.active) stopFlight();
+            if (typeof GAZE !== 'undefined' && GAZE.active) stopGaze();
+            if (isZoomed || targetedStar) { isZoomed = false; targetedStar = null; try { deselectPlanet(); } catch (_) {} btnBack.style.display = 'none'; }
+            caidaElegida = !caidaElegida;            // segundo toque: te arrepientes (mientras no pases el umbral sin vuelta)
+            btn.classList.toggle('active', caidaElegida);
+            if (caidaElegida) Portal.precargar(urlMI);
+        }
+        btn.addEventListener('click', caer);
+
+        function notaGrave() {
+            try {
+                if (!audioCtx) return;
+                const g = audioCtx.createGain();
+                g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.22, audioCtx.currentTime + 0.35);
+                g.connect(audioCtx.destination);
+                [55, 82.5, 110.3].forEach((f, i) => {
+                    const o = audioCtx.createOscillator();
+                    o.type = 'sine'; o.frequency.value = f;
+                    const gi = audioCtx.createGain(); gi.gain.value = [1, 0.35, 0.15][i];
+                    o.connect(gi); gi.connect(g); o.start();
+                });
+            } catch (_) {}
+        }
+        function cruzar() {
+            cruzado = true;
+            notaGrave();
+            Portal.ir('mundointerior', { via: 'horizonte' });
+        }
+
+        function tick(ahora) {
+            requestAnimationFrame(tick);
+            const dt = Math.min(0.25, (ahora - tPrev) / 1000); tPrev = ahora;   // en equipos lentos también cae a su ritmo
+            if (cruzado || !camera || !controls) return;
+            const bh = flightBH();
+            const r = camera.position.distanceTo(bh);
+            if (r < R_TIBIO) Portal.precargar(urlMI);
+
+            // Intensidad: 0 fuera del anillo de fotones, 1 en el horizonte
+            const k = r >= R_FOTONES ? 0 : Math.min(1, (R_FOTONES - r) / (R_FOTONES - R_HORIZONTE));
+            HORIZONTE.k = k;
+            HORIZONTE.tiempo = 1 - 0.75 * k;
+            tinte.style.opacity = (Math.pow(k, 0.8) * 0.92).toFixed(3);
+            const corte = k > 0.01 ? Math.round(18000 * Math.pow(1 - k, 2.4) + 160) : null;
+            if (corte !== ultimoCorte && (corte === null || ultimoCorte === null || Math.abs(corte - ultimoCorte) > 60)) {
+                Portal.audio({ corte: corte }, 0.12);
+                ultimoCorte = corte;
+            }
+
+            // ¿La gravedad toma el control?
+            const enViaje = typeof FLIGHT !== 'undefined' && FLIGHT.active;
+            const avanza = !enViaje && ((keys.w ? 1 : 0) - joyL.y) > 0.2;
+            const retrocede = ((keys.s ? 1 : 0) + joyL.y) > 0.2;
+            const sinVuelta = r < R_SIN_VUELTA;
+            if (caidaElegida && retrocede && !sinVuelta) { caidaElegida = false; btn.classList.remove('active'); }
+            const cae = caidaElegida || sinVuelta || (r < R_FOTONES && avanza);
+            controls.minDistance = (cae || r < R_FOTONES) ? 0.01 : 2;
+            if (cae && !enViaje) {
+                dir.subVectors(bh, camera.position).normalize();
+                tang.crossVectors(dir, UP).normalize();
+                const v = r > R_FOTONES ? Math.max(2.5, r * 0.32) : (0.45 + 2.4 * k);   // espiral que se cierra
+                camera.position.addScaledVector(dir, v * dt).addScaledVector(tang, v * 0.55 * dt);
+                controls.target.lerp(bh, Math.min(1, dt * 1.6));
+            }
+            if (r < R_HORIZONTE * 1.04) cruzar();
+        }
+        requestAnimationFrame(tick);
+    })();
+    </script>
+    <!-- ── FIN PORTAL ── -->
 </body>
 </html>

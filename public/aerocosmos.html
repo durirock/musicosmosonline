@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>AeroCosmos Cartógrafo</title>
+    <!-- ── PORTAL ── entrelazamiento de mundos (antes que los demás scripts) -->
+    <script src="portal.js" data-mundo="planetafunk" data-listo="manual"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -5195,7 +5197,43 @@ void main(){
             renderViewRig(dt);   // CARTÓGRAFO: render desde la vista elegida (ave · 3ª · 1ª)
         }
 
-        window.onload = () => tintaInit().then(() => { init(); tintaSpawn(); });
+        window.onload = () => tintaInit().then(() => { init(); tintaSpawn(); if (window.PlanetaFunkPortal) PlanetaFunkPortal(); });   // ── PORTAL ──
     </script>
+    <!-- ── PORTAL ── Planeta Funk en el viaje ────────────────────────────────
+         · Si llegas por Kalpa, bajas desde lo alto de la atmósfera hacia tus dibujos
+           (cualquier tecla de vuelo te devuelve el control).
+         · Un anillo Kalpa en el cielo, delante del punto de llegada → Sagitario A*.
+    -->
+    <script>
+    window.PlanetaFunkPortal = function () {
+        if (!window.Portal) return;
+        const base = camera.position.clone();
+        const llegaPorKalpa = !!Portal.maleta.desde;
+        // Anillo hacia Sagitario A*: adelante y algo más abajo que el punto de llegada
+        Portal.anillo({ escena: scene, camara: camera,
+                        posicion: new THREE.Vector3(base.x + 160, base.y - 60, base.z - 560),
+                        destino: 'sagitario', via: 'kalpa', radio: 40, tibio: 620, cruce: 34 });
+        if (llegaPorKalpa) {
+            const y0 = base.y + 900, rx0 = -0.85, rxF = (typeof cameraRotX === 'number') ? cameraRotX : -0.32;
+            camera.position.y = y0;
+            cameraRotX = rx0;
+            const t0 = performance.now(), DUR = 7000;
+            const VUELO = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyZ', 'KeyX', 'Space'];
+            (function bajar(ahora) {
+                const k = Math.min(1, (ahora - t0) / DUR);
+                const tomoControl = typeof keys !== 'undefined' && VUELO.some(c => keys[c]);
+                if (tomoControl) return;
+                const e = 1 - Math.pow(1 - k, 3);
+                camera.position.y = y0 + (base.y - y0) * e;
+                cameraRotX = rx0 + (rxF - rx0) * e;
+                if (k < 1) requestAnimationFrame(bajar);
+            })(t0);
+        }
+        // Levanta el velo cuando el mundo ya dibujó sus primeros cuadros
+        let n = 0;
+        (function esperar() { if (++n < 4) requestAnimationFrame(esperar); else Portal.listo(); })();
+    };
+    </script>
+    <!-- ── FIN PORTAL ── -->
 </body>
 </html>

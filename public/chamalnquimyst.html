@@ -504,6 +504,8 @@ body.touch #btn-universe-mode { bottom: auto; top: 120px; right: 20px; padding: 
 <!-- ════════════════════════════════════════════════
     THREE.JS r165
 ════════════════════════════════════════════════ -->
+<!-- ── PORTAL ── el Sol es el mapa: velos al entrar a cada mundo, sin astrolabio propio -->
+<script src="portal.js" data-mundo="sol" data-astrolabio="no"></script>
 <script type="importmap">
 {
   "imports": {
@@ -848,7 +850,7 @@ const PLANETS = [
   { id: 'musicosmos', name: 'Musicosmos', url: 'index.html', col: 0xa87fff, orbitR: 30, spd: 0.0055, sz: 4.5, detail: 5, incl: 0.12, desc: 'Espacio tridimensional donde la música cobra vida.' },
   { id: 'kalpa', name: 'Kalpa', url: 'kalpa.html?desde=sol&hacia=planetafunk', col: 0xff6a5a, orbitR: 43, spd: 0.004, sz: 2.2, detail: 2, incl: -0.18, desc: 'Experiencia contemplativa de túnel infinito con shaders de coseno.' },
   { id: 'archhtml', name: 'Mundo Interior', url: 'mundointerior_completo.html', col: 0x00e5cc, orbitR: 56, spd: 0.003, sz: 3.8, detail: 5, incl: 0.24, desc: 'Navegador de archivos 3D.' },
-  { id: 'pfunk', name: 'PlanetaFunk', url: 'planetafunk.html', col: 0x66ff99, orbitR: 68, spd: 0.0022, sz: 3.0, detail: 3, incl: -0.1, desc: 'Mundo procedural con terreno fBm.' },
+  { id: 'pfunk', name: 'PlanetaFunk', url: 'aerocosmos.html', col: 0x66ff99, orbitR: 68, spd: 0.0022, sz: 3.0, detail: 3, incl: -0.1, desc: 'Mundo procedural con terreno fBm.' },
   { id: 'wildmedicine', name: 'Wild Medicine', url: 'https://www.wildmedicine.cl', col: 0x22dd88, orbitR: 79, spd: 0.0018, sz: 3.4, detail: 4, incl: 0.08, desc: 'Puente entre la sabiduría ancestral y la medicina moderna.' },
   { id: 'kp', name: 'Killer Pendiente', url: 'https://durirock.github.io/blog', col: 0xffcc55, orbitR: 91, spd: 0.0016, sz: 5.2, detail: 3, incl: 0.2, isKP: true, desc: 'Sistema gamificado de productividad.' },
   { id: 'bitacora', name: 'Bitácora', url: 'https://durirock.github.io/blog', col: 0xffaa33, orbitR: 104, spd: 0.0012, sz: 2.0, detail: 3, incl: -0.15, desc: 'Museo viviente del ecosistema Chamalnquimyst.' },
@@ -1411,6 +1413,14 @@ function navigateToUniverse(pd) {
   if (!pd.url || pd.url === '#') return;
   const anchor = { planetId: pd.id, camPos: { x: _lastCamPos.x, y: _lastCamPos.y, z: _lastCamPos.z }, camYaw: camYaw, camPitch: camPitch, camRadius: camRadius, camTarget: { x: camTarget.x, y: camTarget.y, z: camTarget.z }, timestamp: Date.now() };
   try { sessionStorage.setItem('cml_anchor', JSON.stringify(anchor)); } catch(_){}
+  // ── PORTAL ── los mundos del ecosistema se abren con su velo y saben que vienes del Sol
+  if (window.Portal && !/^https?:/i.test(pd.url)) {
+    const u = new URL(pd.url, location.href);
+    if (!u.searchParams.has('desde')) u.searchParams.set('desde', 'sol');
+    Portal.irUrl(u.href, { color: '#' + pd.col.toString(16).padStart(6, '0') });
+    return;
+  }
+  // ── FIN PORTAL ──
   window.location.href = pd.url;
 }
 window.navigateToUniverse = navigateToUniverse;
