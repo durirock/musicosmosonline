@@ -597,7 +597,7 @@
                 'vec3 pal(float t){ return 0.55+0.45*cos(6.2831*(vec3(0.02,0.36,0.68)+t)); }',
                 'void main(){',
                 '  vec2 p=(vUv-0.5)*2.0; float r=length(p); float a=atan(p.y,p.x);',
-                '  float z=0.35/(r+0.04)+uT*(1.4+uK*2.0);',                         // profundidad del túnel
+                '  float z=0.35/(r+0.04)+uT*1.4;',                         // profundidad del túnel
                 '  float hel=sin(a*3.0+z*2.6)*0.5+0.5;',                            // la espiral de Kalpa
                 '  float anillos=pow(sin(z*5.0)*0.5+0.5,3.0);',
                 '  vec3 col=pal(z*0.12+hel*0.25);',
@@ -745,7 +745,39 @@
             };
             g.add(lente);
         }
-        return { g, disco, nucleo, lente, agujero: true };
+        // Microestrellas: un enjambre de soles diminutos que orbitan el agujero, como en Sagitario A*.
+        // Las cercanas giran más rápido (Kepler) y titilan; el cúmulo se aplana hacia el disco.
+        const N = 2600, pos = new Float32Array(N * 3), dat = new Float32Array(N * 4), col = new Float32Array(N * 3);
+        for (let i = 0; i < N; i++) {
+            const r = R * (2.4 + Math.pow(Math.random(), 1.7) * 13), a0 = Math.random() * Math.PI * 2;
+            const inc = (Math.random() - 0.5) * (Math.random() < 0.6 ? 0.5 : 2.4);   // la mayoría cerca del plano
+            dat[i * 4] = r; dat[i * 4 + 1] = a0; dat[i * 4 + 2] = inc; dat[i * 4 + 3] = Math.random() * 6.28;
+            const tib = Math.random();                                             // de azul joven a ámbar viejo
+            col[i * 3] = 0.75 + 0.25 * tib; col[i * 3 + 1] = 0.8 + 0.12 * (1 - Math.abs(tib - 0.5)); col[i * 3 + 2] = 1.0 - 0.35 * tib;
+        }
+        const geo = new T.BufferGeometry();
+        geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+        geo.setAttribute('aDat', new T.BufferAttribute(dat, 4));
+        geo.setAttribute('color', new T.BufferAttribute(col, 3));
+        const estrellas = new T.Points(geo, new T.ShaderMaterial({
+            transparent: true, depthWrite: false, blending: T.AdditiveBlending, vertexColors: true, fog: false,
+            uniforms: { uT: { value: 0 }, uR: { value: R } },
+            vertexShader: [
+                'attribute vec4 aDat; uniform float uT; uniform float uR; varying vec3 vC; varying float vB;',
+                'void main(){',
+                '  float r=aDat.x; float w=1.6*pow(uR*2.4/r,1.5);',                       // velocidad orbital kepleriana
+                '  float a=aDat.y+uT*w; float c=cos(aDat.z), s=sin(aDat.z);',
+                '  vec3 p=vec3(cos(a)*r, sin(a)*r*s*0.35, sin(a)*r*c);',
+                '  vec4 mv=modelViewMatrix*vec4(p,1.0); gl_Position=projectionMatrix*mv;',
+                '  vB=0.55+0.45*sin(uT*3.0+aDat.w*7.0); vC=color;',
+                '  gl_PointSize=clamp((1.2+1.6*fract(aDat.w*13.7))*300.0/-mv.z,1.0,4.0);',
+                '}'].join('\n'),
+            fragmentShader: 'varying vec3 vC; varying float vB; void main(){ vec2 q=gl_PointCoord-0.5; float d=length(q); if(d>0.5) discard;' +
+                'gl_FragColor=vec4(vC*vB,(1.0-d*2.0)*vB); }'
+        }));
+        estrellas.frustumCulled = false;
+        g.add(estrellas);
+        return { g, disco, nucleo, lente, estrellas, agujero: true };
     }
 
     function anillo(o) {
@@ -858,13 +890,13 @@
                 if (u.uA) u.uA.value = suave(Math.min(1, s * 1.15)) * p.abre * (p.muere ? s : 1);
                 const arr = p.puntos.geometry.attributes.position.array, fase = p.puntos.userData.fase;
                 for (let j = 0; j < fase.length; j++) {
-                    const f = (fase[j] + t * 0.07 * (1 + k)) % 1;
+                    const f = (fase[j] + t * 0.07) % 1;          // velocidad constante: acercarse solo aviva el brillo
                     if (pa.fractura) {           // chispas que escapan de la grieta
                         arr[j * 3] = (Math.sin(fase[j] * 91.0) * 0.12 + (fase[j] - 0.5) * f * 0.9) * p.R;
                         arr[j * 3 + 1] = (fase[j] * 2.4 - 1.2) * p.R;
                         arr[j * 3 + 2] = f * p.R * 0.5;
                     } else {
-                        const ang = fase[j] * 40 + t * (0.6 + k);
+                        const ang = fase[j] * 40 + t * 0.6;
                         const rr = p.R * (1.6 - f * 1.5);
                         arr[j * 3] = Math.cos(ang) * rr; arr[j * 3 + 1] = Math.sin(ang) * rr; arr[j * 3 + 2] = (1 - f) * p.R * 0.6;
                     }
@@ -875,6 +907,7 @@
                 p.grupo.scale.setScalar(Math.max(0.001, s));
                 pa.disco.material.uniforms.uT.value = t;
                 pa.disco.rotation.z += dt * 0.15;
+                if (pa.estrellas) pa.estrellas.material.uniforms.uT.value = t;
                 if (pa.lente) pa.lente.lookAt(posV);
                 // Absorción gravitacional: te atrae, y desde el punto sin retorno ya no hay escape
                 const gv = p.gravedad;

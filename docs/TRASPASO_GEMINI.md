@@ -218,3 +218,31 @@ ese espejo esté disponible en cualquier dispositivo sin depender del archivo f�
 
 La versión completa de este traspaso, con contexto personal, está en el Proyecto de Claude
 (`claude/traspaso-gemini.md`). Pídesela a Andrés si no la tienes.
+
+---
+
+## 7. Encargos nuevos de Andrés (22-nov, noche) que quedaron para Gemini
+
+### 7.1 Joypad compartido en todos los universos
+"Todos los universos tienen el mismo sistema de joypad y configuración que Musicosmos; se
+comparte en todos."
+- Musicosmos (`public/index.html`) ya tiene mapeo de joypad configurable (acciones por botón,
+  guardado en `localStorage`). Búscalo con `grep -n "getGamepads\|gamepad" index.html`.
+- Plan: extraer ese sistema a un módulo `public/cosmos-joypad.js`, cargado por `portal.js`,
+  con la **misma clave de `localStorage`** para que la configuración se comparta (mismo origen).
+- Acciones comunes del ecosistema: astrolabio (º), grieta, crear portal (◎), **Entrar** al
+  portal (`.pt-entrar`), radio (♪). Cada mundo registra sus acciones propias
+  (p. ej. `Portal.joypad.registrar({ accion: fn })`) para mover cámara/avatar a su manera.
+- Mando: Ultra Game 31fjx04025 (mini USB). Probar con `navigator.getGamepads()` en Chrome.
+
+### 7.2 Sagitario A* con el synth de Musicosmos y la orquesta de ángeles
+"El agujero negro tiene el mismo synth de Musicosmos para tocar con el teclado del PC y con
+el MIDI, y el agujero responde; al mismo tiempo se dirige desde el synth la orquesta
+sinfónica de ángeles con el piano."
+- El synth nuevo de Musicosmos (teclado completo, loopera) vive en `index.html`; extraerlo a
+  un módulo reutilizable (`public/cosmos-synth.js`) en vez de copiarlo.
+- `sinfonia_gravitacional.html` ya responde a MIDI ("Esferas", tempo, melodía, Modo Viaje).
+  Conectar la salida del synth a su analizador/eventos de nota para que el agujero reaccione.
+- "Orquesta sinfónica de ángeles": identificar en Sinfonía qué capa es (grep "ángel\|angel\|
+  orquesta\|coro") y permitir que las notas del piano (Yamaha P-115 por MIDI) la dirijan.
+- Devolución a Andrés antes de construir: es arquitectura compartida entre mundos.
