@@ -2294,7 +2294,12 @@
                 radioFreqData = new Uint8Array(radioAnalyser.frequencyBinCount);
 
                 radioGain = audioCtx.createGain();
-                radioGain.gain.value = document.getElementById('vol-radio').value;
+                radioGain.gain.value = 0;
+                rampa(radioGain.gain, volRadio(), isAudioPlaying ? RELEVO_S : 1.2);
+                if (isAudioPlaying && masterGain) {
+                    rampa(masterGain.gain, 0, RELEVO_S);
+                    setTimeout(() => { if (radioAudioEl === el && isAudioPlaying) { funkStop(); masterGain.gain.setValueAtTime(volMaster(), audioCtx.currentTime + 0.6); } }, RELEVO_S * 1000 + 100);
+                }
 
                 source.connect(radioAnalyser);
                 radioAnalyser.connect(radioGain);
@@ -4389,9 +4394,25 @@ void main(){
         // y se apaga con ■ o la tecla N. Si lo apagas, queda apagado la próxima vez.
         // =====================================================================
         const FUNK_PREF = 'aerocosmos.funk';
+        // ── Relevo radio ⇄ groove: uno se apaga despacio mientras el otro entra despacio ──
+        const RELEVO_S = 3.5;
+        function rampa(param, hacia, seg) {
+            const t = audioCtx.currentTime;
+            param.cancelScheduledValues(t); param.setValueAtTime(param.value, t);
+            param.linearRampToValueAtTime(hacia, t + seg);
+        }
+        function volMaster() { return parseFloat(document.getElementById('vol-master').value) || 1; }
+        function volRadio() { return parseFloat(document.getElementById('vol-radio').value) || 0.8; }
         function funkStart() {
             ensureAudioCtx();
             if (audioCtx.state === 'suspended') audioCtx.resume();
+            // El groove entra despacio; si la radio sonaba, se va apagando mientras tanto
+            if (!isAudioPlaying && masterGain) { masterGain.gain.setValueAtTime(0, audioCtx.currentTime); rampa(masterGain.gain, volMaster(), RELEVO_S); }
+            if (radioAudioEl && radioGain) {
+                rampa(radioGain.gain, 0, RELEVO_S);
+                const el = radioAudioEl;
+                setTimeout(() => { if (radioAudioEl === el) disconnectRadio(); }, RELEVO_S * 1000 + 100);
+            }
             if (!noiseBuffer) {
                 const bufferSize = audioCtx.sampleRate * 2;
                 noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
@@ -4420,7 +4441,7 @@ void main(){
                 // el propio botón ■/▶, el del panel o la tecla N deciden por sí mismos
                 if (e && ((e.target && (e.target.id === 'btn-funk' || e.target.id === 'btn-start-core')) || e.code === 'KeyN')) return;
                 window.removeEventListener('pointerdown', first, true); window.removeEventListener('keydown', first, true);
-                if (pref !== 'off' && !isAudioPlaying) funkStart();
+                if (pref !== 'off' && !isAudioPlaying && !radioAudioEl) funkStart();   // si la radio ya suena, se respeta
             };
             window.addEventListener('pointerdown', first, true); window.addEventListener('keydown', first, true);
             document.getElementById('btn-funk').addEventListener('click', e => { e.stopPropagation(); pref = 'manual'; funkToggle(); });
@@ -5040,13 +5061,23 @@ void main(){
         function nucFrame(dt) {
             if (!NUC.sun) return;
             NUC.t += dt;
+            // Con la radio, el sol y la luna no crecen al golpe: su corteza fluye con la música.
+            // El sol sigue los medios y agudos; la luna, los graves. Respuesta lenta y continua.
+            const conRadio = radioConnected && !radioFreqData ? false : radioConnected;
+            const rS = conRadio ? (radioBand.mid + radioBand.treble) * 0.5 * spectrumReactivity : 0;
+            const rL = conRadio ? radioBand.bass * spectrumReactivity : 0;
+            NUC.rs = (NUC.rs || 0) + (rS - (NUC.rs || 0)) * Math.min(1, dt * 1.4);
+            NUC.rl = (NUC.rl || 0) + (rL - (NUC.rl || 0)) * Math.min(1, dt * 1.1);
+            NUC.ts = (NUC.ts || 0) + dt * (1 + NUC.rs * 1.8);
+            NUC.tl = (NUC.tl || 0) + dt * 0.8 * (1 + NUC.rl * 1.5);
             const proj = window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
             const sunLvl = THREE.MathUtils.clamp((sunCurrentScale - sunBaseScale) / 120, 0, 1);
             const day = THREE.MathUtils.clamp(sunElevation * 4 + 0.5, 0, 1);
             [[NUC.sun, sunMesh, sunCurrentScale * 3.1, sunLvl], [NUC.moon, moonMesh, moonCurrentScale * 3.3, moonBeatGlow]].forEach(([N, anchor, R, lvl], idx) => {
                 N.grp.position.copy(anchor.position);
                 const breathe = 0.08 + 0.06 * Math.sin(NUC.t * 0.23 + idx * 2);          // nunca del todo quieto
-                N.u.uTime.value = NUC.t * (idx ? 0.8 : 1); N.u.uLevel.value = Math.min(1, lvl + breathe);
+                const radioLvl = idx ? NUC.rl * 0.9 : NUC.rs * 1.1;
+                N.u.uTime.value = idx ? NUC.tl : NUC.ts; N.u.uLevel.value = Math.min(1, lvl + breathe + radioLvl);
                 N.u.uProj.value = proj; N.u.uR.value = R;
                 // el sol palidece al anochecer y la luna al amanecer, sin cortes
                 const fade = idx ? 0.55 + 0.45 * (1 - day) : 0.6 + 0.4 * day;
@@ -5236,19 +5267,31 @@ void main(){
     <script>
     window.PlanetaFunkPortal = function () {
         if (!window.Portal) return;
+        // Deriva por Kalpa: apareces en otro mapa, lejos de donde estabas
+        if (Portal.maleta.deriva === '1') {
+            const ang = Math.random() * Math.PI * 2, dist = 20000 + Math.random() * 40000;
+            camera.position.x += Math.cos(ang) * dist;
+            camera.position.z += Math.sin(ang) * dist;
+            camera.position.y = Math.max(480, Math.max(SEA_LEVEL, noise.get(camera.position.x, camera.position.z)) + 260);
+        }
         const base = camera.position.clone();
         const llegaPorKalpa = !!Portal.maleta.desde;
         // Portales que aparecen al azar en el cielo: a Musicosmos (directo) y túneles de Kalpa
         Portal.escenario({ escena: scene, camara: camera, renderer: renderer, viajero: () => camera.position });
-        Portal.sembrar({ max: 3, distancia: [600, 1500], altura: [-120, 80], vida: [80, 160], intervalo: [10, 24], primero: 3, abanico: 60,
+        const sueloPF = (x, z) => Math.max(SEA_LEVEL, noise.get(x, z));
+        Portal.sembrar({ max: 3, distancia: [900, 2100], altura: [-60, 160], suelo: sueloPF, vida: [80, 160], intervalo: [10, 24], primero: 3, abanico: 60,
             tipos: [
                 { destino: 'musicosmos', estilo: 'anillo', radio: 40, peso: 3, tibio: 700, cruce: 34 },
+                { destino: 'sagitario',  estilo: 'anillo', radio: 40, peso: 2, tibio: 700, cruce: 34, etiqueta: 'Agujero negro · Sagitario A*' },
                 { destino: 'sagitario',  estilo: 'kalpa',  radio: 40, peso: 1, tibio: 700, cruce: 34 },
-                { destino: 'musicosmos', estilo: 'kalpa',  radio: 40, peso: 1, tibio: 700, cruce: 34 }
+                { destino: 'musicosmos', estilo: 'kalpa',  radio: 40, peso: 1, tibio: 700, cruce: 34 },
+                // Kalpa breve: un tramo corto de túnel y sales en otro mapa de Planeta Funk
+                { destino: 'planetafunk', estilo: 'kalpa', radio: 40, peso: 2, tibio: 700, cruce: 34, etiqueta: 'Kalpa breve · otro mapa',
+                  urlPropia: Portal.url('kalpa', { hacia: 'planetafunk', deriva: '1', breve: '1' }) }
             ] });
         // El agujero negro, lejos y en otro lugar cada vez: lente gravitacional y absorción → Sagitario A*
-        Portal.sembrar({ max: 1, primero: 1, intervalo: [30, 60], vida: [300, 600], abanico: 80,
-            tipos: [{ destino: 'sagitario', estilo: 'agujero', radio: 220, distancia: [3200, 4500], altura: [300, 700],
+        Portal.sembrar({ max: 1, primero: 1, intervalo: [30, 60], vida: [300, 600], abanico: 80, suelo: sueloPF,
+            tipos: [{ destino: 'sagitario', estilo: 'agujero', radio: 220, distancia: [4200, 5600], altura: [300, 700],
                       tibio: 2600, cruce: 176, etiqueta: 'Sagitario A*',
                       gravedad: { alcance: 6, sinRetorno: 1.6, tiron: 1.2, caida: 3 } }] });
         if (llegaPorKalpa) {
@@ -5267,9 +5310,21 @@ void main(){
                 if (k < 1) requestAnimationFrame(bajar);
             })(t0);
         }
-        // Levanta el velo cuando el mundo ya dibujó sus primeros cuadros
-        let n = 0;
-        (function esperar() { if (++n < 4) requestAnimationFrame(esperar); else Portal.listo(); })();
+        // Precalentar: mientras viajas por el túnel de Kalpa la página está precargada y
+        // escondida, y ahí no corre el ciclo de dibujo. Se genera el terreno alrededor y se
+        // compilan los shaders a mano; recién entonces (y unos segundos después) avisa que está lista.
+        let vueltas = 0;
+        (function calentar() {
+            try {
+                if (document.prerendering) { VIEW.focusX = camera.position.x; VIEW.focusZ = camera.position.z; }
+                updateChunks(); processChunkQueue();
+            } catch (_) {}
+            if (chunkQueue.length && ++vueltas < 600) { setTimeout(calentar, document.prerendering ? 0 : 40); return; }
+            try { renderer.compile(scene, camera); } catch (_) {}
+            const loader = document.getElementById('loading');
+            if (loader) loader.style.display = 'none';
+            setTimeout(() => Portal.listo(), 1500);
+        })();
     };
     </script>
     <!-- ── FIN PORTAL ── -->

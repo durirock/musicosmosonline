@@ -5,10 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Chamalnquimyst Universe</title>
 <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!-- Emulador Ruffle (WebAssembly) para ejecutar archivos Flash .swf modernos -->
+<script>
+  window.RufflePlayer = window.RufflePlayer || {};
+  window.RufflePlayer.config = {
+    autoplay: "on",
+    unmuteOverlay: "visible",
+    backgroundColor: "#050210",
+    letterbox: "on",
+    contextMenu: "on",
+    splashScreen: false,
+    openUrlMode: "allow"
+  };
+</script>
+<script src="https://unpkg.com/@ruffle-rs/ruffle" defer></script>
 <style>
 /* ============================================================
-   CHAMALNQUIMYST UNIVERSE — NEUROESTÉTICA v4
-   Glassmorphism, elegancia contemplativa, cristal puro
+   CHAMALNQUIMYST UNIVERSE — NEUROESTÉTICA v5.3
+   Glassmorphism, elegancia contemplativa + Durakinesis Cenit/Nadir
 ============================================================ */
 :root {
   --void:      #030108;
@@ -34,7 +48,167 @@ html, body {
   user-select: none;
 }
 
-canvas#c { position: fixed; inset: 0; z-index: 1; }
+canvas#c { position: fixed; inset: 0; z-index: 1; touch-action: none; }
+
+/* Capa CSS3D para los paneles interactivos flotando en el cenit y nadir */
+#css3d-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ── PANEL FLOTANTE EN EL ESPACIO PROFUNDO (DURAKINESIS SWF) ── */
+.space-swf-panel {
+  width: 820px;
+  height: 660px;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  overflow: hidden;
+  background: radial-gradient(circle at top right, rgba(16, 8, 38, 0.82), rgba(4, 1, 12, 0.92));
+  border: 1.5px solid rgba(0, 240, 255, 0.38);
+  box-shadow:
+    0 0 60px rgba(0, 240, 255, 0.18),
+    0 0 120px rgba(204, 68, 255, 0.12),
+    inset 0 0 24px rgba(0, 240, 255, 0.08);
+  transition: border-color .35s ease, box-shadow .35s ease;
+  backface-visibility: visible;
+}
+.space-swf-panel.interactive {
+  pointer-events: auto;
+  border-color: rgba(0, 240, 255, 0.82);
+  box-shadow:
+    0 0 85px rgba(0, 240, 255, 0.36),
+    inset 0 0 30px rgba(0, 240, 255, 0.16);
+}
+.space-swf-panel.accent-fuchsia.interactive {
+  border-color: rgba(255, 45, 149, 0.85);
+  box-shadow:
+    0 0 85px rgba(255, 45, 149, 0.36),
+    inset 0 0 30px rgba(255, 45, 149, 0.16);
+}
+.space-swf-panel.accent-fuchsia {
+  border-color: rgba(255, 45, 149, 0.42);
+  box-shadow:
+    0 0 60px rgba(255, 45, 149, 0.18),
+    0 0 120px rgba(204, 68, 255, 0.14),
+    inset 0 0 24px rgba(255, 45, 149, 0.08);
+}
+
+.swf-space-bar {
+  height: 52px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.10), rgba(204, 68, 255, 0.08), rgba(4, 1, 12, 0.75));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  flex-shrink: 0;
+}
+.space-swf-panel.accent-fuchsia .swf-space-bar {
+  background: linear-gradient(90deg, rgba(255, 45, 149, 0.12), rgba(204, 68, 255, 0.10), rgba(4, 1, 12, 0.75));
+}
+
+.swf-space-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.swf-space-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+  flex-shrink: 0;
+}
+.space-swf-panel.accent-fuchsia .swf-space-dot {
+  background: var(--fuchsia);
+  box-shadow: 0 0 12px var(--fuchsia);
+}
+.swf-space-title {
+  font-family: 'Italiana', serif;
+  font-size: 1.25rem;
+  letter-spacing: 0.2em;
+  color: #fff;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.swf-space-tag {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.48);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.swf-space-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.swf-mini-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.9);
+  font-family: 'Space Mono', monospace;
+  font-size: 0.60rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+.swf-mini-btn:hover {
+  background: rgba(0, 240, 255, 0.18);
+  border-color: var(--cyan);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+}
+.swf-mini-btn.dive-btn {
+  border-color: rgba(255, 45, 149, 0.65);
+  background: linear-gradient(90deg, rgba(255, 45, 149, 0.22), rgba(0, 240, 255, 0.18));
+  color: #fff;
+  box-shadow: 0 0 18px rgba(255, 45, 149, 0.28);
+}
+.swf-mini-btn.dive-btn:hover {
+  border-color: #fff;
+  background: linear-gradient(90deg, rgba(255, 45, 149, 0.42), rgba(0, 240, 255, 0.36));
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.55);
+  transform: translateY(-1px);
+}
+.space-swf-panel.accent-fuchsia .swf-mini-btn:hover {
+  background: rgba(255, 45, 149, 0.20);
+  border-color: var(--fuchsia);
+  box-shadow: 0 0 14px rgba(255, 45, 149, 0.35);
+}
+
+.swf-space-stage {
+  flex: 1;
+  width: 100%;
+  height: 608px;
+  background: #050210;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.swf-space-stage ruffle-player,
+.swf-space-stage object,
+.swf-space-stage embed {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
 
 /* ── TOP BAR ── */
 #top-bar {
@@ -191,7 +365,7 @@ canvas#c { position: fixed; inset: 0; z-index: 1; }
 .dp-item-time { font-family: 'Space Mono', monospace; font-size: 0.6rem; color: rgba(255, 255, 255, 0.4); letter-spacing: 0.05em; }
 .dp-item-txt { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; color: rgba(255, 255, 255, 0.85); line-height: 1.7; font-weight: 300; }
 .dp-item-name { font-size: 0.9rem; color: #fff; letter-spacing: 0.05em; font-weight: 400;}
-.dp-empty { text-align: center; padding: 4rem; color: rgba(255,255,255,0.2); font-size: 1rem; font-family: 'Cormorant Garamond', serif; font-style: italic; }
+.dp-empty { text-align: center; padding: 4rem; color: rgba(255,255,255,0.45); font-size: 1rem; font-family: 'Cormorant Garamond', serif; font-style: italic; }
 
 .priority-tag { font-family: 'Space Mono', monospace; font-size: 0.5rem; padding: 0.2rem 0.5rem; margin-left: 0.8rem; border-radius: 20px; letter-spacing: 0.1em; text-transform: uppercase; }
 .priority-tag.a { background: rgba(255,45,85,0.15); color: #ff2d55; border: 1px solid rgba(255,45,85,0.3); }
@@ -277,10 +451,15 @@ canvas#c { position: fixed; inset: 0; z-index: 1; }
   backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
 }
 #cegg-micro:hover { border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 20px rgba(0,240,255,.3); transform: scale(1.1); }
-#cegg-file { display: none; }
+#cegg-file, #swf-file-picker { display: none; }
 #cegg-dot { position: fixed; bottom: 28px; right: 80px; z-index: 61; font-size: .45rem; letter-spacing: .15em; color: rgba(255,255,255,.4); text-transform: uppercase; pointer-events: none; white-space: nowrap; }
 
-#flash { position: fixed; inset: 0; z-index: 500; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 50%, rgba(0,255,136,.15), transparent 70%); transition: opacity .1s; }
+#flash { position: fixed; inset: 0; z-index: 500; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 50%, rgba(0,255,136,.15), transparent 70%); transition: opacity .15s; }
+#dive-veil {
+  position: fixed; inset: 0; z-index: 490; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 240, 255, 0.22), rgba(255, 45, 149, 0.14) 45%, transparent 80%);
+  transition: opacity .45s ease;
+}
 
 #btn-universe-mode {
   position: fixed; bottom: 85px; right: 20px; z-index: 100; padding: 12px 20px;
@@ -291,8 +470,7 @@ canvas#c { position: fixed; inset: 0; z-index: 1; }
 #btn-universe-mode:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
 #btn-universe-mode.active { border-color: var(--cyan); color: var(--cyan); background: rgba(0,240,255,0.05); box-shadow: 0 0 25px rgba(0,240,255,0.2); }
 
-/* ════ v5 · ESTILOS QUE FALTABAN ════ */
-canvas#c { touch-action: none; }
+/* ════ v5 · ESTILOS COMPLEMENTARIOS ════ */
 #vignette { position: fixed; inset: 0; z-index: 2; pointer-events: none;
   background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(2,0,8,.55) 100%); }
 
@@ -328,7 +506,7 @@ canvas#c { touch-action: none; }
 .dp-ai-insight:last-child { border-bottom: none; }
 .dp-ai-insight-title { font-size: .55rem; letter-spacing: .2em; color: var(--purple); text-transform: uppercase; margin-bottom: .5rem; }
 
-/* Misión de la semana (KP → /api/mision · mision.json) */
+/* Misión de la semana */
 #mision { position: fixed; top: 58px; left: 30px; z-index: 79; max-width: min(460px, 60vw); pointer-events: none;
   font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: .95rem; line-height: 1.35;
   color: rgba(255,255,255,0); transition: color 1.2s ease; }
@@ -350,7 +528,6 @@ body.touch #touch-ui { display: block; }
 #joy-r .knob { border-color: rgba(204,68,255,.5); background: radial-gradient(circle, rgba(204,68,255,.28), rgba(204,68,255,.04) 70%); box-shadow: 0 0 18px rgba(204,68,255,.3); }
 .joy-lbl { position: absolute; bottom: -16px; left: 0; right: 0; text-align: center; font-size: .4rem; letter-spacing: .2em;
   color: rgba(255,255,255,.35); text-transform: uppercase; pointer-events: none; }
-.joy-ax { position: absolute; font-size: .5rem; color: rgba(255,255,255,.25); pointer-events: none; }
 #btn-boost { position: fixed; right: 168px; bottom: 44px; z-index: 90; width: 64px; height: 64px; border-radius: 50%;
   border: 1px solid rgba(255,215,0,.35); background: radial-gradient(circle, rgba(255,215,0,.12), rgba(255,215,0,.02) 70%);
   color: rgba(255,215,0,.85); font-family: 'Space Mono', monospace; font-size: .42rem; letter-spacing: .15em; text-transform: uppercase;
@@ -383,7 +560,9 @@ body.touch #btn-universe-mode { bottom: auto; top: 120px; right: 20px; padding: 
 
 <canvas id="c"></canvas>
 <div id="vignette"></div>
+<div id="css3d-layer"></div>
 <div id="flash"></div>
+<div id="dive-veil"></div>
 <div id="mision"></div>
 
 <div id="touch-ui">
@@ -499,10 +678,11 @@ body.touch #btn-universe-mode { bottom: auto; top: 120px; right: 20px; padding: 
 
 <div id="cegg-micro" onclick="document.getElementById('cegg-file').click()" title="Cargar psique .cegg">🥚</div>
 <input type="file" id="cegg-file" accept=".cegg" onchange="loadCeggFile(this)">
+<input type="file" id="swf-file-picker" accept=".swf" onchange="loadLocalSwfFile(this)">
 <div id="cegg-dot">buscando señal cegg...</div>
 
 <!-- ════════════════════════════════════════════════
-    THREE.JS r165
+    THREE.JS r165 + CSS3DRenderer
 ════════════════════════════════════════════════ -->
 <!-- ── PORTAL ── el Sol es el mapa: velos al entrar a cada mundo, sin astrolabio propio -->
 <script src="portal.js" data-mundo="sol" data-astrolabio="no"></script>
@@ -522,6 +702,7 @@ import { RenderPass }       from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass }  from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass }       from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass }       from 'three/addons/postprocessing/ShaderPass.js';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
 window._cosmicEggData = null;
 
@@ -530,8 +711,15 @@ if (IS_TOUCH) document.body.classList.add('touch');
 
 const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !IS_TOUCH, alpha: false, powerPreference: 'high-performance' });
-// Eficiencia: en móvil 1.5× basta; el bloom y la lente se ven igual con un 45 % menos de píxeles
 renderer.setPixelRatio(Math.min(devicePixelRatio, IS_TOUCH ? 1.5 : 2));
+
+/* ════ CSS3D RENDERER PARA PANELES INTERACTIVOS EN CENIT Y NADIR ════ */
+const cssScene = new THREE.Scene();
+const cssRenderer = new CSS3DRenderer();
+cssRenderer.domElement.style.position = 'absolute';
+cssRenderer.domElement.style.inset = '0';
+cssRenderer.domElement.style.pointerEvents = 'none';
+document.getElementById('css3d-layer').appendChild(cssRenderer.domElement);
 
 /* ════ v5 · RUIDO COMPARTIDO (GLSL) ════ */
 const GLSL_NOISE = `
@@ -551,11 +739,14 @@ renderer.setClearColor(0x020006, 1);
 
 const scene  = new THREE.Scene();
 
-const universeGroup = new THREE.Group(); 
+const universeGroup = new THREE.Group();
 scene.add(universeGroup);
 
-const muGroup = new THREE.Group(); 
+const muGroup = new THREE.Group();
 scene.add(muGroup);
+
+const deepSwfGroup = new THREE.Group();
+scene.add(deepSwfGroup);
 
 window._universeGroup = universeGroup;
 window._muGroup = muGroup;
@@ -565,7 +756,7 @@ const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 6000);
 camera.position.set(0, 15, 110);
 camera.lookAt(0, 0, 0);
 
-/* ════ v5 · LENTE GRAVITACIONAL (Sagitario A*) — un solo pase de pantalla ════ */
+/* ════ v5 · LENTE GRAVITACIONAL (Sagitario A*) ════ */
 const LensShader = {
   uniforms: { tDiffuse: { value: null }, uCenter: { value: new THREE.Vector2(0.5, 0.5) }, uRs: { value: 0 }, uAspect: { value: 1 }, uOn: { value: 0 }, uFlare: { value: 0 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
@@ -576,13 +767,13 @@ const LensShader = {
       if (uOn < 0.5 || uRs <= 0.0 || r > uRs * 16.0) { gl_FragColor = texture2D(tDiffuse, vUv); return; }
       float fade = 1.0 - smoothstep(uRs * 6.0, uRs * 16.0, r);
       vec2 dir = d / max(r, 1e-5);
-      float defl = (uRs * uRs * 1.5 / max(r, 1e-5)) * fade;     // α ∝ Rs²/b
+      float defl = (uRs * uRs * 1.5 / max(r, 1e-5)) * fade;
       vec2 sd = dir * (r - defl); sd.x /= uAspect;
       vec4 col = texture2D(tDiffuse, uCenter + sd);
-      float ring = exp(-pow((r - uRs * 1.32) / (uRs * 0.07), 2.0));   // anillo de fotones
+      float ring = exp(-pow((r - uRs * 1.32) / (uRs * 0.07), 2.0));
       float ring2 = exp(-pow((r - uRs * 1.55) / (uRs * 0.25), 2.0));
       col.rgb += vec3(1.0, 0.86, 0.72) * (ring * (0.55 + uFlare) + ring2 * 0.08) * fade;
-      col.rgb *= smoothstep(uRs * 0.92, uRs * 1.06, r);              // horizonte de eventos
+      col.rgb *= smoothstep(uRs * 0.92, uRs * 1.06, r);
       gl_FragColor = col;
     }`
 };
@@ -591,13 +782,14 @@ const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.85, 0.45, 0.42);
 composer.addPass(bloom);
-const lensPass = new ShaderPass(LensShader);   // después del bloom: así el horizonte queda negro de verdad
+const lensPass = new ShaderPass(LensShader);
 composer.addPass(lensPass);
 composer.addPass(new OutputPass());
 
 function onResize() {
   const W = innerWidth, H = innerHeight;
   renderer.setSize(W, H); composer.setSize(W, H);
+  cssRenderer.setSize(W, H);
   camera.aspect = W / H; camera.updateProjectionMatrix();
   bloom.resolution.set(W, H);
   lensPass.uniforms.uAspect.value = W / H;
@@ -605,8 +797,7 @@ function onResize() {
 window.addEventListener('resize', onResize);
 onResize();
 
-/* ════ v5 · NEBULOSA — se calcula UNA vez en un cubemap y queda como fondo.
-   (Como la fotosíntesis: captar la luz una vez y vivir de ella; cero costo por frame.) ════ */
+/* ════ v5 · NEBULOSA (cubemap) ════ */
 {
   const nebScene = new THREE.Scene();
   const nebMat = new THREE.ShaderMaterial({
@@ -616,7 +807,7 @@ onResize();
       varying vec3 vDir;
       void main(){
         vec3 d = normalize(vDir);
-        float band = exp(-pow(dot(d, normalize(vec3(0.25,1.0,0.35))), 2.0) * 10.0);   // Vía Láctea
+        float band = exp(-pow(dot(d, normalize(vec3(0.25,1.0,0.35))), 2.0) * 10.0);
         float n  = fbm(d * 2.2);
         float n2 = fbm(d * 4.5 + n * 1.8);
         vec3 c1 = vec3(0.09,0.02,0.17), c2 = vec3(0.00,0.09,0.15), c3 = vec3(0.20,0.03,0.11);
@@ -637,7 +828,7 @@ onResize();
   nebMat.dispose();
 }
 
-/* ════ v5 · ESTRELLAS — campo esférico + banda galáctica, temperatura real y titileo ════ */
+/* ════ v5 · ESTRELLAS ════ */
 let starMat;
 {
   const N1 = 3500, N2 = IS_TOUCH ? 6000 : 11000, N = N1 + N2;
@@ -677,8 +868,6 @@ let starMat;
 }
 
 const coreGeo = new THREE.IcosahedronGeometry(3.2, 10);
-/* v5 · Sol vivo: granulación + oscurecimiento de limbo. Mantiene .emissive y .emissiveIntensity
-   (los sliders y la activación del .cegg siguen escribiendo ahí; se copian al shader cada frame). */
 const sunU = { uTime: { value: 0 }, uEmis: { value: new THREE.Color(0.3, 0.1, 0.6) }, uInt: { value: 0.05 } };
 const coreMat = new THREE.ShaderMaterial({
   uniforms: sunU,
@@ -701,7 +890,6 @@ coreMat.emissive = new THREE.Color(0.02, 0.0, 0.05);
 coreMat.emissiveIntensity = 0.05;
 const coreMesh = new THREE.Mesh(coreGeo, coreMat);
 
-/* Corona del Sol: un plano que siempre mira a la cámara (barato y suave) */
 const sunCoronaMat = new THREE.ShaderMaterial({
   uniforms: { uTime: sunU.uTime, uEmis: sunU.uEmis, uInt: sunU.uInt },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
@@ -721,7 +909,7 @@ const sunCorona = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), sunCoronaMat);
 sunCorona.raycast = () => {};
 universeGroup.add(sunCorona);
 coreMesh.userData = { type: 'sun', name: 'Sol de Voluntad' };
-universeGroup.add(coreMesh); 
+universeGroup.add(coreMesh);
 window._coreMat = coreMat;
 
 const L1 = new THREE.PointLight(0xffffff, 0.1, 200);
@@ -734,7 +922,7 @@ const haloMat = new THREE.MeshBasicMaterial({ color: 0x8844ff, transparent: true
 universeGroup.add(new THREE.Mesh(haloGeo, haloMat));
 
 let coronaPoints = null; let coronaGeo = null; let filamentos = []; let shadowRings = []; let starPower = 0;
-window._coronaOpacity = 0.03; 
+window._coronaOpacity = 0.03;
 
 function buildCorona(totalXP) {
   if (coronaPoints) { universeGroup.remove(coronaPoints); coronaGeo.dispose(); coronaPoints.material.dispose(); }
@@ -757,8 +945,8 @@ function buildCorona(totalXP) {
     fragmentShader: `uniform float uOpacity; varying vec3 vC; void main() { float d = length(gl_PointCoord - vec2(0.5)) * 2.0; if (d > 1.0) discard; float a = (exp(-d*d*6.0) * 0.9 + 0.1 * (1.0 - d)) * uOpacity * 2.2; gl_FragColor = vec4(vC, a); }`,
     transparent: true, vertexColors: true, blending: THREE.AdditiveBlending, depthWrite: false,
   });
-  coronaPoints = new THREE.Points(coronaGeo, mat); window._coronaMat = mat; 
-  universeGroup.add(coronaPoints); 
+  coronaPoints = new THREE.Points(coronaGeo, mat); window._coronaMat = mat;
+  universeGroup.add(coronaPoints);
 }
 
 function buildFilamentos(arqs) {
@@ -772,7 +960,7 @@ function buildFilamentos(arqs) {
     }
     const curve = new THREE.CatmullRomCurve3(pts); const geo = new THREE.TubeGeometry(curve, 40, 0.04, 4, false);
     const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const mesh = new THREE.Mesh(geo, mat); mesh.userData = { hue, arq }; 
+    const mesh = new THREE.Mesh(geo, mat); mesh.userData = { hue, arq };
     universeGroup.add(mesh); filamentos.push(mesh);
   });
 }
@@ -788,7 +976,7 @@ function buildShadowRings(totalDistr) {
   }
 }
 
-let aspectInner = []; const arqMeshMap = new Map(); 
+let aspectInner = []; const arqMeshMap = new Map();
 
 function buildAspectInner(arqs) {
   aspectInner.forEach(a => { universeGroup.remove(a.mesh); arqMeshMap.delete(a.mesh); }); aspectInner = [];
@@ -816,15 +1004,15 @@ function buildAspectInner(arqs) {
 let muMesh = null;
 function buildMuStar(totalMu) {
   if (muMesh) { muGroup.remove(muMesh); muMesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose?.(); }); }
-  
+
   const sz = Math.max(2, Math.min(10, 2 + Math.log10(totalMu + 1) * 1.2));
   const muGeo = new THREE.IcosahedronGeometry(sz, 4);
   const muMat = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0xffaa00, emissiveIntensity: 0.6, wireframe: true, transparent: true, opacity: 0.85 });
   muMesh = new THREE.Mesh(muGeo, muMat);
-  
-  muMesh.position.set(150, 40, -350); 
+
+  muMesh.position.set(150, 40, -350);
   muMesh.userData = { type: 'mu_star', name: 'Estrella de Mu', sz: sz, mu: totalMu };
-  muGroup.add(muMesh); 
+  muGroup.add(muMesh);
 
   const muGlow = new THREE.Mesh(
     new THREE.SphereGeometry(sz * 1.8, 24, 24),
@@ -860,11 +1048,176 @@ const PLANETS = [
   { id: 'kairos', name: 'Kairós', url: 'tiempo.html', col: 0x5ad1ff, orbitR: 150, spd: 0.0006, sz: 2.0, detail: 4, incl: -0.08, desc: 'Cápsula de tiempo: grabarse para el propio yo futuro.' }
 ];
 
-/* ════ v5 · CADA PLANETA CON IDENTIDAD PROPIA ════
-   Un solo programa GLSL (se compila una vez) con un estilo por id.
-   Superficie opaca iluminada desde el Sol: lado día, lado noche, atmósfera. */
+/* ════ CENIT Y NADIR: PANELES INTERACTIVOS SWF (DURAKINESIS) ════
+   - ARRIBA (Cenit, y = +265): intro.swf — oculto en la vista inicial, solo visible al mirar/volar arriba.
+   - ABAJO  (Nadir, y = -265): index800x600.swf — oculto en la vista inicial, solo visible al mirar/volar abajo
+     o al descender con animación desde el portal de Intro. */
+const DEEP_SWF_PANELS = [
+  {
+    id: 'durakinesis_intro',
+    name: 'Durakinesis · Intro',
+    subtitle: 'Cenit Cósmico · Portal SWF',
+    swfCandidates: ['intro.swf', 'INTRO.SWF', 'Intro.swf'],
+    swf: 'intro.swf',
+    col: 0x00f0ff,
+    accentClass: '',
+    isIntro: true,
+    pos: new THREE.Vector3(0, 265, 0),
+    rotY: 0,
+    rotX: 1.32,   // Inclinado mirando hacia abajo (hacia el Sol)
+    scale: 0.095
+  },
+  {
+    id: 'durakinesis_web',
+    name: 'Web Durakinesis',
+    subtitle: 'Nadir Cósmico · Reliquia Interactiva',
+    swfCandidates: ['index800x600.swf', 'INDEX800X600.SWF'],
+    swf: 'index800x600.swf',
+    col: 0xff2d95,
+    accentClass: 'accent-fuchsia',
+    isIntro: false,
+    pos: new THREE.Vector3(0, -265, 0),
+    rotY: 0,
+    rotX: -1.32,  // Inclinado mirando hacia arriba (hacia el Sol)
+    scale: 0.095
+  }
+];
+
+const swfSpaceEntries = [];
+const swfHitMeshes = [];
+
+DEEP_SWF_PANELS.forEach((cfg, idx) => {
+  const el = document.createElement('div');
+  el.className = `space-swf-panel ${cfg.accentClass}`;
+  el.id = `space-panel-${cfg.id}`;
+
+  const extraBtn = cfg.isIntro
+    ? `<button class="swf-mini-btn dive-btn" onclick="window.diveToDurakinesisWeb()">⬇ Entrar a Durakinesis</button>`
+    : `<button class="swf-mini-btn" onclick="window.ascendToDurakinesisIntro()">⬆ Intro</button>`;
+
+  el.innerHTML = `
+    <div class="swf-space-bar">
+      <div class="swf-space-title-wrap">
+        <span class="swf-space-dot"></span>
+        <span class="swf-space-title">${cfg.name}</span>
+        <span class="swf-space-tag">${cfg.subtitle}</span>
+      </div>
+      <div class="swf-space-actions">
+        ${extraBtn}
+        <button class="swf-mini-btn" onclick="window.pickLocalSwf('${cfg.id}')">📂 .swf</button>
+        <button class="swf-mini-btn" onclick="window.returnToCenter()">↩ Sol</button>
+      </div>
+    </div>
+    <div class="swf-space-stage" id="space-swf-stage-${cfg.id}"></div>
+  `;
+
+  ['mousedown', 'pointerdown', 'click', 'dblclick', 'wheel', 'touchstart'].forEach(evName => {
+    el.addEventListener(evName, ev => {
+      if (el.classList.contains('interactive')) ev.stopPropagation();
+    }, { passive: evName === 'wheel' || evName === 'touchstart' });
+  });
+
+  const cssObj = new CSS3DObject(el);
+  cssObj.position.copy(cfg.pos);
+  cssObj.rotation.set(cfg.rotX, cfg.rotY, 0);
+  cssObj.scale.setScalar(cfg.scale);
+  cssScene.add(cssObj);
+
+  const anchor = new THREE.Group();
+  anchor.position.copy(cfg.pos);
+  anchor.rotation.set(cfg.rotX, cfg.rotY, 0);
+  deepSwfGroup.add(anchor);
+
+  const worldW = 820 * cfg.scale;
+  const worldH = 660 * cfg.scale;
+
+  const frameGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(worldW + 3.2, worldH + 3.2));
+  const frameMat = new THREE.LineBasicMaterial({
+    color: cfg.col,
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending
+  });
+  anchor.add(new THREE.LineSegments(frameGeo, frameMat));
+
+  const outerGeo = new THREE.EdgesGeometry(new THREE.PlaneGeometry(worldW + 10.5, worldH + 10.5));
+  const outerMat = new THREE.LineBasicMaterial({
+    color: cfg.col,
+    transparent: true,
+    opacity: 0.25,
+    blending: THREE.AdditiveBlending
+  });
+  anchor.add(new THREE.LineSegments(outerGeo, outerMat));
+
+  const backPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(worldW + 6.0, worldH + 6.0),
+    new THREE.MeshBasicMaterial({
+      color: cfg.col,
+      transparent: true,
+      opacity: 0.045,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+  backPlane.position.z = -0.35;
+  backPlane.userData = { type: 'swf_panel', id: cfg.id, name: cfg.name, col: cfg.col, sz: 18 };
+  anchor.add(backPlane);
+  swfHitMeshes.push(backPlane);
+
+  const pN = 120;
+  const pPos = new Float32Array(pN * 3);
+  for (let k = 0; k < pN; k++) {
+    const side = Math.random() * Math.PI * 2;
+    const rx = (worldW * 0.56) + Math.random() * 14;
+    const ry = (worldH * 0.56) + Math.random() * 14;
+    pPos[k * 3]     = Math.cos(side) * rx;
+    pPos[k * 3 + 1] = Math.sin(side) * ry;
+    pPos[k * 3 + 2] = (Math.random() - 0.5) * 18;
+  }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const dustMat = new THREE.PointsMaterial({
+    color: cfg.col,
+    size: 0.65,
+    transparent: true,
+    opacity: 0.55,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const dust = new THREE.Points(dustGeo, dustMat);
+  dust.raycast = () => {};
+  anchor.add(dust);
+
+  const beaconMat = new THREE.MeshBasicMaterial({
+    color: cfg.col,
+    transparent: true,
+    opacity: 0.16,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const beaconRing = new THREE.Mesh(new THREE.RingGeometry(worldW * 0.65, worldW * 0.67, 64), beaconMat);
+  beaconRing.position.z = -1.2;
+  beaconRing.raycast = () => {};
+  anchor.add(beaconRing);
+
+  swfSpaceEntries.push({
+    cfg,
+    el,
+    cssObj,
+    anchor,
+    dust,
+    beaconRing,
+    baseY: cfg.pos.y,
+    phase: idx * 2.1,
+    worldW,
+    worldH
+  });
+});
+
+/* ════ v5 · CADA PLANETA CON IDENTIDAD PROPIA ════ */
 const PLANET_STYLE = { musicosmos: 0, kalpa: 1, archhtml: 2, pfunk: 3, wildmedicine: 4, kp: 5, bitacora: 6, botica: 7, pikitipu: 8, kairos: 9 };
-const sunWorld = { value: new THREE.Vector3() };   // posición del Sol en el mundo (se mueve con el Motor de Voluntad)
+const sunWorld = { value: new THREE.Vector3() };
 
 const PLANET_VS = `varying vec3 vObj; varying vec3 vWN; varying vec3 vWP;
   void main(){ vObj = position; vWN = normalize(mat3(modelMatrix) * normal); vec4 wp = modelMatrix * vec4(position,1.0); vWP = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }`;
@@ -877,7 +1230,7 @@ const PLANET_FS = GLSL_NOISE + `
     vec3 p = normalize(vObj); float t = uTime; vec3 c = uCol;
     vec3 base = c * 0.5; vec3 emis = vec3(0.0); float spec = 0.15;
 
-    if (uStyle < 0.5) {            // MUSICOSMOS — gigante gaseoso de ondas sonoras
+    if (uStyle < 0.5) {
       float w = fbm(p * 2.5 + vec3(0.0, t * 0.05, 0.0));
       float bands = sin(p.y * 14.0 + w * 5.0 + t * 0.25) * 0.5 + 0.5;
       float fine  = sin(p.y * 46.0 + w * 9.0 - t * 0.45) * 0.5 + 0.5;
@@ -885,17 +1238,17 @@ const PLANET_FS = GLSL_NOISE + `
       base = mix(base, vec3(1.0, 0.78, 1.0) * c * 1.2, fine * 0.2);
       emis = c * pow(bands, 6.0) * 0.35 * (0.6 + 0.4 * sin(t * 1.3 + p.x * 8.0));
       spec = 0.35;
-    } else if (uStyle < 1.5) {     // KALPA — retícula de cosenos, eco del túnel
+    } else if (uStyle < 1.5) {
       float k = cos(p.x * 9.0 + t * 0.6) * cos(p.y * 9.0 - t * 0.5) * cos(p.z * 9.0 + t * 0.4);
       float lines = smoothstep(0.8, 1.0, abs(k));
       base = mix(c * 0.18, c * 0.6, fbm(p * 3.0));
       emis = c * lines * 1.1 + vec3(1.0, 0.8, 0.5) * lines * 0.2;
-    } else if (uStyle < 2.5) {     // MUNDO INTERIOR — cristal facetado
+    } else if (uStyle < 2.5) {
       float v = voro(p * 4.0 + vec3(0.0, 0.0, t * 0.03));
       base = mix(c * 0.85, c * 0.2, v);
       emis = c * smoothstep(0.62, 0.85, v) * 0.7;
       spec = 0.9;
-    } else if (uStyle < 3.5) {     // PLANETAFUNK — continentes fBm, océanos y nubes
+    } else if (uStyle < 3.5) {
       float h = fbm(p * 2.2); float sea = 0.48;
       vec3 ocean = mix(vec3(0.02, 0.07, 0.16), vec3(0.04, 0.28, 0.38), smoothstep(0.3, sea, h));
       vec3 land = mix(c * 0.5, vec3(0.72, 0.66, 0.46), smoothstep(0.56, 0.7, h));
@@ -903,32 +1256,32 @@ const PLANET_FS = GLSL_NOISE + `
       base = h < sea ? ocean : land; spec = h < sea ? 0.9 : 0.05;
       float clouds = smoothstep(0.56, 0.76, fbm(p * 3.0 + vec3(t * 0.02, 0.0, t * 0.015)));
       base = mix(base, vec3(0.8), clouds * 0.55);
-      emis = c * smoothstep(0.95, 1.0, sin(h * 40.0 - t * 2.0)) * 0.4 * step(sea, h);   // pulso funk
-    } else if (uStyle < 4.5) {     // WILD MEDICINE — micelio bioluminiscente
+      emis = c * smoothstep(0.95, 1.0, sin(h * 40.0 - t * 2.0)) * 0.4 * step(sea, h);
+    } else if (uStyle < 4.5) {
       float r1 = 1.0 - abs(fbm(p * 3.5) * 2.0 - 1.0);
       float r2 = 1.0 - abs(fbm(p * 7.0 + 3.0) * 2.0 - 1.0);
       float veins = max(pow(r1, 8.0), pow(r2, 12.0) * 0.7);
       base = mix(vec3(0.03, 0.06, 0.04), vec3(0.09, 0.17, 0.09), fbm(p * 5.0));
       emis = c * veins * 1.5 * (0.6 + 0.4 * sin(t * 1.5 - p.y * 5.0 + p.x * 3.0));
-    } else if (uStyle < 5.5) {     // KILLER PENDIENTE — núcleo dorado con bandas de tormenta
+    } else if (uStyle < 5.5) {
       float w = fbm(p * 3.0 + vec3(t * 0.03));
       float b = sin(p.y * 10.0 + w * 4.0) * 0.5 + 0.5;
       base = mix(vec3(0.5, 0.28, 0.05), c * 1.05, b);
       emis = c * pow(b, 8.0) * 0.25 * (1.0 + uPulse * 3.0);
       spec = 0.5;
-    } else if (uStyle < 6.5) {     // BITÁCORA — ámbar rocoso, cráteres
+    } else if (uStyle < 6.5) {
       float h = fbm(p * 4.0); float cr = smoothstep(0.18, 0.0, voro(p * 3.0));
       base = mix(c * 0.22, c * 0.75, h) * (1.0 - cr * 0.45);
-    } else if (uStyle < 7.5) {     // LA BOTICA — remolino de pócima
+    } else if (uStyle < 7.5) {
       float s = fbm(p * 2.0 + fbm(p * 3.0 + t * 0.05) * 2.0);
       base = mix(c * 0.25, vec3(0.55, 0.28, 1.0), s);
       emis = c * pow(s, 4.0) * 0.9;
-    } else if (uStyle < 8.5) {     // PIKITIPU — piel orgánica con manchas que respiran
+    } else if (uStyle < 8.5) {
       float s = smoothstep(0.36, 0.3, voro(p * 5.0 + vec3(0.0, t * 0.05, 0.0)));
       base = mix(c * 0.4, c * 0.95, fbm(p * 4.0));
       base = mix(base, vec3(1.0, 0.95, 0.6), s * 0.6);
       emis = c * s * 0.45 * (0.7 + 0.3 * sin(t * 3.0)) * (1.0 + uPulse * 2.0);
-    } else {                       // KAIRÓS — hielo con anillos de tiempo y una aguja
+    } else {
       float lat = asin(clamp(p.y, -1.0, 1.0)); float lon = atan(p.z, p.x);
       float rings = smoothstep(0.93, 1.0, sin(lat * 24.0 - t * 0.6));
       float hand = smoothstep(0.985, 1.0, cos(lon - t * 0.2)) * step(0.0, p.y);
@@ -943,13 +1296,12 @@ const PLANET_FS = GLSL_NOISE + `
     float sp = pow(max(dot(N, H), 0.0), 48.0) * spec;
     float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);
     vec3 col = base * (0.04 + wrap * 0.82) + vec3(1.0, 0.95, 0.9) * sp * diff * 0.7;
-    col += emis * (0.5 + 0.5 * (1.0 - diff));        // la emisión se lee mejor en el lado noche
-    col += c * fres * (0.2 + 0.8 * wrap) * 0.6;      // atmósfera
+    col += emis * (0.5 + 0.5 * (1.0 - diff));
+    col += c * fres * (0.2 + 0.8 * wrap) * 0.6;
     col *= 1.0 + uHover * 0.35;
     gl_FragColor = vec4(col, 1.0);
   }`;
 
-/* Órbita con estela: brilla detrás del planeta y se apaga al alejarse */
 const ORBIT_FS = `uniform vec3 uCol; uniform float uAngle; varying vec2 vP;
   void main(){ float ang = atan(vP.y, vP.x); float pa = -uAngle;
     float delta = mod(ang - pa, 6.28318);
@@ -957,7 +1309,6 @@ const ORBIT_FS = `uniform vec3 uCol; uniform float uAngle; varying vec2 vP;
     gl_FragColor = vec4(uCol, 0.03 + trail * 0.32); }`;
 const ORBIT_VS = `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 
-/* Disco de acreción de Sagitario A* — rotación kepleriana + Doppler */
 const DISK_VS = `varying vec2 vP; varying vec3 vWP; varying vec3 vVel;
   void main(){ vP = position.xy; vec4 wp = modelMatrix * vec4(position,1.0); vWP = wp.xyz;
     vVel = normalize(mat3(modelMatrix) * vec3(position.y, -position.x, 0.0));
@@ -995,7 +1346,6 @@ PLANETS.forEach((p, i) => {
 
   let mesh;
   if (p.isBlackHole) {
-    /* ── SAGITARIO A* ── horizonte opaco + disco; el anillo de fotones y la lente los dibuja lensPass */
     mesh = new THREE.Mesh(new THREE.SphereGeometry(p.sz, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
     mesh.userData = { ...p, type: 'planet', angle: i * (Math.PI * 2 / PLANETS.length), uTime: { value: 0 } };
     const diskMat = new THREE.ShaderMaterial({
@@ -1015,7 +1365,6 @@ PLANETS.forEach((p, i) => {
     mesh = new THREE.Mesh(pg, pm);
     mesh.userData = { ...p, type: 'planet', angle: i * (Math.PI * 2 / PLANETS.length), uTime: pm.uniforms.uTime, uHover: pm.uniforms.uHover, uPulse: pm.uniforms.uPulse };
 
-    // halo atmosférico de borde suave (antes: esfera plana que se veía poligonal de cerca)
     const gg = new THREE.SphereGeometry(p.sz * 1.45, 48, 32);
     const gm = new THREE.ShaderMaterial({ uniforms: { uCol: { value: col.clone() }, uOp: { value: 0.03 } },
       vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vN = normalize(mat3(modelMatrix) * normal); vec4 wp = modelMatrix * vec4(position,1.0); vV = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
@@ -1024,7 +1373,7 @@ PLANETS.forEach((p, i) => {
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
     const glow = new THREE.Mesh(gg, gm); glow.raycast = () => {}; mesh.add(glow); mesh.userData.glowMat = gm;
 
-    if (p.isKP) {   // anillo planetario: el plano del anillo es perpendicular al eje de giro → no bambolea
+    if (p.isKP) {
       mesh.rotation.order = 'ZYX'; mesh.rotation.z = 0.42;
       const krm = new THREE.ShaderMaterial({ uniforms: { uCol: { value: col.clone() }, uIn: { value: p.sz * 1.35 }, uOut: { value: p.sz * 2.25 } },
         vertexShader: ORBIT_VS,
@@ -1048,7 +1397,6 @@ PLANETS.forEach((p, i) => {
       fragmentShader: `uniform vec3 uColor; uniform float uOpacity; uniform float uTime; uniform float uIdx; varying vec2 vUv; void main() { float d = length(vUv - vec2(0.5)) * 2.0; if (d > 1.0) discard; float alpha = smoothstep(1.0, 0.2, d) * uOpacity; alpha *= 0.85 + sin(uTime * 0.4 + uIdx * 1.3) * 0.15; float ring = smoothstep(0.85, 0.92, d) * smoothstep(1.0, 0.95, d); vec3 col = mix(uColor * 0.6, uColor * 1.4, ring); alpha += ring * uOpacity * 0.6; gl_FragColor = vec4(col, alpha); }`,
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
     });
-    // v5: el planeta ahora es opaco → el disco se agranda para leerse como halo dimensional alrededor
     const disc = new THREE.Mesh(discGeo, discMat); disc.scale.setScalar(1.32); disc.raycast = () => {};
     disc.userData.isDimensionDisc = true; mesh.add(disc); mesh.userData.dimensionDisc = disc; mesh.userData.discMat = discMat;
   }
@@ -1081,7 +1429,7 @@ try {
   } else { window._discOpacity = 0.35; }
 } catch(_){ window._discOpacity = 0.35; }
 
-/* ── OVERLAY ORBITAL (iFrames) ── */
+/* ── OVERLAY ORBITAL (iFrames para planetas) ── */
 const orbitOverlay = document.createElement('div');
 orbitOverlay.id = 'orbit-overlay';
 orbitOverlay.style.cssText = `position:fixed; z-index:10; pointer-events:auto; display:none; border-radius:50%; overflow:hidden; background:rgba(4,2,16,0.15); box-shadow: 0 0 60px rgba(0,0,0,0.8); -webkit-mask-image: radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 55%, transparent 95%); mask-image: radial-gradient(circle, rgba(0,0,0,1) 0%, rgba(0,0,0,0.9) 55%, transparent 95%); transition: box-shadow 0.3s ease;`;
@@ -1100,7 +1448,7 @@ orbitOverlay.appendChild(orbitGlass);
 document.body.appendChild(orbitOverlay);
 
 let overlayClickTimeout = null;
-orbitGlass.addEventListener('click', (e) => {
+orbitGlass.addEventListener('click', () => {
   if (overlayClickTimeout) {
     clearTimeout(overlayClickTimeout);
     overlayClickTimeout = null;
@@ -1125,16 +1473,13 @@ function deactivateOrbitIframe() { orbitIframe.style.pointerEvents = 'none'; orb
 
 function updateOrbitOverlayPosition() {
   if (orbitOverlay.style.display === 'none' || !_flyTarget || _flyTarget.userData.type !== 'planet') return;
-  const pd = _flyTarget.userData; const planetPos = new THREE.Vector3(); _flyTarget.getWorldPosition(planetPos); 
+  const pd = _flyTarget.userData; const planetPos = new THREE.Vector3(); _flyTarget.getWorldPosition(planetPos);
   const v = planetPos.clone().project(camera);
   const cx = ( v.x * 0.5 + 0.5) * innerWidth; const cy = (-v.y * 0.5 + 0.5) * innerHeight;
   const dist = camera.position.distanceTo(planetPos); const fov = camera.fov * Math.PI / 180; const screenH = innerHeight;
-  const projRadius = (pd.sz / dist) * (screenH / (2 * Math.tan(fov / 2))); 
-  
-  // Aura es sz * 2.0. Con 1.85 es levemente más pequeño, creando un anillo tipo eclipse.
-  // En Sagitario A* el portal vive DENTRO del horizonte: así no tapa el disco ni la lente
+  const projRadius = (pd.sz / dist) * (screenH / (2 * Math.tan(fov / 2)));
   const finalSz = projRadius * 2 * (pd.isBlackHole ? 0.92 : 1.85);
-  
+
   orbitOverlay.style.width = finalSz + 'px'; orbitOverlay.style.height = finalSz + 'px';
   orbitOverlay.style.left = (cx - finalSz / 2) + 'px'; orbitOverlay.style.top = (cy - finalSz / 2) + 'px';
 }
@@ -1145,19 +1490,17 @@ function updateOrbitOverlayPosition() {
 let _arqs = [];
 
 function activateUniverse(data, opts = {}) {
-  const refresh = !!(opts.refresh && window._CEGG);   // refresco en vivo desde KP: sin animación de entrada
+  const refresh = !!(opts.refresh && window._CEGG);
   window._cosmicEggData = data;
   const usuarios = data.perfiles_usuarios || {};
   const glob     = data.perfil_global     || {};
   const totalXP  = glob.estadisticas_globales?.total_pv_acumulado || 0;
   let totalMu  = 0;
-  
+
   _arqs = Object.entries(usuarios).map(([nombre, p]) => {
     const mu = p.datos_cuantitativos?.nivel_y_xp?.mu_disponibles || 0;
     totalMu += mu;
-    
     const historico = p.datos_cualitativos?.historico_tareas || [];
-    
     return {
       nombre,
       xp:    p.datos_cuantitativos?.nivel_y_xp?.xp_total || 0,
@@ -1194,9 +1537,9 @@ function activateUniverse(data, opts = {}) {
 
   let f = 0; const D = refresh ? 1 : 200; const targetCoronaOpacity = window._coronaOpacity;
   (function step() {
-    f++; const p = Math.min(1, f / D); const e = 1 - Math.pow(1 - p, 4); 
+    f++; const p = Math.min(1, f / D); const e = 1 - Math.pow(1 - p, 4);
 
-    coreMat.emissiveIntensity = 0.02 + e * starPower * 0.4; 
+    coreMat.emissiveIntensity = 0.02 + e * starPower * 0.4;
     coreMat.emissive.setHSL(e * 0.6, 0.85, 0.45);
     L1.intensity = e * starPower * 1.0; L2.intensity = e * starPower * 0.6; L3.intensity = e * starPower * 0.4;
     L1.color.setHSL((f * 0.003) % 1, 1, 0.7);
@@ -1236,7 +1579,7 @@ function triggerFlash(nombre) {
   document.getElementById('flash').style.opacity = '1';
   setTimeout(() => { document.getElementById('flash').style.opacity = '0'; }, 300);
   aspectInner.forEach(a => { if (a.mesh.userData.arq?.nombre === nombre) a.mesh.userData.flashTimer = 3; });
-  window._bhFlare = 1;   // Sagitario A* se enciende: un pendiente cayó al horizonte
+  window._bhFlare = 1;
   planetMeshes.forEach(pm => { if ((pm.userData.id === 'kp' || pm.userData.id === 'pikitipu') && pm.userData.uPulse) pm.userData.uPulse.value = 1; });
   if (muMesh) {
     muMesh.material.emissive.setHex(0x00ff88);
@@ -1247,7 +1590,7 @@ function triggerFlash(nombre) {
 let hoveredPlanet   = null;
 let nameTagTimer    = null;
 const nameTag       = document.getElementById('planet-name-tag');
-window._aspectsExp  = false; 
+window._aspectsExp  = false;
 
 function worldToScreen(pos3d) {
   const v = pos3d.clone().project(camera);
@@ -1255,10 +1598,11 @@ function worldToScreen(pos3d) {
 }
 
 window.addEventListener('mousemove', e => {
+  if (e.target.closest('.space-swf-panel.interactive')) return;
   mpos.x = (e.clientX / innerWidth)  * 2 - 1; mpos.y = -(e.clientY / innerHeight) * 2 + 1;
   ray.setFromCamera(mpos, camera);
 
-  const targets = [coreMesh, ...planetMeshes, ...aspectInner.map(a=>a.mesh)];
+  const targets = [coreMesh, ...planetMeshes, ...swfHitMeshes, ...aspectInner.map(a=>a.mesh)];
   if(muMesh) targets.push(muMesh);
   const hits = ray.intersectObjects(targets, false);
 
@@ -1267,19 +1611,19 @@ window.addEventListener('mousemove', e => {
     hoveredPlanet = obj;
     document.body.style.cursor = 'pointer';
 
-    if (obj === coreMesh || obj.userData.type === 'planet' || obj.userData.type === 'mu_star') {
+    if (obj === coreMesh || obj.userData.type === 'planet' || obj.userData.type === 'mu_star' || obj.userData.type === 'swf_panel') {
       const _wp = new THREE.Vector3(); obj.getWorldPosition(_wp); const sc = worldToScreen(_wp);
-      
+
       nameTag.textContent = obj.userData.name || 'Sol de Voluntad';
       let colHex = '#ffffff';
-      if(obj.userData.type === 'planet') colHex = '#' + new THREE.Color(obj.userData.col).getHexString();
+      if(obj.userData.type === 'planet' || obj.userData.type === 'swf_panel') colHex = '#' + new THREE.Color(obj.userData.col).getHexString();
       if(obj.userData.type === 'mu_star') colHex = '#ffd700';
       if(obj === coreMesh) colHex = '#cc44ff';
-      
+
       nameTag.style.color = colHex;
-      nameTag.style.left = sc.x + 'px'; 
-      nameTag.style.top = (sc.y + (obj.userData.sz || 4.5) * 18 + 15) + 'px';
-      
+      nameTag.style.left = sc.x + 'px';
+      nameTag.style.top = (sc.y + (obj.userData.type === 'swf_panel' ? 60 : (obj.userData.sz || 4.5) * 18 + 15)) + 'px';
+
       nameTag.classList.add('vis'); nameTag.classList.remove('hide'); clearTimeout(nameTagTimer);
       document.getElementById('aspect-panel').classList.remove('vis');
     }
@@ -1295,7 +1639,7 @@ window.addEventListener('mousemove', e => {
       const aspPanel = document.getElementById('aspect-panel');
       aspPanel.style.left = (e.clientX + 20) + 'px'; aspPanel.style.top = (e.clientY - 20) + 'px';
       aspPanel.classList.add('vis');
-      nameTag.classList.remove('vis'); 
+      nameTag.classList.remove('vis');
     }
 
   } else {
@@ -1315,7 +1659,7 @@ window.addEventListener('mousemove', e => {
 
   const d2 = mpos.x * mpos.x + mpos.y * mpos.y;
   const isHovAsp = hoveredPlanet && hoveredPlanet.userData.type === 'aspect';
-  
+
   if (d2 < 0.05) window._aspectsExp = true;
   else if (d2 > 0.6 && !isHovAsp) window._aspectsExp = false;
 
@@ -1325,15 +1669,23 @@ window.addEventListener('mousemove', e => {
 let _lastClickTime = 0; let _lastClickObj  = null; const DBLCLICK_THRESHOLD = 400;
 
 window.addEventListener('click', e => {
-  if (e.target.closest('#panel-cfg, #panel-cegg-info, #planet-panel, #data-panel, #stat-popup, #top-bar, #cegg-micro, #orbit-overlay, #touch-ui, #btn-universe-mode')) return;
+  if (wasDragged) { wasDragged = false; return; }
+  if (e.target.closest('#panel-cfg, #panel-cegg-info, #planet-panel, #data-panel, #stat-popup, #top-bar, #cegg-micro, #orbit-overlay, #touch-ui, #btn-universe-mode, .space-swf-panel.interactive')) return;
 
   mpos.x = (e.clientX / innerWidth)  * 2 - 1; mpos.y = -(e.clientY / innerHeight) * 2 + 1;
   ray.setFromCamera(mpos, camera);
 
-  const targets = [coreMesh, ...planetMeshes, ...aspectInner.map(a=>a.mesh)];
+  const targets = [coreMesh, ...planetMeshes, ...swfHitMeshes, ...aspectInner.map(a=>a.mesh)];
   if(muMesh) targets.push(muMesh);
   const hits = ray.intersectObjects(targets, false);
   const now  = Date.now();
+
+  if (_dockedSwfEntry && !_diveAnim) {
+    if (!hits.length || hits[0].object.userData.type !== 'swf_panel' || hits[0].object.userData.id !== _dockedSwfEntry.cfg.id) {
+      releaseSwfDock();
+    }
+    return;
+  }
 
   if (_isOrbiting) {
     const orbitGlass = document.getElementById('orbit-glass');
@@ -1348,12 +1700,22 @@ window.addEventListener('click', e => {
 
   if (hits.length) {
     const obj = hits[0].object;
+    if (obj.userData.type === 'swf_panel') {
+      // Sin teletransporte desde el centro: solo encuadra si el usuario navegó cerca
+      const wp = new THREE.Vector3();
+      obj.getWorldPosition(wp);
+      if (camera.position.distanceTo(wp) < 210) {
+        dockSwfPanel(obj.userData.id);
+      }
+      return;
+    }
+
     const isDbl = (now - _lastClickTime < DBLCLICK_THRESHOLD) && _lastClickObj === obj;
     _lastClickTime = now; _lastClickObj  = obj;
 
     if (isDbl) {
       if (obj.userData.type === 'planet' || obj.userData.type === 'aspect' || obj.userData.type === 'mu_star') {
-         window.closePP(); document.getElementById('data-panel').classList.remove('visible'); enterOrbit(obj); 
+         window.closePP(); document.getElementById('data-panel').classList.remove('visible'); enterOrbit(obj);
       } else if (obj === coreMesh && !window._CEGG) {
         document.getElementById('cegg-file').click();
       } else if (obj === coreMesh && window._CEGG) {
@@ -1372,18 +1734,168 @@ window.addEventListener('click', e => {
       }, DBLCLICK_THRESHOLD + 20);
     }
   } else {
-    _lastClickTime = now; _lastClickObj = null; 
+    _lastClickTime = now; _lastClickObj = null;
   }
 });
 
 /* ════════════════════════════════════
-   SISTEMA DE ÓRBITA Y VUELO
+   SISTEMA DE ÓRBITA, VUELO, ANCLAJE Y DESCENSO CINEMATOGRÁFICO
 ════════════════════════════════════ */
-let _isTransitioning = false; let _isOrbiting = false; let _isFlyingTo = false;  
+let _isTransitioning = false; let _isOrbiting = false; let _isFlyingTo = false;
 let _flyTarget = null; let _flyTargetPos = new THREE.Vector3(); let _flyTargetQuat = new THREE.Quaternion();
 let _lastCamPos = new THREE.Vector3(); let _lastCamQuat = new THREE.Quaternion(); let _orbitOffset = new THREE.Vector3();
 
+let _dockedSwfEntry = null;
+let _isFlyingToSwf = false;
+let _diveAnim = null;
+
+function getSwfFrontPose(entry) {
+  const wp = new THREE.Vector3();
+  const wq = new THREE.Quaternion();
+  entry.anchor.getWorldPosition(wp);
+  entry.anchor.getWorldQuaternion(wq);
+
+  const vFov = camera.fov * Math.PI / 180;
+  const distH = (entry.worldH * 0.58) / Math.tan(vFov / 2);
+  const distW = (entry.worldW * 0.58) / (Math.tan(vFov / 2) * camera.aspect);
+  const idealDist = Math.max(distH, distW, 55);
+
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(wq);
+  const panelUp = new THREE.Vector3(0, 1, 0).applyQuaternion(wq);
+  const camPos = wp.clone().addScaledVector(normal, idealDist);
+  const m = new THREE.Matrix4().lookAt(camPos, wp, panelUp);
+  const camQuat = new THREE.Quaternion().setFromRotationMatrix(m);
+  return { camPos, camQuat, lookAt: wp };
+}
+
+function dockSwfPanel(id) {
+  const entry = swfSpaceEntries.find(e => e.cfg.id === id);
+  if (!entry) return;
+  window.closePP();
+  document.getElementById('data-panel').classList.remove('visible');
+  hideOrbitOverlay();
+
+  if (!_isOrbiting && !_dockedSwfEntry) {
+    _lastCamPos.copy(camera.position);
+    _lastCamQuat.copy(camera.quaternion);
+  }
+  _diveAnim = null;
+  _isOrbiting = false;
+  _isFlyingTo = false;
+  _flyTarget = null;
+  _dockedSwfEntry = entry;
+  _isFlyingToSwf = true;
+  _isTransitioning = true;
+}
+
+/* ── ANIMACIÓN DE DESCENSO / ASCENSO ENTRE INTRO (ARRIBA) Y WEB DURAKINESIS (ABAJO) ── */
+function startVerticalPortalFlight(targetId) {
+  const targetEntry = swfSpaceEntries.find(e => e.cfg.id === targetId);
+  if (!targetEntry) return;
+
+  window.closePP();
+  document.getElementById('data-panel').classList.remove('visible');
+  hideOrbitOverlay();
+  _isOrbiting = false;
+  _isFlyingTo = false;
+  _flyTarget = null;
+  _isFlyingToSwf = false;
+  _isTransitioning = false;
+  _dockedSwfEntry = targetEntry;
+
+  // Fijar la posición base del destino para calcular el encuadre final exacto
+  targetEntry.anchor.position.y = targetEntry.baseY;
+  targetEntry.anchor.updateMatrixWorld(true);
+  const endPose = getSwfFrontPose(targetEntry);
+
+  const startPos = camera.position.clone();
+  const startQuat = camera.quaternion.clone();
+  const goingDown = endPose.camPos.y < startPos.y;
+
+  // Trayectoria curva cinematográfica pasando frente al Sol y atravesando el disco orbital
+  const p1 = new THREE.Vector3(goingDown ? 52 : -52, startPos.y * 0.45, 115);
+  const p2 = new THREE.Vector3(goingDown ? -38 : 38, endPose.camPos.y * 0.45, 110);
+  const curve = new THREE.CatmullRomCurve3([startPos, p1, p2, endPose.camPos]);
+
+  const veil = document.getElementById('dive-veil');
+  if (veil) {
+    veil.style.opacity = '1';
+    setTimeout(() => { veil.style.opacity = '0'; }, 1600);
+  }
+  window._bhFlare = 0.8;
+
+  _diveAnim = {
+    t: 0,
+    duration: 2.75,
+    curve,
+    startQuat,
+    endPose,
+    targetEntry
+  };
+}
+
+window.diveToDurakinesisWeb = () => startVerticalPortalFlight('durakinesis_web');
+window.ascendToDurakinesisIntro = () => startVerticalPortalFlight('durakinesis_intro');
+
+window._isIntroSwfActive = () => {
+  const intro = swfSpaceEntries.find(e => e.cfg.id === 'durakinesis_intro');
+  if (!intro) return false;
+  if (_dockedSwfEntry === intro) return true;
+  return intro.el.classList.contains('interactive');
+};
+
+function releaseSwfDock() {
+  if (!_dockedSwfEntry && !_diveAnim) return;
+  const prevEntry = _dockedSwfEntry;
+  _diveAnim = null;
+  camera.fov = 52;
+  camera.updateProjectionMatrix();
+
+  const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+  camYaw = euler.y;
+  camPitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, euler.x));
+
+  if (!window._CEGG && prevEntry) {
+    const wp = new THREE.Vector3();
+    prevEntry.anchor.getWorldPosition(wp);
+    camTarget.copy(wp);
+    const diff = camera.position.clone().sub(camTarget);
+    camRadius = Math.max(25, Math.min(480, diff.length()));
+    camPitch = Math.asin(THREE.MathUtils.clamp(diff.y / Math.max(camRadius, 0.001), -0.95, 0.95));
+    camYaw = Math.atan2(diff.x, diff.z);
+  }
+
+  _dockedSwfEntry = null;
+  _isFlyingToSwf = false;
+  _isTransitioning = false;
+}
+
+function returnToCenter() {
+  hideOrbitOverlay();
+  _diveAnim = null;
+  camera.fov = 52;
+  camera.updateProjectionMatrix();
+  _dockedSwfEntry = null;
+  _isFlyingToSwf = false;
+  _isOrbiting = false;
+  _isFlyingTo = false;
+  _flyTarget = null;
+  _isTransitioning = false;
+  camTarget.set(0, 0, 0);
+  camYaw = 0;
+  camPitch = -0.13;
+  camRadius = 95;
+  if (window._CEGG) {
+    camera.position.set(0, 15, 110);
+    camera.lookAt(0, 0, 0);
+    const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+    camYaw = e.y; camPitch = e.x;
+  }
+}
+window.returnToCenter = returnToCenter;
+
 function enterOrbit(objMesh) {
+  if (_dockedSwfEntry) releaseSwfDock();
   if (!_isOrbiting) { _lastCamPos.copy(camera.position); _lastCamQuat.copy(camera.quaternion); }
   _flyTarget = objMesh; _isFlyingTo = true; _isTransitioning = true; _isOrbiting = false;
 
@@ -1391,8 +1903,8 @@ function enterOrbit(objMesh) {
   if(objMesh === coreMesh) sz = 5;
   if(objMesh.userData.type === 'aspect') sz = 1.5;
 
-  if (objMesh.userData.isBlackHole) sz = objMesh.userData.sz * 1.6;   // más lejos: que se vea el disco y la lente
-  const wpos = new THREE.Vector3(); objMesh.getWorldPosition(wpos);    // v5: posición real (no la local del pivot)
+  if (objMesh.userData.isBlackHole) sz = objMesh.userData.sz * 1.6;
+  const wpos = new THREE.Vector3(); objMesh.getWorldPosition(wpos);
   const dir = camera.position.clone().sub(wpos).normalize();
   _orbitOffset.copy(dir).multiplyScalar(sz * 4.0);
   _flyTargetPos.copy(wpos).add(_orbitOffset);
@@ -1424,7 +1936,10 @@ function navigateToUniverse(pd) {
   window.location.href = pd.url;
 }
 window.navigateToUniverse = navigateToUniverse;
-window.volarA = id => { const pm = planetMeshes.find(p => p.userData.id === id); if (pm) enterOrbit(pm); };   // p. ej. volarA('sagitario')
+window.volarA = id => {
+  const pm = planetMeshes.find(p => p.userData.id === id);
+  if (pm) enterOrbit(pm);
+};
 
 function restoreAnchorIfNeeded() {
   try {
@@ -1442,24 +1957,30 @@ function clearAnchor() { try { sessionStorage.removeItem('cml_anchor'); } catch(
    TECLADO Y CONTROLES
 ════════════════════════════════════ */
 const KEYS = { w:0, a:0, s:0, d:0, q:0, e:0, z:0, x:0, shift:0, space:0 };
-const CAM_SPEED = 18; const CAM_FAST  = 50; const YAW_SPEED = 1.2; 
+const CAM_SPEED = 24; const CAM_FAST  = 70; const YAW_SPEED = 1.2;
 let camYaw = 0; let camPitch = -0.13; let camRadius = 90; let camTarget = new THREE.Vector3(0, 0, 0);
-let isDrag = false; let prevMouse = { x: 0, y: 0 };
+let isDrag = false; let wasDragged = false; let dragStart = { x: 0, y: 0 }; let prevMouse = { x: 0, y: 0 };
 
 document.addEventListener('keydown', ke => {
+  if (document.activeElement && document.activeElement.closest('.space-swf-panel') && ke.key !== 'Escape') return;
   const k = ke.key.toLowerCase();
   if (k in KEYS) KEYS[k] = 1; if (ke.shiftKey) KEYS.shift = 1;
   if (ke.key === ' ') { KEYS.space = 1; ke.preventDefault(); }
   if (k === 'h') {
-    if (_isOrbiting) exitOrbit();
-    camTarget.set(0, 0, 0); camYaw = window._CEGG ? camera.rotation.y : 0; camPitch = window._CEGG ? camera.rotation.x : -0.13; camRadius = 90;
+    returnToCenter();
   }
   if (k === 'c') {
     if (KEYS.shift || _isOrbiting) { exitOrbit(); }
+    else if (hoveredPlanet && hoveredPlanet.userData.type === 'swf_panel') {
+      const wp = new THREE.Vector3();
+      hoveredPlanet.getWorldPosition(wp);
+      if (camera.position.distanceTo(wp) < 210) dockSwfPanel(hoveredPlanet.userData.id);
+    }
     else if (hoveredPlanet) { enterOrbit(hoveredPlanet); }
     else if (muMesh && camera.position.distanceTo(muMesh.position) < 250) { enterOrbit(muMesh); }
   }
   if (ke.key === 'Escape' || ke.key === 'Backspace') {
+    if (_dockedSwfEntry || _diveAnim) { returnToCenter(); ke.preventDefault(); return; }
     if (_isOrbiting) { exitOrbit(); ke.preventDefault(); }
     window.closePP(); document.getElementById('data-panel').classList.remove('visible'); document.getElementById('stat-popup').classList.remove('visible');
   }
@@ -1472,35 +1993,46 @@ document.addEventListener('keyup', ke => {
   const k = ke.key.toLowerCase(); if (k in KEYS) KEYS[k] = 0; if (!ke.shiftKey) KEYS.shift = 0; if (ke.key === ' ') KEYS.space = 0;
 });
 
-renderer.domElement.addEventListener('mousedown', e => { if (e.button === 0) { isDrag = true; prevMouse = { x: e.clientX, y: e.clientY }; } });
+renderer.domElement.addEventListener('mousedown', e => {
+  if (e.button === 0) {
+    if (_dockedSwfEntry && !_diveAnim) releaseSwfDock();
+    isDrag = true; wasDragged = false;
+    dragStart = { x: e.clientX, y: e.clientY };
+    prevMouse = { x: e.clientX, y: e.clientY };
+  }
+});
 window.addEventListener('mouseup', () => { isDrag = false; });
 window.addEventListener('mousemove', e => {
   if (!isDrag) return;
+  if (Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y) > 5) wasDragged = true;
   if (_isOrbiting) { deactivateOrbitIframe(); window._orbitSpin = (window._orbitSpin || 0) - (e.clientX - prevMouse.x) * 0.005; }
   camYaw -= (e.clientX - prevMouse.x) * 0.003; camPitch -= (e.clientY - prevMouse.y) * 0.003;
-  camPitch = Math.max(-Math.PI / 2.1, Math.min(0.45, camPitch)); prevMouse = { x: e.clientX, y: e.clientY };
+  camPitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, camPitch)); prevMouse = { x: e.clientX, y: e.clientY };
 });
 renderer.domElement.addEventListener('wheel', e => {
+  if (_dockedSwfEntry && !_diveAnim) releaseSwfDock();
   if (_isOrbiting) {
     const len = _orbitOffset.length();
     const newLen = Math.max(_flyTarget ? (_flyTarget.userData.sz || 3) * 2 : 5, Math.min(120, len + e.deltaY * 0.05));
     _orbitOffset.normalize().multiplyScalar(newLen);
   } else {
-    camRadius += e.deltaY * 0.07; camRadius = Math.max(15, Math.min(280, camRadius));
+    camRadius += e.deltaY * 0.09; camRadius = Math.max(15, Math.min(620, camRadius));
   }
 }, { passive: true });
 
-/* v5 · ejes táctiles (los escriben los joypads; ver bloque CONTROLES TÁCTILES) */
 const TA = { fwd: 0, strafe: 0, vert: 0, yaw: 0, boost: 0 };
 window._TA = TA;
-const damp = (k, dt) => 1 - Math.exp(-k * dt);   // suavizado independiente de los FPS
+const damp = (k, dt) => 1 - Math.exp(-k * dt);
 
 function updateCamera(dt) {
   const sp = (KEYS.shift || KEYS.space || TA.boost ? CAM_FAST : CAM_SPEED) * dt;
   const aFwd = (KEYS.w - KEYS.s) + TA.fwd, aStr = (KEYS.d - KEYS.a) + TA.strafe, aVer = (KEYS.z - KEYS.x) + TA.vert, aYaw = (KEYS.q - KEYS.e) - TA.yaw;
   const movingAll = Math.abs(aFwd) + Math.abs(aStr) + Math.abs(aVer) + Math.abs(aYaw) > 0.05;
   if (movingAll && _isOrbiting) exitOrbit();
+  if (movingAll && _dockedSwfEntry && !_diveAnim) releaseSwfDock();
   camYaw += aYaw * YAW_SPEED * dt;
+
+  if (_dockedSwfEntry || _diveAnim) return;
 
   if (window._CEGG && !_isTransitioning && !_isOrbiting) {
     camera.quaternion.setFromEuler(new THREE.Euler(camPitch, camYaw, 0, 'YXZ'));
@@ -1508,9 +2040,9 @@ function updateCamera(dt) {
     const moveVec = new THREE.Vector3(0, 0, 0);
     moveVec.addScaledVector(fwd, aFwd * sp); moveVec.addScaledVector(right, aStr * sp); moveVec.addScaledVector(up, aVer * sp);
 
-    if (window._moveUniverseMode) { 
-        camera.position.add(moveVec); 
-        universeGroup.position.add(moveVec); 
+    if (window._moveUniverseMode) {
+        camera.position.add(moveVec);
+        universeGroup.position.add(moveVec);
     }
     else { camera.position.add(moveVec); }
     _lastCamPos.copy(camera.position); _lastCamQuat.copy(camera.quaternion);
@@ -1525,17 +2057,27 @@ function updateCamera(dt) {
 }
 
 const clock = new THREE.Clock(); window._orbitAuto = true; let _orbSpeedMult = 0.4;
-window._setOrbSpeedMod = f => { _orbSpeedMult = f; };   // v5: el slider de órbita por fin mueve la variable real
+window._setOrbSpeedMod = f => { _orbSpeedMult = f; };
 window._pulseSpeed = 0.35; let _pulsePhase = 0;
-const _tmpV = new THREE.Vector3(); let _frame = 0;
+const _tmpV = new THREE.Vector3();
+const _camFwd = new THREE.Vector3();
+const _toPanel = new THREE.Vector3();
+const _diveLook = new THREE.Vector3();
+const _diveMat = new THREE.Matrix4();
+const _diveQuat = new THREE.Quaternion();
+let _frame = 0;
 
 (function animate() {
   requestAnimationFrame(animate); const dt = Math.min(clock.getDelta(), 0.05); const t = clock.getElapsedTime();
 
-  updateCamera(dt); if (!_isOrbiting) { camera.position.x += Math.sin(t * 0.04) * 0.008; camera.position.y += Math.sin(t * 0.05) * 0.006; }
+  updateCamera(dt);
+  if (!_isOrbiting && !_dockedSwfEntry && !_diveAnim) {
+    camera.position.x += Math.sin(t * 0.04) * 0.008;
+    camera.position.y += Math.sin(t * 0.05) * 0.006;
+  }
 
   coreMesh.rotation.x = t * 0.025; coreMesh.rotation.y = t * 0.035; coreMesh.rotation.z = t * 0.018;
-  _pulsePhase += dt * window._pulseSpeed;                  // v5: el slider "Velocidad pulso" ahora actúa
+  _pulsePhase += dt * window._pulseSpeed;
   const pulse = Math.sin(_pulsePhase) * 0.5 + 0.5;
 
   if (starPower > 0) {
@@ -1549,7 +2091,6 @@ const _tmpV = new THREE.Vector3(); let _frame = 0;
     L1.intensity = 0.1 + lv * 0.05; L2.intensity = 0.08 + lv * 0.03; L1.color.setHSL(hue, 0.8, 0.6);
   }
 
-  // v5: Sol vivo + corona + estrellas
   sunU.uTime.value = t; sunU.uEmis.value.copy(coreMat.emissive);
   sunU.uInt.value = coreMat.emissiveIntensity * (window._solBrightMul ?? 1);
   coreMesh.getWorldPosition(sunWorld.value);
@@ -1563,23 +2104,42 @@ const _tmpV = new THREE.Vector3(); let _frame = 0;
     muMesh.scale.setScalar(gPulse);
   }
 
-  if (coronaPoints && starPower > 0) { coronaPoints.rotation.y = t * 0.018; coronaPoints.rotation.x = t * 0.009; }
-  filamentos.forEach((fl, i) => { fl.rotation.y = t * (0.012 + i * 0.002); fl.rotation.z = Math.sin(t * 0.06 + i) * 0.025; });
-  shadowRings.forEach(r => { r.rotation.z += r.userData.spd; r.rotation.x += r.userData.spd * 0.6; });
+  // ── PANELES FLOTANTES SWF EN CENIT (ARRIBA) Y NADIR (ABAJO) ──
+  camera.getWorldDirection(_camFwd);
+  swfSpaceEntries.forEach(entry => {
+    const isDocked = (_dockedSwfEntry === entry);
+    if (isDocked) {
+      entry.anchor.position.y += (entry.baseY - entry.anchor.position.y) * damp(8, dt);
+    } else {
+      entry.anchor.position.y = entry.baseY + Math.sin(t * 0.55 + entry.phase) * 1.3;
+    }
+    entry.dust.rotation.z = t * 0.035 * (entry.phase ? -1 : 1);
+    entry.beaconRing.rotation.z = -t * 0.08;
+
+    entry.anchor.getWorldPosition(entry.cssObj.position);
+    entry.anchor.getWorldQuaternion(entry.cssObj.quaternion);
+
+    _toPanel.copy(entry.cssObj.position).sub(camera.position);
+    const distToPanel = _toPanel.length();
+    const inFront = _toPanel.dot(_camFwd) > 2.0;
+    entry.el.style.visibility = inFront ? 'visible' : 'hidden';
+
+    const canInteract = inFront && !_diveAnim && (isDocked || distToPanel < 140);
+    entry.el.classList.toggle('interactive', canInteract);
+  });
 
   // ── ASPECTOS ORBITANDO ──
   aspectInner.forEach((a, i) => {
     const d = a.mesh.userData;
     const em = d.emerging || d.flashTimer > 0;
-    
     const targetR = em ? 12 + i * 0.5 : 3.5 + (i % 3) * 0.6;
     const curLen = a.mesh.position.length() || targetR;
     const newR = curLen + (targetR - curLen) * 0.045;
 
     const isHovered = hoveredPlanet === a.mesh;
     const baseSpd = 0.1 + (i % 3) * 0.02;
-    const targetSpd = isHovered ? 0.003 : baseSpd; 
-    
+    const targetSpd = isHovered ? 0.003 : baseSpd;
+
     d.currentSpeed = d.currentSpeed || baseSpd;
     d.currentSpeed += (targetSpd - d.currentSpeed) * 0.15;
     d.orbitTheta += dt * d.currentSpeed;
@@ -1623,9 +2183,58 @@ const _tmpV = new THREE.Vector3(); let _frame = 0;
     }
   });
 
-  if (_isTransitioning) {
+  // ── ANIMACIÓN DE DESCENSO / ASCENSO ENTRE CENIT Y NADIR ──
+  if (_diveAnim) {
+    _diveAnim.t += dt / _diveAnim.duration;
+    const raw = Math.min(1, _diveAnim.t);
+    // Suavizado quintic ease-in-out
+    const ease = raw < 0.5 ? 16 * raw * raw * raw * raw * raw : 1 - Math.pow(-2 * raw + 2, 5) / 2;
+
+    const pos = _diveAnim.curve.getPoint(ease);
+    camera.position.copy(pos);
+
+    // En la mitad del viaje miramos hacia el Sol/destino y luego nos alineamos con la orientación exacta del panel destino
+    _diveLook.copy(_diveAnim.endPose.lookAt).lerp(sunWorld.value, Math.sin(ease * Math.PI) * 0.55);
+    _diveMat.lookAt(camera.position, _diveLook, new THREE.Vector3(0, 1, 0));
+    _diveQuat.setFromRotationMatrix(_diveMat);
+
+    if (ease < 0.25) {
+      camera.quaternion.copy(_diveAnim.startQuat).slerp(_diveQuat, ease / 0.25);
+    } else if (ease > 0.72) {
+      camera.quaternion.copy(_diveQuat).slerp(_diveAnim.endPose.camQuat, (ease - 0.72) / 0.28);
+    } else {
+      camera.quaternion.copy(_diveQuat);
+    }
+
+    // Efecto warp sutil de FOV durante el viaje
+    camera.fov = 52 + Math.sin(ease * Math.PI) * 24;
+    camera.updateProjectionMatrix();
+
+    if (raw >= 1) {
+      camera.position.copy(_diveAnim.endPose.camPos);
+      camera.quaternion.copy(_diveAnim.endPose.camQuat);
+      camera.fov = 52;
+      camera.updateProjectionMatrix();
+      _dockedSwfEntry = _diveAnim.targetEntry;
+      _isFlyingToSwf = false;
+      _diveAnim = null;
+    }
+  } else if (_dockedSwfEntry) {
+    const pose = getSwfFrontPose(_dockedSwfEntry);
+    if (_isFlyingToSwf) {
+      const k = damp(4.2, dt);
+      camera.position.lerp(pose.camPos, k);
+      camera.quaternion.slerp(pose.camQuat, k);
+      if (camera.position.distanceTo(pose.camPos) < 0.35) {
+        camera.position.copy(pose.camPos);
+        camera.quaternion.copy(pose.camQuat);
+        _isFlyingToSwf = false;
+        _isTransitioning = false;
+      }
+    }
+  } else if (_isTransitioning) {
     if (_isFlyingTo && _flyTarget) {
-      const wp = new THREE.Vector3(); _flyTarget.getWorldPosition(wp); 
+      const wp = new THREE.Vector3(); _flyTarget.getWorldPosition(wp);
       _flyTargetPos.copy(wp).add(_orbitOffset);
       const m = new THREE.Matrix4(); m.lookAt(_flyTargetPos, wp, camera.up); _flyTargetQuat.setFromRotationMatrix(m);
       const k = damp(3.4, dt) * (1 + (TA.boost || KEYS.space ? 1.5 : 0));
@@ -1639,13 +2248,11 @@ const _tmpV = new THREE.Vector3(); let _frame = 0;
 
   if (_isOrbiting && _flyTarget) {
     const wp = new THREE.Vector3(); _flyTarget.getWorldPosition(wp);
-    // v5: en órbita el touchpad / arrastre gira alrededor del planeta
     if (window._orbitSpin) { _orbitOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), window._orbitSpin); window._orbitSpin = 0; }
     const targetPos = wp.clone().add(_orbitOffset);
     camera.position.lerp(targetPos, damp(7.7, dt)); camera.lookAt(wp);
   }
 
-  // v5 · Lente gravitacional: centro y radio de Sagitario A* en pantalla
   window._bhFlare = Math.max(0, window._bhFlare - dt * 0.35);
   if (blackHoleMesh) {
     blackHoleMesh.getWorldPosition(_tmpV);
@@ -1659,29 +2266,31 @@ const _tmpV = new THREE.Vector3(); let _frame = 0;
     LU.uFlare.value = window._bhFlare;
   }
 
-  // v5 · ahorro: con el iframe de órbita activo (otro universo corriendo encima) dibujamos a ~20 fps
   _frame++;
   const iframeActive = orbitOverlay.style.display !== 'none' && orbitGlass.style.display === 'none';
-  if (!iframeActive || _frame % 3 === 0) composer.render();
+  if (!iframeActive || _frame % 3 === 0) {
+    composer.render();
+    cssRenderer.render(cssScene, camera);
+  }
   updateOrbitOverlayPosition();
-})(); 
+})();
 
 restoreAnchorIfNeeded();
 window.toggleUniverseMode = function() {
   window._moveUniverseMode = !window._moveUniverseMode;
-  const btn = document.getElementById('btn-universe-mode'); btn.blur(); 
+  const btn = document.getElementById('btn-universe-mode'); btn.blur();
   if (window._axesHelper) window._axesHelper.visible = window._moveUniverseMode;
   if (window._moveUniverseMode) { btn.textContent = "MODO: MOTOR DE VOLUNTAD"; btn.classList.add('active'); } else { btn.textContent = "MODO: CÁMARA LIBRE"; btn.classList.remove('active'); }
 };
 
 window.addEventListener('blur', () => { for (let k in KEYS) KEYS[k] = 0; isDrag = false; });
-window._moduleReady = true; window.dispatchEvent(new Event('universo-listo'));
+
+window._DEEP_SWF_CONFIGS = DEEP_SWF_PANELS;
+window._moduleReady = true;
+window.dispatchEvent(new Event('universo-listo'));
 
 /* ════════════════════════════════════
    v5 · CONTROLES TÁCTILES
-   Izquierdo: desplazamiento (adelante/atrás, lateral)
-   Derecho:   arriba/abajo = altitud · izquierda/derecha = girar cámara
-   Touchpad (un dedo sobre el cielo): mirar · Pellizco: acercar/alejar · Botón: acelerar
 ════════════════════════════════════ */
 if (IS_TOUCH) {
   const DEAD = 0.12;
@@ -1718,9 +2327,9 @@ if (IS_TOUCH) {
   boost.addEventListener('touchend', bOff, { passive: false });
   boost.addEventListener('touchcancel', bOff, { passive: false });
 
-  // Touchpad + pellizco sobre el lienzo
   const cv = renderer.domElement; let lookId = null, lx = 0, ly = 0, pinchD = 0;
   cv.addEventListener('touchstart', e => {
+    if (_dockedSwfEntry && !_diveAnim) releaseSwfDock();
     if (e.touches.length === 2) {
       lookId = null; pinchD = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
     } else if (lookId === null) {
@@ -1734,7 +2343,7 @@ if (IS_TOUCH) {
       if (_isOrbiting && _flyTarget) {
         const len = _orbitOffset.length(); const minL = (_flyTarget.userData.sz || 3) * 2;
         _orbitOffset.normalize().multiplyScalar(Math.max(minL, Math.min(120, len + delta * 0.6)));
-      } else { camRadius = Math.max(15, Math.min(280, camRadius + delta)); if (window._CEGG) TA._pinchMove = -delta; }
+      } else { camRadius = Math.max(15, Math.min(480, camRadius + delta)); if (window._CEGG) TA._pinchMove = -delta; }
       e.preventDefault(); return;
     }
     for (const t of e.changedTouches) {
@@ -1743,17 +2352,16 @@ if (IS_TOUCH) {
       if (_isOrbiting) window._orbitSpin = (window._orbitSpin || 0) - dx * 0.006;
       camYaw   -= dx * 0.0042;
       camPitch -= dy * 0.0042;
-      camPitch = Math.max(-Math.PI / 2.1, Math.min(0.45, camPitch));
+      camPitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, camPitch));
       e.preventDefault();
     }
   }, { passive: false });
   const lookEnd = e => { for (const t of e.changedTouches) if (t.identifier === lookId) lookId = null; if (e.touches.length < 2) pinchD = 0; };
   cv.addEventListener('touchend', lookEnd); cv.addEventListener('touchcancel', lookEnd);
 
-  // En modo nave (cegg activo) el pellizco empuja la nave hacia adelante/atrás
   (function pinchFly() {
     requestAnimationFrame(pinchFly);
-    if (TA._pinchMove && window._CEGG && !_isOrbiting) {
+    if (TA._pinchMove && window._CEGG && !_isOrbiting && !_dockedSwfEntry && !_diveAnim) {
       const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
       camera.position.addScaledVector(fwd, TA._pinchMove * 0.5);
       if (window._moveUniverseMode) universeGroup.position.addScaledVector(fwd, TA._pinchMove * 0.5);
@@ -1765,6 +2373,136 @@ if (IS_TOUCH) {
 </script>
 
 <script>
+/* ════════════════════════════════════
+   MOTOR RUFFLE PARA PANELES 3D CENIT Y NADIR (DURAKINESIS)
+   Incluye intercepción automática de getURL() en intro.swf sin modificar el SWF
+════════════════════════════════════ */
+window._swfData = {};
+window._activeSwfId = null;
+
+// Interceptar window.open si intro.swf dispara getURL() al terminar o al pulsar entrar
+const _origWindowOpen = window.open;
+window.open = function(url, target, features) {
+  if (window._isIntroSwfActive && window._isIntroSwfActive()) {
+    window.diveToDurakinesisWeb?.();
+    return null;
+  }
+  return _origWindowOpen ? _origWindowOpen.apply(window, arguments) : null;
+};
+
+function showSwfPlaceholder(container, swfName, panelId) {
+  const isIntro = panelId === 'durakinesis_intro';
+  container.innerHTML = `
+    <div style="text-align:center; padding:2.5rem; max-width:520px;">
+      <div style="font-family:'Italiana',serif; font-size:2rem; letter-spacing:.2em; color:#fff; margin-bottom:.8rem; text-shadow:0 0 24px rgba(0,240,255,.35);">
+        ${isIntro ? 'INTRO DURAKINESIS' : 'WEB DURAKINESIS'}
+      </div>
+      <div style="font-family:'Cormorant Garamond',serif; font-size:1.25rem; color:rgba(255,255,255,.78); line-height:1.6; margin-bottom:1.6rem;">
+        Este monolito está listo para ejecutar <code>${swfName}</code> de forma interactiva.
+        Colócalo junto al HTML en GitHub Pages o cárgalo ahora desde tu equipo.
+      </div>
+      <button onclick="window.pickLocalSwf('${panelId}')" class="pp-enter-btn" style="max-width:320px; margin:0 auto; border-color:rgba(0,240,255,.55); background:rgba(0,240,255,.08);">
+        📂 Cargar archivo .swf aquí
+      </button>
+    </div>`;
+}
+
+async function fetchFirstAvailableSwf(candidates) {
+  for (const name of candidates) {
+    let resolvedUrl = null;
+    try { resolvedUrl = new URL(name, window.location.href).href; }
+    catch (_) { continue; }
+    try {
+      const res = await fetch(resolvedUrl);
+      if (res.ok) {
+        const buf = await res.arrayBuffer();
+        return { data: new Uint8Array(buf), name };
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+window.mountSwf = function(container, swfSource, panelId, expectedName) {
+  if (!container) return;
+  container.innerHTML = `<div class="dp-empty" style="padding:2rem;">Despertando reliquia Flash…</div>`;
+
+  const loadBytesIntoRuffle = (bytes, fileName, retries = 30) => {
+    const ruffle = window.RufflePlayer && window.RufflePlayer.newest ? window.RufflePlayer.newest() : null;
+    if (!ruffle) {
+      if (retries > 0) { setTimeout(() => loadBytesIntoRuffle(bytes, fileName, retries - 1), 250); return; }
+      container.innerHTML = `<div class="dp-empty">No se pudo inicializar el motor Ruffle. Verifica tu conexión o recarga la página.</div>`;
+      return;
+    }
+    try {
+      container.innerHTML = '';
+      const player = ruffle.createPlayer();
+      player.style.width = '100%';
+      player.style.height = '100%';
+      container.appendChild(player);
+      player.load({ data: bytes, swfFileName: fileName || expectedName || 'durakinesis.swf' }).catch(() => {
+        showSwfPlaceholder(container, fileName || expectedName || 'archivo.swf', panelId);
+      });
+    } catch (_) {
+      showSwfPlaceholder(container, fileName || expectedName || 'archivo.swf', panelId);
+    }
+  };
+
+  if (swfSource && swfSource.data instanceof Uint8Array) {
+    loadBytesIntoRuffle(swfSource.data, swfSource.name);
+    return;
+  }
+
+  const candidates = Array.isArray(swfSource) ? swfSource : (typeof swfSource === 'string' ? [swfSource] : []);
+  if (candidates.length) {
+    const proto = window.location.protocol;
+    if (proto !== 'http:' && proto !== 'https:') {
+      showSwfPlaceholder(container, expectedName || candidates[0], panelId);
+      return;
+    }
+    fetchFirstAvailableSwf(candidates).then(found => {
+      if (found) loadBytesIntoRuffle(found.data, found.name);
+      else showSwfPlaceholder(container, expectedName || candidates[0], panelId);
+    });
+    return;
+  }
+
+  showSwfPlaceholder(container, expectedName || 'archivo.swf', panelId);
+};
+
+window.pickLocalSwf = function(panelId) {
+  window._activeSwfId = panelId;
+  const inp = document.getElementById('swf-file-picker');
+  inp.value = '';
+  inp.click();
+};
+
+window.loadLocalSwfFile = function(inp) {
+  const file = inp.files && inp.files[0];
+  const pid = window._activeSwfId;
+  if (!file || !pid) return;
+  file.arrayBuffer().then(buf => {
+    const payload = { data: new Uint8Array(buf), name: file.name };
+    window._swfData[pid] = payload;
+    const stage = document.getElementById('space-swf-stage-' + pid);
+    if (stage) window.mountSwf(stage, payload, pid, file.name);
+  }).catch(() => {});
+};
+
+function bootDeepSwfPanels() {
+  const list = window._DEEP_SWF_CONFIGS || [];
+  list.forEach(cfg => {
+    const stage = document.getElementById('space-swf-stage-' + cfg.id);
+    if (stage) {
+      const src = window._swfData[cfg.id] || cfg.swfCandidates || cfg.swf;
+      window.mountSwf(stage, src, cfg.id, cfg.swf);
+    }
+  });
+}
+
+if (window._moduleReady) bootDeepSwfPanels();
+else window.addEventListener('universo-listo', bootDeepSwfPanels, { once: true });
+
 /* ════════════════════════════════════
    LÓGICA DE PANELES DETALLADOS Y UTILIDADES GLOBALES
 ════════════════════════════════════ */
@@ -1803,15 +2541,14 @@ function calculateLevelAndXp(totalXp) {
 function calculateLevel(xp) { return calculateLevelAndXp(xp).level; }
 function xpForNextLevel(xp) { return calculateLevelAndXp(xp).nextLevelXp; }
 function xpProgress(xp) { const data = calculateLevelAndXp(xp); return data.currentXp / data.nextLevelXp; }
-function xpRemaining(xp) { const data = calculateLevelAndXp(xp); return data.nextLevelXp - data.currentXp; }
 function parseDate(str) { if (!str) return new Date(0); try { return new Date(str); } catch(e) { return new Date(0); } }
 
 function generateAIAnalysis(userData, userName) {
   const quant = userData?.datos_cuantitativos || {}; const qual = userData?.datos_cualitativos || {};
-  const tasks = qual.tareas_detalladas || []; const pending = tasks.filter(t => !t.completed); const completed = tasks.filter(t => t.completed);
+  const tasks = qual.tareas_detalladas || []; const completed = tasks.filter(t => t.completed);
   const xp = quant.nivel_y_xp?.xp_total || 0; const distractions = quant.informacion_mara_egosombra?.total_distracciones || 0;
   const completionRate = tasks.length > 0 ? Math.round((completed.length / tasks.length) * 100) : 0;
-  
+
   let insights = [];
   insights.push({ title: 'Tasa de Completación', text: completionRate >= 70 ? `Excelente: ${completionRate}% de tareas completadas. Mantén este ritmo de luz.` : `${completionRate}% completado. Considera dividir tareas grandes en partes microscópicas.` });
   if (distractions > 5) insights.push({ title: 'Patrón Ego-Sombra', text: `Se han detectado ${distractions} distracciones de Mara. Identifica tus momentos vulnerables y respira profundamente.` });
@@ -1830,14 +2567,12 @@ function setupNavTabs(nav, content) {
   });
 }
 
-// ── EXPUESTAS GLOBALMENTE PARA EL CLICK DEL MOUSE Y EL HTML ──
-
 window.showStatPopup = function(type, data, x, y) {
   const popup = document.getElementById('stat-popup');
   const title = document.getElementById('sp-title');
   const content = document.getElementById('sp-content');
   let html = '';
-  
+
   switch(type) {
       case 'pending':
           title.textContent = `Pendientes (${data.length})`;
@@ -1879,7 +2614,7 @@ window.openPP = function(pd) {
   } else {
     html += `<div class="dp-empty">Este universo está en fase de desarrollo o concepto. Próximamente...</div>`;
   }
-  
+
   document.getElementById('pp-body').innerHTML = html;
   pp.classList.add('open');
 };
@@ -1894,21 +2629,21 @@ window.showAspectPanel = function(userName) {
   if(!window._cosmicEggData) return;
   const panel = document.getElementById('data-panel'); const nav = document.getElementById('dp-nav'); const content = document.getElementById('dp-content');
   const userData = window._cosmicEggData.perfiles_usuarios[userName]; if (!userData) return;
-  
+
   const quant = userData.datos_cuantitativos; const qual = userData.datos_cualitativos;
   const userXp = quant.nivel_y_xp?.xp_total || 0; const level = calculateLevel(userXp);
-  
+
   document.getElementById('dp-title').innerHTML = `${userName}`;
   document.getElementById('dp-subtitle').textContent = `Nivel ${level} · ${formatNumber(userXp)} PV`;
-  
+
   const tasks = qual.tareas_detalladas || [];
   window.currentPendingTasks = tasks.filter(t => !t.completed);
-  window.currentCompletedTasks = qual.historico_tareas || []; // Usamos el histórico rico en datos
+  window.currentCompletedTasks = qual.historico_tareas || [];
   window.currentDistractions = qual.distracciones_detalladas || [];
   const bitacoraPersonal = qual.bitacora_personal || [];
-  
+
   const aiInsights = generateAIAnalysis(userData, userName);
-  
+
   nav.innerHTML = `
       <button class="dp-nav-btn active" data-tab="overview">◈ Síntesis Áurica</button>
       <div class="dp-nav-sep"></div>
@@ -1917,7 +2652,7 @@ window.showAspectPanel = function(userName) {
       <button class="dp-nav-btn" data-tab="pending">⏳ Misiones Activas</button>
       <button class="dp-nav-btn" data-tab="historico">📜 Histórico de Victorias</button>
   `;
-  
+
   content.innerHTML = `
       <div class="dp-tab-pane active" id="tab-overview">
           <div class="dp-level-box">
@@ -1964,27 +2699,27 @@ window.showAspectPanel = function(userName) {
       </div>
   `;
   setupNavTabs(nav, content); panel.classList.add('visible');
-}
+};
 
 window.showSelfPanel = function() {
   if(!window._cosmicEggData) return;
   const panel = document.getElementById('data-panel'); const nav = document.getElementById('dp-nav'); const content = document.getElementById('dp-content');
   const global = window._cosmicEggData.perfil_global;
   const totalXp = global.estadisticas_globales.total_pv_acumulado || 0; const level = calculateLevel(totalXp);
-  
+
   document.getElementById('dp-title').innerHTML = `Sistema Global`;
   document.getElementById('dp-subtitle').textContent = `Nivel ${level} · ${formatNumber(totalXp)} PV Total`;
-  
+
   const granBitacora = global.gran_bitacora_universal || [];
   const sortedBitacora = [...granBitacora].sort((a, b) => parseDate(b.timestamp || b.date) - parseDate(a.timestamp || a.date));
-  
+
   nav.innerHTML = `
       <button class="dp-nav-btn active" data-tab="overview">◈ Estado del Ser</button>
       <div class="dp-nav-sep"></div>
       <button class="dp-nav-btn" data-tab="bitacora">📜 Gran Bitácora</button>
       <button class="dp-nav-btn" data-tab="aspects">👥 Arquetipos</button>
   `;
-  
+
   content.innerHTML = `
       <div class="dp-tab-pane active" id="tab-overview">
           <div class="dp-level-box">
@@ -2025,7 +2760,7 @@ window.showMuPanel = function() {
   if(!window._cosmicEggData) return;
   const panel = document.getElementById('data-panel'); const nav = document.getElementById('dp-nav'); const content = document.getElementById('dp-content');
   const usuarios = window._cosmicEggData.perfiles_usuarios;
-  
+
   let muTotal = 0; let arqData = [];
   for(let u in usuarios) {
       const mu = usuarios[u].datos_cuantitativos?.nivel_y_xp?.mu_disponibles || 0;
@@ -2033,15 +2768,15 @@ window.showMuPanel = function() {
       arqData.push({ nombre: u, mu: mu });
   }
   arqData.sort((a,b) => b.mu - a.mu);
-  
+
   document.getElementById('dp-title').innerHTML = `Banco Central de Mu`;
   document.getElementById('dp-subtitle').textContent = `Economía Universal · ${muTotal} Mu Totales`;
-  
+
   nav.innerHTML = `
       <button class="dp-nav-btn active" data-tab="overview">◈ Reservas</button>
       <button class="dp-nav-btn" data-tab="distr">📊 Distribución</button>
   `;
-  
+
   content.innerHTML = `
       <div class="dp-tab-pane active" id="tab-overview">
           <div class="dp-level-box" style="justify-content:center; text-align:center; background:rgba(255,215,0,0.02); border-color:rgba(255,215,0,0.1);">
@@ -2061,7 +2796,7 @@ window.showMuPanel = function() {
           <h3 class="dp-section-title">📊 Distribución de Mu por Arquetipo</h3>
           ${arqData.map(a => `
               <div class="dp-data-item" style="display:flex; justify-content:space-between; border-left-color:var(--gold);">
-                  <strong style="color:#fff; font-weight:400; font-size:1.1rem; font-family:'Cormorant Garamond', serif;">${a.nombre}</strong> 
+                  <strong style="color:#fff; font-weight:400; font-size:1.1rem; font-family:'Cormorant Garamond', serif;">${a.nombre}</strong>
                   <span style="font-family:'Space Mono', monospace; color:var(--gold); font-size:0.85rem;">${a.mu} Mu</span>
               </div>
           `).join('')}
@@ -2070,19 +2805,11 @@ window.showMuPanel = function() {
   setupNavTabs(nav, content); panel.classList.add('visible');
 };
 
-/* CERRAR PANELES DESDE LOS BOTONES ✕ DE HTML */
 document.getElementById('sp-close').addEventListener('click', () => { document.getElementById('stat-popup').classList.remove('visible'); });
 document.getElementById('dp-close').addEventListener('click', () => { document.getElementById('data-panel').classList.remove('visible'); });
 
-
 /* ════════════════════════════════════
    v5 · CUERPO CALLOSO — conexión automática con Killer Pendiente
-   Mismos caminos que usa kp828.py:
-     · HTTP  http://127.0.0.1:5000/api/egg      → el HuevoCosmico_LIVE.cegg ya parseado
-     · WS    ws://127.0.0.1:8765                → pulsos TASK_COMPLETE, TASK_CREATED, FEED, MEGA_TASK, MISION_SEMANA…
-     · HTTP  /api/eventos?desde=seq             → respaldo si el WebSocket no conecta
-     · Estático voluntad.json / mision.json     → lo que ve el mundo (y el celular) con KP apagado
-   127.0.0.1 y no "localhost": en Windows localhost puede ir a IPv6 (::1) y KP escucha solo en IPv4.
 ════════════════════════════════════ */
 const KP_HTTP = 'http://127.0.0.1:5000';
 const KP_WS   = 'ws://127.0.0.1:8765';
@@ -2109,7 +2836,7 @@ async function pullEgg(refresh) {
     return true;
   } catch (_) { return false; }
 }
-function scheduleEgg(ms = 1600) { clearTimeout(_eggTimer); _eggTimer = setTimeout(() => pullEgg(true), ms); }  // KP regenera el huevo justo después del pulso
+function scheduleEgg(ms = 1600) { clearTimeout(_eggTimer); _eggTimer = setTimeout(() => pullEgg(true), ms); }
 
 function showMision(m) {
   if (!m || !m.texto) return;
@@ -2149,7 +2876,6 @@ function connectWS() {
   ws.onclose = () => { _wsOk = false; setTimeout(connectWS, 6000); };
 }
 
-// Respaldo: si el WS no está, se leen los pulsos por HTTP (el búfer de 60 de KP)
 function startEventPoll() {
   if (_eventPoll) return;
   kpFetch('/api/eventos?desde=0').then(r => { _kpSeq = r.ultimo || 0; }).catch(() => {});
@@ -2160,10 +2886,9 @@ function startEventPoll() {
       catch (_) { if (!(await pullEgg(true))) { window._kpLive = false; setDot(window._CEGG ? '○ KP dormido · huevo en memoria' : '🥚 carga manual'); } }
     }
   }, 5000);
-  setInterval(() => { if (!document.hidden && window._kpLive) pullEgg(true); }, 60000);   // latido suave
+  setInterval(() => { if (!document.hidden && window._kpLive) pullEgg(true); }, 60000);
 }
 
-// Lo público: si no hay KP (celular, visitante), mostrar al menos Pv · Mu y la misión
 async function loadPublic() {
   try { showMision(await kpFetch('/api/mision', 1500)); } catch (_) {
     try { const r = await fetch('mision.json', { cache: 'no-store' }); if (r.ok) showMision(await r.json()); } catch (_) {}
@@ -2184,7 +2909,6 @@ async function loadPublic() {
   const ok = await pullEgg(false);
   if (!ok) {
     setDot('🥚 carga manual');
-    // KP puede abrirse después: reintento tranquilo cada 15 s hasta encontrarlo
     const retry = setInterval(async () => { if (window._kpLive) return clearInterval(retry); if (!document.hidden && await pullEgg(window._CEGG)) clearInterval(retry); }, 15000);
   }
   loadPublic();
@@ -2221,9 +2945,8 @@ window.openCeggInfo = openCeggInfo;
 function closeCeggInfo() { document.getElementById('panel-cegg-info').classList.remove('open'); }
 window.closeCeggInfo = closeCeggInfo;
 
-function loginGoogle()   { closeCfg(); alert('Firebase próximamente — arrastra tu .cegg para activar el universo.'); }
+function loginGoogle()   { closeCfg(); setDot('Firebase próximamente · carga tu .cegg'); }
 window.loginGoogle = loginGoogle;
-
 </script>
 </body>
 </html>
