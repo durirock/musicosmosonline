@@ -55,11 +55,45 @@ const server = http.createServer((req, res) => {
             res.end(data);
         });
 
+    // 4. NUEVO: atajo a Mundo Interior
+    } else if (req.url === '/mundointerior' || req.url === '/mundointerior/') {
+        res.writeHead(302, { 'Location': '/mundointerior_completo.html' });
+        res.end();
+
+    // 5. NUEVO: cualquier otro archivo de 'public' (las partes del ecosistema)
     } else {
-        res.writeHead(404);
-        res.end("Ruta desconocida en el Musicosmos.");
+        servirPublico(req, res);
     }
 });
+
+// --- ARCHIVOS ESTÁTICOS DE 'public' ---
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const TIPOS = {
+    '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+    '.cegg': 'application/json; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+    '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.mp4': 'video/mp4', '.webm': 'video/webm',
+    '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.woff2': 'font/woff2'
+};
+function servirPublico(req, res) {
+    let ruta;
+    try { ruta = decodeURIComponent(req.url.split('?')[0]); } catch (e) { ruta = ''; }
+    const archivo = path.join(PUBLIC_DIR, path.normalize(ruta));
+    // nada fuera de 'public' (ni historia_cosmos.jsonl ni server.js)
+    if (!ruta || !archivo.startsWith(PUBLIC_DIR + path.sep)) {
+        res.writeHead(404); res.end("Ruta desconocida en el Musicosmos."); return;
+    }
+    fs.stat(archivo, (err, st) => {
+        if (err || !st.isFile()) { res.writeHead(404); res.end("Ruta desconocida en el Musicosmos."); return; }
+        res.writeHead(200, {
+            'Content-Type': TIPOS[path.extname(archivo).toLowerCase()] || 'application/octet-stream',
+            'Content-Length': st.size
+        });
+        fs.createReadStream(archivo).pipe(res);
+    });
+}
 
 const wss = new WebSocket.Server({ server });
 
