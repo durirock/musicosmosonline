@@ -171,17 +171,34 @@
         #controls.min { padding: 9px 14px; }
         body.movil .ui-overlay .pn-tog { display: none; }
         /* RADAR: instrumento de viento, rumbo y térmicas cercanas */
-        #radar-box { position: absolute; left: 20px; bottom: 20px; z-index: 11; display: none; padding: 10px 10px 8px; border-radius: 12px;
-            background: rgba(4, 9, 18, 0.72); border: 1px solid rgba(148, 163, 184, 0.28); backdrop-filter: blur(8px); text-align: center; }
-        body[data-mode="fly"] #radar-box { display: block; bottom: 210px; }
-        body[data-mode="walk"] #radar-box { display: block; }
-        #radar { width: 150px; height: 150px; display: block; }
-        #radar-txt { font: 600 10px/1.45 monospace; color: #cbd5e1; letter-spacing: .06em; margin-top: 4px; white-space: nowrap; }
+        /* RADAR: solo el instrumento, sin recuadro, en la esquina superior izquierda */
+        #radar-box { position: absolute; left: 14px; top: 14px; z-index: 11; display: none; text-align: center; pointer-events: none; }
+        body[data-mode="fly"] #radar-box, body[data-mode="walk"] #radar-box { display: block; }
+        #radar { width: 112px; height: 112px; display: block; margin: 0 auto; }
+        #radar-txt { font: 600 9.5px/1.4 monospace; color: #e2e8f0; letter-spacing: .05em; margin-top: 3px; white-space: nowrap; width: 132px;
+            text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 2px rgba(0,0,0,.9); }
         #radar-txt b { color: #7dd3fc; font-weight: 700; }
-        body.movil #radar-box, body.movil[data-mode="fly"] #radar-box { left: auto; right: 12px; bottom: 166px; padding: 6px 6px 4px; }
-        body.movil #radar { width: 92px; height: 92px; }
-        body.movil #radar-txt { font-size: 8px; white-space: normal; width: 92px; line-height: 1.35; }
+        body[data-mode="fly"] .ui-overlay, body[data-mode="walk"] .ui-overlay { left: 150px; }
+        body.movil #radar-box { left: 8px; top: 8px; }
+        body.movil #radar { width: 70px; height: 70px; }
+        body.movil #radar-txt { font-size: 7.5px; width: 78px; margin-left: -4px; }
         body.movil #radar-txt .rt2 { display: none; }
+        body.movil[data-mode="fly"] .ui-overlay, body.movil[data-mode="walk"] .ui-overlay { left: 90px; }
+        body.movil[data-mode="fly"] #piki-hud, body.movil[data-mode="walk"] #piki-hud { left: 90px; top: 46px; }
+        /* instrumentos de vuelo: minimizables (queda el vario a la vista) */
+        .inst-head { display: flex; justify-content: flex-end; margin: -6px -4px 4px 0; }
+        #instruments.min .inst-full { display: none; }
+        #instruments.min { padding: 8px 12px; }
+        #instruments { padding: 10px 12px; min-width: 150px; font-size: 11px; }
+        #instruments .instrument-value { font-size: 1.12rem; }
+        #instruments .mb-2 { margin-bottom: 2px; }
+        #instruments .wind-row { font-size: 9.5px; margin-top: 5px; padding-top: 5px; max-width: 250px; }
+        #radar-tog { pointer-events: auto; display: block; margin-top: 2px; text-shadow: 0 1px 3px #000; }
+        #radar-box.min #radar, #radar-box.min #radar-txt { display: none; }
+        #radar-box.min #radar-tog { padding: 4px 8px; border-radius: 8px; background: rgba(4, 9, 18, .6); border: 1px solid rgba(148,163,184,.3); color: #cbd5e1; }
+        body.ui-idle #radar-box, body.ui-idle #instruments { opacity: 0; pointer-events: none; }
+        #radar-box, #instruments { transition: opacity .6s; }
+        body[data-mode="fly"] #piki-hud, body[data-mode="walk"] #piki-hud { top: 262px; }
         body.movil.ui-idle .joy-base { opacity: .28; }
         #piki-hud { position: absolute; left: 20px; top: 205px; width: 200px; z-index: 12; background: rgba(6, 10, 22, 0.72); color: #e2e8f0;
             border: 1px solid rgba(99, 245, 161, 0.35); border-radius: 12px; padding: 10px 12px; font-size: 11px; backdrop-filter: blur(8px); }
@@ -356,10 +373,11 @@
     </div>
 
     <div class="flight-instruments" id="instruments">
-        <div class="mb-2">SPD: <span class="instrument-value" id="inst-spd">0</span> km/h</div>
-        <div class="mb-2">ALT: <span class="instrument-value" id="inst-alt">0</span> m</div>
+        <div class="inst-head"><span class="pn-tog" id="inst-tog">ocultar</span></div>
+        <div class="mb-2 inst-full">SPD: <span class="instrument-value" id="inst-spd">0</span> km/h</div>
+        <div class="mb-2 inst-full">ALT: <span class="instrument-value" id="inst-alt">0</span> m</div>
         <div>VAR: <span class="instrument-value" id="inst-var">0.0</span> m/s</div>
-        <div class="wind-row" id="inst-wind">AGL 0 m · ladera —</div>
+        <div class="wind-row inst-full" id="inst-wind">AGL 0 m · ladera —</div>
     </div>
 
     <div class="controls-hint" id="controls">
@@ -403,7 +421,7 @@
     </div>
 
     <div id="mob-inst"></div>
-    <div id="radar-box"><canvas id="radar"></canvas><div id="radar-txt"></div></div>
+    <div id="radar-box"><canvas id="radar"></canvas><div id="radar-txt"></div><span class="pn-tog" id="radar-tog">ocultar radar</span></div>
     <div id="launch-chip"></div>
     <div id="joy-left" class="joy-zone"><div class="joy-base"><div class="joy-knob"></div></div></div>
     <div id="joy-right" class="joy-zone"><div class="joy-base"><div class="joy-knob"></div></div></div>
@@ -3228,7 +3246,9 @@
             ph.querySelector('.ph-head').addEventListener('click', e => { e.stopPropagation(); phSet(!ph.classList.contains('min')); });
             // paneles de información y de teclas: también minimizables y recordados
             [['.ui-overlay', 'info-tog', 'aerocosmos.info', 'ocultar información', 'ver información'],
-             ['#controls', 'keys-tog', 'aerocosmos.teclas', 'ocultar', 'ver']].forEach(([sel, tog, key, on, off]) => {
+             ['#controls', 'keys-tog', 'aerocosmos.teclas', 'ocultar', 'ver'],
+             ['#instruments', 'inst-tog', 'aerocosmos.instr', 'ocultar', 'ver'],
+             ['#radar-box', 'radar-tog', 'aerocosmos.radar', 'ocultar radar', 'radar']].forEach(([sel, tog, key, on, off]) => {
                 const el = document.querySelector(sel), tg = document.getElementById(tog);
                 const set = m => { el.classList.toggle('min', m); tg.textContent = m ? off : on; try { localStorage.setItem(key, m ? 'min' : 'open'); } catch (_) {} };
                 let m0 = false; try { m0 = localStorage.getItem(key) === 'min'; } catch (_) {}
@@ -3510,10 +3530,11 @@ void main(){
                 this.gold = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x995500, emissiveIntensity: .5, roughness: .1, metalness: .95 });
                 this.parts = [];   // grupos que se mueven con la onda: { obj, base, y }
                 // cuerpo-tubo
-                const pts = [[0, -4.5, -5.5], [0, -4, -3.5], [0, -3.2, -1.8], [0, -2, -.2], [-.15, 0, .1], [0, 1.2, -.2], [.15, 2.5, 0], [.08, 3.8, .2], [-.05, 4.8, .15], [0, 5.8, 0]]
+                // en vuelo la cola sigue el eje de la columna (no se levanta como cuando está de pie) y ondula con ella
+                const pts = [[0, -9.5, 0], [0, -7.8, .05], [0, -6.1, 0], [0, -4.4, -.05], [0, -2.7, 0], [-.15, -1, .05], [0, .6, -.05], [.15, 2.2, 0], [.08, 3.7, .1], [-.05, 4.9, .1], [0, 5.8, 0]]
                     .map(p => new THREE.Vector3(...p));
                 const curve = new THREE.CatmullRomCurve3(pts);
-                const tube = new THREE.TubeGeometry(curve, 90, .6, 18, false);
+                const tube = new THREE.TubeGeometry(curve, 120, .6, 18, false);
                 const pa = tube.attributes.position, ua = tube.attributes.uv, p = new THREE.Vector3();
                 for (let i = 0; i < pa.count; i++) {
                     p.fromBufferAttribute(pa, i); const t = ua.getX(i);
@@ -3556,8 +3577,8 @@ void main(){
                 [-1, 1].forEach(side => {
                     const ws = new THREE.Group();
                     for (let i = 0; i < 6; i++) {
-                        const len = 7.5 - i * .8, s = new THREE.Shape();
-                        s.moveTo(0, 0); s.quadraticCurveTo(.8, len * .4, .2, len); s.quadraticCurveTo(-.6, len * .5, 0, 0);
+                        const len = (7.5 - i * .8) * 1.6, s = new THREE.Shape();
+                        s.moveTo(0, 0); s.quadraticCurveTo(1.3, len * .4, .3, len); s.quadraticCurveTo(-.9, len * .5, 0, 0);
                         const f = new THREE.Mesh(new THREE.ShapeGeometry(s), this.mat);
                         f.position.set(side * .15, i * .12, -.05);
                         f.rotation.z = side * (Math.PI * .82 - i * .12); f.rotation.x = .3 + i * .05; f.rotation.y = side * .2;
@@ -4921,19 +4942,20 @@ void main(){
                 float lum = 0.3 + uLevel * 0.55 + abs(disp) * 0.35 + (1.0 - sh / 6.0) * 0.25;
                 float white = clamp(uLevel * 0.5 + (1.0 - sh / 6.0) * 0.28 + max(0.0, disp) * 0.3, 0.0, 0.85);
                 vec3 wm = vec3(0.75, 0.9, 1.12), ws = vec3(1.12, 0.95, 0.68);
-                vC = mix(cm * lum + white * wm * 0.8, cS * lum * 1.15 + white * ws * 0.85, uPal);
-                vA = uFade * (0.34 + 0.12 * uPal);                // muchas partículas sumadas: cada una suave, el conjunto brilla
+                vC = mix(cm * lum + white * wm * 0.8, cS * lum * 1.25 + white * ws * 0.5, uPal);
+                vA = uFade * (0.34 - 0.15 * uPal);                // muchas partículas sumadas: cada una suave, el conjunto brilla
                 float sz = aSz * (1.0 + uLevel * 2.0 + abs(disp) * 1.5 + white * 1.2);
                 gl_PointSize = clamp(sz * uR * 0.032 * uProj / max(-mv.z, 1.0), 1.0, 24.0);
                 gl_Position = projectionMatrix * mv;
             }`;
         const NUC_FRAG = `
-            varying vec3 vC; varying float vA;
+            uniform float uNorm; varying vec3 vC; varying float vA;
             void main() {
                 vec2 q = gl_PointCoord - 0.5; float d = length(q) * 2.0;
                 if (d > 1.0) discard;
                 float a = pow(1.0 - d, 1.6) + 0.55 * pow(max(0.0, 1.0 - d * 3.2), 2.0);   // centro fotónico nítido
-                gl_FragColor = vec4(vC * a * vA, 1.0);
+                // luna: luz que se suma sobre el cielo oscuro · sol: pigmento opaco, conserva el oro sobre el celeste
+                gl_FragColor = uNorm > 0.5 ? vec4(vC * 1.05, clamp(a * vA * 3.2, 0.0, 0.95)) : vec4(vC * a * vA, 1.0);
             }`;
         function nucGlowTex(c1, c2, c3) {
             const c = document.createElement('canvas'); c.width = c.height = 128;
@@ -4964,9 +4986,9 @@ void main(){
             g.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
             g.setAttribute('aSz', new THREE.BufferAttribute(sz, 1));
             g.setAttribute('aRest', new THREE.BufferAttribute(rest, 1));
-            const u = { uTime: { value: 0 }, uLevel: { value: 0 }, uProj: { value: 600 }, uR: { value: 1 }, uPal: { value: pal }, uFade: { value: 1 } };
+            const u = { uTime: { value: 0 }, uLevel: { value: 0 }, uProj: { value: 600 }, uR: { value: 1 }, uPal: { value: pal }, uFade: { value: 1 }, uNorm: { value: pal } };
             const m = new THREE.ShaderMaterial({ uniforms: u, vertexShader: NUC_VERT, fragmentShader: NUC_FRAG,
-                transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+                transparent: true, depthWrite: false, blending: pal ? THREE.NormalBlending : THREE.AdditiveBlending, fog: false });
             const pts = new THREE.Points(g, m); pts.frustumCulled = false;
             const grp = new THREE.Group(); grp.add(pts);
             // singularidad central: tres halos como en el original
@@ -4991,7 +5013,7 @@ void main(){
             const proj = window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
             const sunLvl = THREE.MathUtils.clamp((sunCurrentScale - sunBaseScale) / 120, 0, 1);
             const day = THREE.MathUtils.clamp(sunElevation * 4 + 0.5, 0, 1);
-            [[NUC.sun, sunMesh, sunCurrentScale * 1.8, sunLvl], [NUC.moon, moonMesh, moonCurrentScale * 1.9, moonBeatGlow]].forEach(([N, anchor, R, lvl], idx) => {
+            [[NUC.sun, sunMesh, sunCurrentScale * 3.1, sunLvl], [NUC.moon, moonMesh, moonCurrentScale * 3.3, moonBeatGlow]].forEach(([N, anchor, R, lvl], idx) => {
                 N.grp.position.copy(anchor.position);
                 const breathe = 0.08 + 0.06 * Math.sin(NUC.t * 0.23 + idx * 2);          // nunca del todo quieto
                 N.u.uTime.value = NUC.t * (idx ? 0.8 : 1); N.u.uLevel.value = Math.min(1, lvl + breathe);
@@ -5025,7 +5047,7 @@ void main(){
             const hdg = bearingOf(-Math.sin(cameraRotY), -Math.cos(cameraRotY));
             const toScr = deg => (deg - hdg - 90) * Math.PI / 180;                 // rumbo arriba
             // fondo y anillos
-            g.fillStyle = 'rgba(2, 6, 14, 0.85)'; g.beginPath(); g.arc(c, c, R, 0, 7); g.fill();
+            g.fillStyle = 'rgba(2, 6, 14, 0.62)'; g.beginPath(); g.arc(c, c, R, 0, 7); g.fill();
             g.strokeStyle = 'rgba(148, 163, 184, 0.22)'; g.lineWidth = dpr;
             [1 / 3, 2 / 3].forEach(k => { g.beginPath(); g.arc(c, c, R * k, 0, 7); g.stroke(); });
             g.strokeStyle = 'rgba(148, 163, 184, 0.45)'; g.beginPath(); g.arc(c, c, R, 0, 7); g.stroke();
@@ -5033,7 +5055,7 @@ void main(){
                 const a = toScr(d), r0 = R * (d % 90 ? 0.9 : 0.84);
                 g.beginPath(); g.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0); g.lineTo(c + Math.cos(a) * R, c + Math.sin(a) * R); g.stroke();
             }
-            g.font = `700 ${Math.round(10 * dpr)}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+            g.font = `700 ${Math.round((css < 90 ? 8 : 9.5) * dpr)}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
             [['N', 0], ['E', 90], ['S', 180], ['O', 270]].forEach(([l, d]) => {
                 const a = toScr(d), rr = R * 0.72;
                 g.fillStyle = l === 'N' ? '#fbbf24' : '#cbd5e1'; g.fillText(l, c + Math.cos(a) * rr, c + Math.sin(a) * rr);
@@ -5062,7 +5084,7 @@ void main(){
             const kmh = U * 3.6, gust = kmh / Math.max(0.5, AIR.gust) * 1.24;
             const rel = ((from - hdg + 540) % 360) - 180, cara = Math.abs(rel) < 45 ? 'de frente' : Math.abs(rel) > 135 ? 'de cola' : rel > 0 ? 'cruzado der.' : 'cruzado izq.';
             document.getElementById('radar-txt').innerHTML =
-                `viento del <b>${rumbo(from)}</b> ${kmh.toFixed(0)} km/h<span class="rt2"> · rachas ${gust.toFixed(0)}</span><br><span class="rt2">rumbo ${hdg.toFixed(0).padStart(3, '0')}° ${rumbo(hdg)} · </span>${cara}`;
+                `viento <b>${rumbo(from)}</b> · ${kmh.toFixed(0)} km/h<br><span class="rt2">rachas ${gust.toFixed(0)} · </span>${cara}<span class="rt2"><br>rumbo ${hdg.toFixed(0).padStart(3, '0')}° ${rumbo(hdg)}</span>`;
         }
 
         let frameCounter = 0;
