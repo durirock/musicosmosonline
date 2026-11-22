@@ -530,6 +530,8 @@
     </div>
     <!-- ── FIN PORTAL ── -->
 
+    <!-- ── PORTAL ── entrelazamiento de mundos (antes que los demás scripts) -->
+    <script src="portal.js" data-mundo="kalpa" data-velo="no"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
@@ -1123,16 +1125,19 @@
         // Si no avisa, Kalpa le da unos segundos y abre el portal igual.
         // ═══════════════════════════════════════════════════════════════════════
         const KalpaPortal = (() => {
-            // Archivos en public/. Si renombras un mundo, cámbialo solo aquí.
-            const MUNDOS = {
+            // Los mundos vienen de portal.js (una sola lista para todo el ecosistema).
+            // Esta copia solo se usa si Kalpa se abre sin portal.js.
+            const MUNDOS = (window.Portal && Portal.MUNDOS) || {
                 musicosmos:    { archivo: 'index.html',                  nombre: 'Musicosmos',      color: '#6B48FF' },
-                planetafunk:   { archivo: 'planetafunk.html',            nombre: 'Planeta Funk',    color: '#FF6B35' },
-                sagitario:     { archivo: 'agunegrosinf.html',           nombre: 'Sagitario A*',    color: '#FFB347' },
+                kalpa:         { archivo: 'kalpa.html',                  nombre: 'Kalpa',           color: '#FF6A5A' },
+                planetafunk:   { archivo: 'aerocosmos.html',             nombre: 'Planeta Funk',    color: '#66FF99' },
+                sagitario:     { archivo: 'sinfonia_gravitacional.html', nombre: 'Sagitario A*',    color: '#FFB347' },
                 mundointerior: { archivo: 'mundointerior_completo.html', nombre: 'Mundo Interior',  color: '#7B3FE4' },
                 sol:           { archivo: 'chamalnquimyst.html',         nombre: 'Sol de Voluntad', color: '#FFD27A' }
             };
+            const breve = new URLSearchParams(location.search).get('breve') === '1';   // viaje corto desde el astrolabio
             const AJUSTES = {
-                esperaMinima: 4,          // s mínimos de viaje antes de abrir el portal
+                esperaMinima: breve ? 2.5 : 4,          // s mínimos de viaje antes de abrir el portal
                 esperaPrecarga: 8,        // s que se le dan al destino si no avisa que está listo
                 salioDelInicio: 1000,     // distancia a recorrer para que el inicio cuente como "regreso"
                 inicioAdelante: 250,      // banda alrededor del punto de partida donde se ofrece volver
@@ -1147,11 +1152,13 @@
             const qs = new URLSearchParams(location.search);
             let desde = qs.get('desde');
             let hacia = qs.get('hacia');
-            if (!MUNDOS[desde]) desde = 'musicosmos';
-            if (!MUNDOS[hacia] || hacia === desde) hacia = (desde === 'planetafunk') ? 'sagitario' : 'planetafunk';
+            if (!MUNDOS[desde] || desde === 'kalpa') desde = 'musicosmos';
+            if (!MUNDOS[hacia] || hacia === desde || hacia === 'kalpa') hacia = (desde === 'planetafunk') ? 'sagitario' : 'planetafunk';
 
             function urlMundo(id) {
+                if (window.Portal) return Portal.url(id, { via: 'kalpa', origen: desde });
                 const p = new URLSearchParams(location.search);
+                p.delete('breve');
                 p.delete('hacia');
                 p.set('desde', 'kalpa');
                 p.set('origen', desde);
@@ -1222,7 +1229,7 @@
             $('kp-origen-nombre').textContent = MUNDOS[desde].nombre;
             avisoDestino.style.setProperty('--kp-c', MUNDOS[hacia].color);
             avisoVolver.style.setProperty('--kp-c', MUNDOS[desde].color);
-            velo.style.setProperty('--kp-velo', MUNDOS[desde].color);
+            velo.style.setProperty('--kp-velo', (MUNDOS.kalpa || MUNDOS[desde]).color);
             $('kp-btn-entrar').addEventListener('click', (e) => { e.stopPropagation(); entrar(); });
             $('kp-btn-volver').addEventListener('click', (e) => { e.stopPropagation(); volver(); });
 
@@ -1248,6 +1255,7 @@
             function cruzar(url, color, porHistoria) {
                 if (cruzando) return;
                 cruzando = true;
+                if (window.Portal) { Portal.salir(url, { color: color, porHistoria: porHistoria }); return; }
                 mostrarVelo(color);
                 timerCruce = setTimeout(() => {
                     if (porHistoria) {
@@ -1346,6 +1354,7 @@
                 // Portal al destino
                 if (!portalAbierto && t >= AJUSTES.esperaMinima && (senalListo || t >= AJUSTES.esperaPrecarga)) {
                     portalAbierto = true;
+                    if (breve) setTimeout(entrar, 1400);   // desde el astrolabio: el túnel se abre solo
                     avisoDestino.classList.add('visible');
                 }
 

@@ -1301,6 +1301,8 @@
           
     </div>
 
+    <!-- ── PORTAL ── entrelazamiento de mundos (antes que los demás scripts) -->
+    <script src="portal.js" data-mundo="musicosmos" data-grieta="mundointerior"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
@@ -13732,6 +13734,7 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
       if (el.id === 'settingsMenu' || el.id === 'arpa' || el.id === 'radar' || el.id === 'radarToast') continue;   // el arpa (instrumento) y el radar (HUD) no se ocultan
       if (/^kp(Panel|Mission|Tip|Lock|Note|File|Ask)$/.test(el.id) || /^(enToast|warpFx|warpFlash|avAsk|avNote|rainBanner|rainFx|rainFlash)$/.test(el.id)) continue;                                      // puente KP: ventanas abiertas y avisos no se apagan
       if (el.id === 'ssPill' && el.classList.contains('rec')) continue;   // el indicador REC no se esconde
+      if (/\bpt-(velo|negro|luz|grieta|pista|astro)\b/.test(el.className || '')) continue;   // ── PORTAL ── velos y avisos del viaje nunca se esconden
       out.push(el);
     }
     return out;
@@ -17661,6 +17664,35 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
         .rc300-sync-btn { white-space: nowrap; }
 
     </style>
+    <!-- ── PORTAL ── portales de Musicosmos ─────────────────────────────────
+         · Anillo Kalpa (cerca del inicio) → túnel → Planeta Funk
+         · Agujero negro a lo lejos → túnel → Sagitario A*
+         · Grieta índigo a Mundo Interior: botón ⟋ o Shift+º
+         · Astrolabio: botón ✦ o tecla º
+    -->
+    <script>
+    (function () {
+        if (!window.Portal) return;
+        function crear() {
+            if (typeof scene === 'undefined' || !scene || typeof avatarObject === 'undefined' || !avatarObject) return setTimeout(crear, 300);
+            const viajero = () => avatarObject.position;
+            // Se ubican según hacia dónde mira la cámara al llegar: el anillo adelante a la
+            // derecha, el agujero negro lejos a la izquierda.
+            const adelante = new THREE.Vector3(); camera.getWorldDirection(adelante);
+            adelante.y = 0; if (adelante.lengthSq() < 1e-4) adelante.set(0, 0, 1); adelante.normalize();
+            const derecha = new THREE.Vector3().crossVectors(adelante, new THREE.Vector3(0, 1, 0)).normalize();
+            const base = avatarObject.position.clone();
+            const enMundo = (fwd, der, alto) => base.clone().addScaledVector(adelante, fwd).addScaledVector(derecha, der).setY(base.y + alto);
+            Portal.anillo({ escena: scene, viajero, posicion: enMundo(150, 45, 2),
+                            destino: 'planetafunk', via: 'kalpa', radio: 12 });
+            Portal.anillo({ escena: scene, viajero, posicion: enMundo(620, -420, 18),
+                            destino: 'sagitario', via: 'kalpa', estilo: 'agujero', radio: 40, tibio: 520, cruce: 34,
+                            etiqueta: 'Sagitario A* · por Kalpa' });
+        }
+        crear();
+    })();
+    </script>
+    <!-- ── FIN PORTAL ── -->
 </body>
 
 </html>
