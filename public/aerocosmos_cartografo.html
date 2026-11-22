@@ -170,6 +170,18 @@
         #controls.min .pn-head { margin-bottom: 0; }
         #controls.min { padding: 9px 14px; }
         body.movil .ui-overlay .pn-tog { display: none; }
+        /* RADAR: instrumento de viento, rumbo y térmicas cercanas */
+        #radar-box { position: absolute; left: 20px; bottom: 20px; z-index: 11; display: none; padding: 10px 10px 8px; border-radius: 12px;
+            background: rgba(4, 9, 18, 0.72); border: 1px solid rgba(148, 163, 184, 0.28); backdrop-filter: blur(8px); text-align: center; }
+        body[data-mode="fly"] #radar-box { display: block; bottom: 210px; }
+        body[data-mode="walk"] #radar-box { display: block; }
+        #radar { width: 150px; height: 150px; display: block; }
+        #radar-txt { font: 600 10px/1.45 monospace; color: #cbd5e1; letter-spacing: .06em; margin-top: 4px; white-space: nowrap; }
+        #radar-txt b { color: #7dd3fc; font-weight: 700; }
+        body.movil #radar-box, body.movil[data-mode="fly"] #radar-box { left: auto; right: 12px; bottom: 166px; padding: 6px 6px 4px; }
+        body.movil #radar { width: 92px; height: 92px; }
+        body.movil #radar-txt { font-size: 8px; white-space: normal; width: 92px; line-height: 1.35; }
+        body.movil #radar-txt .rt2 { display: none; }
         body.movil.ui-idle .joy-base { opacity: .28; }
         #piki-hud { position: absolute; left: 20px; top: 205px; width: 200px; z-index: 12; background: rgba(6, 10, 22, 0.72); color: #e2e8f0;
             border: 1px solid rgba(99, 245, 161, 0.35); border-radius: 12px; padding: 10px 12px; font-size: 11px; backdrop-filter: blur(8px); }
@@ -391,6 +403,7 @@
     </div>
 
     <div id="mob-inst"></div>
+    <div id="radar-box"><canvas id="radar"></canvas><div id="radar-txt"></div></div>
     <div id="launch-chip"></div>
     <div id="joy-left" class="joy-zone"><div class="joy-base"><div class="joy-knob"></div></div></div>
     <div id="joy-right" class="joy-zone"><div class="joy-base"><div class="joy-knob"></div></div></div>
@@ -1029,12 +1042,16 @@
                 shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>',
                     `#include <begin_vertex>
                     #ifdef USE_INSTANCING
-                        vec4 worldPos = modelMatrix * instanceMatrix * vec4(position, 1.0);
+                        mat4 cvM = modelMatrix * instanceMatrix;
                     #else
-                        vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                        mat4 cvM = modelMatrix;
                     #endif
+                    vec4 worldPos = cvM * vec4(position, 1.0);
                     float dist = distance(worldPos.xz, cameraPosition.xz);
-                    transformed.y -= pow(dist, 2.0) * uCurvature;`
+                    // la caída es en metros del MUNDO: se divide por la escala vertical del objeto,
+                    // si no, las esferas grandes de los cúmulos bajaban decenas de veces más y "caían" al moverte
+                    float cvSy = cvM[1][1]; if (abs(cvSy) < 0.001) cvSy = cvSy < 0.0 ? -0.001 : 0.001;
+                    transformed.y -= pow(dist, 2.0) * uCurvature / cvSy;`
                 );
             }
         };
@@ -1220,6 +1237,7 @@
             moonMesh = new THREE.Mesh(astrosGeo, moonMat);
             moonMesh.scale.setScalar(moonBaseScale);
             scene.add(moonMesh);
+            nucInit();
 
             createCosmos();
             createWindVFX();
@@ -1811,7 +1829,8 @@
         // para que los cerros lejanos se distingan del cielo en vez de fundirse con él.
         const dayC    = new THREE.Color(0x9dcdf5);
         const sunsetC = new THREE.Color(0xf97316);
-        const nightC  = new THREE.Color(0x050510);
+        const nightC  = new THREE.Color(0x0e1830);   // azul noche profundo: la niebla no ennegrece los cerros
+        const NIGHT_AMB = new THREE.Color(0xaebcf0), DAY_AMB = new THREE.Color(0xffffff), _nightDir = new THREE.Vector3();
         const skyColor = new THREE.Color();
 
         function updateAtmosphere(dt) {
@@ -1856,12 +1875,17 @@
             // Las luces apuntan a la cámara: dirección de iluminación siempre correcta
             sunLight.position.copy(sunMesh.position);
             sunTarget.position.copy(camera.position);
-            moonLight.position.copy(moonMesh.position);
+            // Luz de noche: cae desde lo alto (del lado de la luna) y crece justo lo que el sol pierde.
+            // Así la suma nunca se hunde: los cerros no se ennegrecen al anochecer ni "se reencienden" después.
+            _nightDir.copy(sunDir).multiplyScalar(-1); _nightDir.y = Math.max(0.75, _nightDir.y); _nightDir.normalize();
+            moonLight.position.copy(camera.position).addScaledVector(_nightDir, 1000);
             moonTarget.position.copy(camera.position);
 
-            sunLight.intensity = sunP * 1.5;
-            moonLight.intensity = moonP * 0.35;
-            ambientLight.intensity = 0.14 + (sunP * 0.4) + (moonP * 0.1);
+            sunLight.intensity = sunP * 1.35;
+            moonLight.intensity = (1 - sunP) * 0.95;
+            ambientLight.intensity = 0.64 + sunP * 0.08;
+            ambientLight.color.copy(NIGHT_AMB).lerp(DAY_AMB, sunP);
+            moonLight.color.setHex(0xa8b8ff);
 
             // Luz cálida al ras del horizonte
             sunLight.color.setHex(0xffeedd).lerp(new THREE.Color(0xff8844), duskW * 0.7);
@@ -3045,6 +3069,7 @@
             // El avatar (Pikitipu en su vela, o Hakuryū) ES el marcador; ecosistema y KP, cuadro a cuadro
             kpEcoFrame(dt, P, yaw, adapt, camH, b, eg);
             curFrame(dt, P, adapt);
+            radarFrame(dt);
 
             // desde el cielo, más allá de lo cargado hay mar abierto, no cielo
             if (adapt > 0.001 && scene.background) {
@@ -3796,11 +3821,11 @@ void main(){
             scene.add(ECO.birdMesh);
         }
         function ecoNewFlock(P, burst) {
-            const a = Math.random() * Math.PI * 2, d = burst ? 0 : 150 + Math.random() * 450;
+            const a = Math.random() * Math.PI * 2, d = burst ? 0 : 70 + Math.random() * 330;
             const ax = P.x + Math.cos(a) * d, az = P.z + Math.sin(a) * d;
             const gy = Math.max(SEA_LEVEL, noise.get(ax, az));
             return {
-                ax, az, ay: burst ? P.y : gy + 70 + Math.random() * 160, r: 40 + Math.random() * 90,
+                ax, az, ay: burst ? P.y : Math.max(gy + 35, P.y - 60 + Math.random() * 120), r: 30 + Math.random() * 70, size: 2.3 + Math.random() * 1.2,
                 w: (.12 + Math.random() * .18) * (Math.random() < .5 ? -1 : 1), ph: Math.random() * 6.28,
                 n: burst ? 12 : 5 + Math.floor(Math.random() * 7), seed: Math.random() * 100,
                 burst: !!burst, life: burst ? 14 : Infinity, age: 0, climb: burst ? 1 : 0
@@ -3810,7 +3835,7 @@ void main(){
         const _bq = new THREE.Quaternion(), _bv = new THREE.Vector3(), _bs = new THREE.Vector3(), _bm = new THREE.Matrix4(), _be = new THREE.Euler();
         function ecoBirdsUpdate(dt, t, P, viewScale) {
             if (!ECO.birdMesh) return;
-            const want = Math.round(ECO.shown * 60);
+            const want = Math.max(22, Math.round(ECO.shown * 70));   // siempre hay aves; el ecosistema suma más
             let have = ECO.flocks.filter(f => !f.offering).reduce((a, f) => a + f.n, 0);
             while (have < want) { const f = ecoNewFlock(P, false); ECO.flocks.push(f); have += f.n; }
             while (have > want + 6) { const i = ECO.flocks.findIndex(f => !f.offering); if (i < 0) break; have -= ECO.flocks[i].n; ECO.flocks.splice(i, 1); }
@@ -3832,11 +3857,11 @@ void main(){
                 const heading = Math.atan2(-Math.sin(f.ph) * f.w, Math.cos(f.ph) * f.w);
                 const size = f.size || 1.3, amp = f.flapAmp ?? 1, fsp = f.flapSpeed || 9;
                 for (let i = 0; i < f.n && k < BIRD_MAX; i++, k++) {
-                    const s = f.seed + i * 7.31, sp = size > 2 ? 4 : 1;   // los grandes planean separados
+                    const glide = f.offering && size > 2, s = f.seed + i * 7.31, sp = glide ? 4 : 1;   // los grandes planean separados
                     const ox = Math.sin(s) * 14 * sp + Math.sin(t * .7 + s) * 3, oz = Math.cos(s * 1.3) * 14 * sp, oy = Math.sin(s * 2.1) * 6 + Math.sin(t * .9 + s) * 2;
                     _bv.set(cx + ox, f.ay + oy, cz + oz);
                     const flap = 1 - amp + amp * Math.sin(t * fsp + s * 3);
-                    _be.set(0, -heading + Math.PI / 2, size > 2 ? Math.sin(t * .5 + s) * .25 : 0); _bq.setFromEuler(_be);
+                    _be.set(0, -heading + Math.PI / 2, glide ? Math.sin(t * .5 + s) * .25 : 0); _bq.setFromEuler(_be);
                     const sz = size * viewScale;
                     _bs.set(sz, sz * flap, sz);
                     _bm.compose(_bv, _bq, _bs); ECO.birdMesh.setMatrixAt(k, _bm);
@@ -4489,6 +4514,7 @@ void main(){
                 const th = AIR.thermals[Math.floor(Math.random() * AIR.thermals.length)]; f.thId = th.id;
             }
             const th = AIR.thermals.find(th => th.id === f.thId); if (!th || thermalEnv(th) < 0.3) return;
+            if (Math.hypot(th.x - camera.position.x, th.z - camera.position.z) > 900) return;   // solo térmicas cercanas: que se vean
             const y = Math.min(th.top - 60, th.g + 260); thermalCenter(th, y, _tc);
             const k = Math.min(1, dt * 0.08);
             f.ax += (_tc.x - f.ax) * k; f.az += (_tc.z - f.az) * k; f.ay += (y - f.ay) * k;
@@ -4569,11 +4595,9 @@ void main(){
                 const dx = (mx * c + mz * s) / Math.max(1, Math.hypot(mx, mz)), dz = (-mx * s + mz * c) / Math.max(1, Math.hypot(mx, mz));
                 const nx = P.x + dx * speed * dt, nz = P.z + dz * speed * dt, g2 = noise.get(nx, nz);
                 const grade = (g2 - g) / Math.max(0.001, speed * dt);
-                if (grade > 1.2 && !water) speed = 0;                                   // pared: demasiado empinado (>45°)
-                else {
-                    const k = grade > 0 ? THREE.MathUtils.clamp(1 - grade * 1.3, 0.3, 1) : Math.min(1.25, 1 - grade * 0.3);
-                    P.x += dx * speed * k * dt; P.z += dz * speed * k * dt; speed *= k;
-                }
+                // cualquier ladera se sube: cuanto más empinada, más lento (en las paredes, trepando)
+                const k = grade > 0 ? THREE.MathUtils.clamp(1 - grade * 0.55, grade > 1.2 ? 0.28 : 0.4, 1) : Math.min(1.25, 1 - grade * 0.3);
+                P.x += dx * speed * k * dt; P.z += dz * speed * k * dt; speed *= k;
             }
             const gH = noise.get(P.x, P.z), eye = water || gH < SEA_LEVEL - 1.2 ? SEA_LEVEL + 0.35 : gH + 1.7;
             if ((keys['Space'] || JOY.jump) && WALK.onGround && !water) { WALK.vy = 4.6; WALK.onGround = false; }
@@ -4846,6 +4870,201 @@ void main(){
             CUR.mesh.geometry.attributes.aA.needsUpdate = true;
         }
 
+        // =====================================================================
+        // ASTROS NÚCLEO — el sol y la luna son el Núcleo 2.2 (nucleonucleolo):
+        // superfluido de partículas en 7 cortezas (proporciones de la Flor de la Vida),
+        // membrana externa con ondas de Faraday, giro diferencial por corteza, modos
+        // armónicos que respiran y un corazón blanco. Calculado en la GPU.
+        //   · LUNA: los colores originales — azul eléctrico, cian y violeta
+        //   · SOL:  la misma criatura en oro, ámbar y blanco caliente
+        // El groove (beats) los excita: crecen las ondas, se encienden las partículas.
+        // =====================================================================
+        const NUC_N = IS_MOBILE ? 2600 : 6500;
+        const NUC_VERT = `
+            attribute vec3 aDir; attribute float aShell; attribute float aPh; attribute float aSz; attribute float aRest;
+            uniform float uTime; uniform float uLevel; uniform float uProj; uniform float uR; uniform float uPal; uniform float uFade;
+            varying vec3 vC; varying float vA;
+            vec3 hsl2rgb(float h, float s, float l) {
+                vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+                return l + s * (rgb - 0.5) * (1.0 - abs(2.0 * l - 1.0));
+            }
+            void main() {
+                float t = uTime, sh = aShell, sw = pow(sh / 6.0, 1.6);
+                vec3 d = aDir;
+                float theta = atan(d.z, d.x), phi = acos(clamp(d.y, -1.0, 1.0));
+                // ondas de Faraday de la membrana
+                float surf = (sin(theta * 3.0 + t * 0.85 + d.y * 2.5) * cos(phi * 3.0 - t * 0.65) * 0.55
+                            + sin(theta * 5.0 - t * 1.3) * sin(phi * 4.0 + t * 0.95) * 0.35
+                            + cos(theta * 2.0 - phi * 3.0 + t * 0.48) * 0.38) * 1.35 * (0.45 + uLevel * 1.4);
+                // modos armónicos (l = 2, 3, 4) que respiran solos
+                float modes = (d.x * d.y) * sin(t * 0.71) * 0.9 + (3.0 * d.z * d.z - 1.0) * sin(t * 0.53 + 1.3) * 0.35
+                            + d.y * (3.0 * d.x * d.x - d.y * d.y) * sin(t * 0.97 + 2.1) * 0.6
+                            + (35.0 * d.z * d.z * d.z * d.z - 30.0 * d.z * d.z + 3.0) * sin(t * 1.21 + 0.4) * 0.05;
+                modes *= 0.22 * (0.6 + uLevel * 1.6);
+                float disp = modes * (1.0 + sw * 1.2) + surf * sw * 0.35;
+                float br = 1.0 + sin(t * 0.31) * 0.03 + sin(t * 0.67 + 1.4) * 0.017;
+                float r = aRest * br * (0.9 + uLevel * 0.22) * (1.0 + disp * 0.36);
+                // giro diferencial: las cortezas internas giran más rápido
+                float spin = t * (0.09 - sh * 0.009) + disp * 0.4;
+                float cs = cos(spin), sn = sin(spin);
+                vec3 p = vec3(d.x * cs - d.z * sn, d.y, d.x * sn + d.z * cs);
+                float wob = 1.0 + sin(t * 0.45 + aPh * 6.0) * 0.03;
+                p = p * r * wob;
+                p.y += sin(t * 0.3 + aPh * 6.2831) * 0.012;
+                vec4 mv = modelViewMatrix * vec4(p * uR, 1.0);
+                // color: el mismo recorrido de tono de la paleta original
+                float u = fract(0.18 + (1.0 - sh / 7.0) * 0.28 + disp * 0.2 + uLevel * 0.15);
+                float hm = 0.58 + sin(u * 6.2831) * 0.08;                    // luna: azul eléctrico → cian / violeta
+                float hs = 0.085 + sin(u * 6.2831) * 0.045;                   // sol: ámbar → oro / naranja
+                vec3 cm = hsl2rgb(fract(hm), 0.92, 0.45 + sin(u * 3.1416) * 0.15);
+                vec3 cS = hsl2rgb(fract(hs), 0.95, 0.5 + sin(u * 3.1416) * 0.14);
+                float lum = 0.3 + uLevel * 0.55 + abs(disp) * 0.35 + (1.0 - sh / 6.0) * 0.25;
+                float white = clamp(uLevel * 0.5 + (1.0 - sh / 6.0) * 0.28 + max(0.0, disp) * 0.3, 0.0, 0.85);
+                vec3 wm = vec3(0.75, 0.9, 1.12), ws = vec3(1.12, 0.95, 0.68);
+                vC = mix(cm * lum + white * wm * 0.8, cS * lum * 1.15 + white * ws * 0.85, uPal);
+                vA = uFade * (0.34 + 0.12 * uPal);                // muchas partículas sumadas: cada una suave, el conjunto brilla
+                float sz = aSz * (1.0 + uLevel * 2.0 + abs(disp) * 1.5 + white * 1.2);
+                gl_PointSize = clamp(sz * uR * 0.032 * uProj / max(-mv.z, 1.0), 1.0, 24.0);
+                gl_Position = projectionMatrix * mv;
+            }`;
+        const NUC_FRAG = `
+            varying vec3 vC; varying float vA;
+            void main() {
+                vec2 q = gl_PointCoord - 0.5; float d = length(q) * 2.0;
+                if (d > 1.0) discard;
+                float a = pow(1.0 - d, 1.6) + 0.55 * pow(max(0.0, 1.0 - d * 3.2), 2.0);   // centro fotónico nítido
+                gl_FragColor = vec4(vC * a * vA, 1.0);
+            }`;
+        function nucGlowTex(c1, c2, c3) {
+            const c = document.createElement('canvas'); c.width = c.height = 128;
+            const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+            g.addColorStop(0, c1); g.addColorStop(0.3, c2); g.addColorStop(0.7, c3); g.addColorStop(1, 'rgba(0,0,0,0)');
+            x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+            const t = new THREE.CanvasTexture(c); t.needsUpdate = true; return t;
+        }
+        function nucCreate(pal) {
+            const FOL_RAW = [1, Math.sqrt(3), 2, Math.sqrt(7), 3, Math.sqrt(12), Math.sqrt(13)];
+            const GOLD = Math.PI * (3 - Math.sqrt(5));
+            const dir = new Float32Array(NUC_N * 3), shell = new Float32Array(NUC_N), ph = new Float32Array(NUC_N),
+                  sz = new Float32Array(NUC_N), rest = new Float32Array(NUC_N);
+            for (let i = 0; i < NUC_N; i++) {
+                const s = Math.min(6, Math.floor(Math.pow(Math.random(), 0.85) * 7));
+                const k = i + 0.5, phi = Math.acos(1 - 2 * k / NUC_N), th = GOLD * k;
+                let x = Math.sin(phi) * Math.cos(th), y = Math.cos(phi), z = Math.sin(phi) * Math.sin(th);
+                y *= 1 - (s / 7) * 0.55;                                       // forma lenticular fluida
+                const l = Math.hypot(x, y, z); dir[i * 3] = x / l; dir[i * 3 + 1] = y / l; dir[i * 3 + 2] = z / l;
+                shell[i] = s; ph[i] = Math.random();
+                sz[i] = 0.58 + Math.random() * 0.85;
+                rest[i] = (FOL_RAW[s] / FOL_RAW[6]) * 0.92 * (1 + (Math.random() - 0.5) * 0.14) * (s === 0 ? 0.55 : 1);
+            }
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NUC_N * 3), 3));
+            g.setAttribute('aDir', new THREE.BufferAttribute(dir, 3));
+            g.setAttribute('aShell', new THREE.BufferAttribute(shell, 1));
+            g.setAttribute('aPh', new THREE.BufferAttribute(ph, 1));
+            g.setAttribute('aSz', new THREE.BufferAttribute(sz, 1));
+            g.setAttribute('aRest', new THREE.BufferAttribute(rest, 1));
+            const u = { uTime: { value: 0 }, uLevel: { value: 0 }, uProj: { value: 600 }, uR: { value: 1 }, uPal: { value: pal }, uFade: { value: 1 } };
+            const m = new THREE.ShaderMaterial({ uniforms: u, vertexShader: NUC_VERT, fragmentShader: NUC_FRAG,
+                transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+            const pts = new THREE.Points(g, m); pts.frustumCulled = false;
+            const grp = new THREE.Group(); grp.add(pts);
+            // singularidad central: tres halos como en el original
+            const tex = pal ? nucGlowTex('rgba(255,250,235,0.95)', 'rgba(255,190,90,0.5)', 'rgba(220,110,30,0.1)')
+                            : nucGlowTex('rgba(255,255,255,0.9)', 'rgba(90,180,255,0.45)', 'rgba(20,70,180,0.08)');
+            const halo = [[0.16, pal ? 0xfff4dc : 0xffffff, 0.7], [0.8, pal ? 0xffa53d : 0x3d8eff, 0.26], [1.7, pal ? 0xff7a1a : 0x6e5cff, 0.12]].map(([s, c, o]) => {
+                const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: c, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, opacity: o, fog: false }));
+                sp.userData.base = s; sp.userData.op = o; grp.add(sp); return sp;
+            });
+            scene.add(grp);
+            return { grp, u, halo };
+        }
+        const NUC = { sun: null, moon: null, t: 0 };
+        function nucInit() {
+            NUC.sun = nucCreate(1); NUC.moon = nucCreate(0);
+            sunMesh.visible = false; moonMesh.visible = false;      // quedan como anclas de posición y luz
+        }
+        // se llama cada cuadro, después de mover los astros
+        function nucFrame(dt) {
+            if (!NUC.sun) return;
+            NUC.t += dt;
+            const proj = window.innerHeight / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+            const sunLvl = THREE.MathUtils.clamp((sunCurrentScale - sunBaseScale) / 120, 0, 1);
+            const day = THREE.MathUtils.clamp(sunElevation * 4 + 0.5, 0, 1);
+            [[NUC.sun, sunMesh, sunCurrentScale * 1.8, sunLvl], [NUC.moon, moonMesh, moonCurrentScale * 1.9, moonBeatGlow]].forEach(([N, anchor, R, lvl], idx) => {
+                N.grp.position.copy(anchor.position);
+                const breathe = 0.08 + 0.06 * Math.sin(NUC.t * 0.23 + idx * 2);          // nunca del todo quieto
+                N.u.uTime.value = NUC.t * (idx ? 0.8 : 1); N.u.uLevel.value = Math.min(1, lvl + breathe);
+                N.u.uProj.value = proj; N.u.uR.value = R;
+                // el sol palidece al anochecer y la luna al amanecer, sin cortes
+                const fade = idx ? 0.55 + 0.45 * (1 - day) : 0.6 + 0.4 * day;
+                N.u.uFade.value = fade;
+                N.halo.forEach(sp => { const s = sp.userData.base * R * 2 * (1 + lvl * 0.4); sp.scale.set(s, s, 1); sp.material.opacity = sp.userData.op * fade * (0.8 + lvl * 0.5); });
+            });
+        }
+
+
+        // =====================================================================
+        // RADAR — de dónde sopla el viento, a qué velocidad, tu rumbo y las térmicas
+        // a menos de 3 km. Rumbo arriba, como en un instrumento de vuelo real.
+        // Norte = −Z del mundo (igual que el mapa), Este = +X.
+        // =====================================================================
+        const RADAR = { t: 0, range: 3000 };
+        const RUMBOS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+        const bearingOf = (x, z) => (Math.atan2(x, -z) * 57.2958 + 360) % 360;
+        const rumbo = deg => RUMBOS[Math.round(deg / 45) % 8];
+        function radarFrame(dt) {
+            RADAR.t -= dt; if (RADAR.t > 0) return; RADAR.t = 0.12;
+            if (!isParagliding && !isWalking) return;
+            const cv = document.getElementById('radar'); if (!cv || !cv.offsetWidth) return;
+            const css = cv.offsetWidth, dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(css * dpr);
+            if (cv.width !== W) { cv.width = cv.height = W; }
+            const g = cv.getContext('2d'), c = W / 2, R = c - 3 * dpr;
+            g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, W);
+            const P = camera.position;
+            const hdg = bearingOf(-Math.sin(cameraRotY), -Math.cos(cameraRotY));
+            const toScr = deg => (deg - hdg - 90) * Math.PI / 180;                 // rumbo arriba
+            // fondo y anillos
+            g.fillStyle = 'rgba(2, 6, 14, 0.85)'; g.beginPath(); g.arc(c, c, R, 0, 7); g.fill();
+            g.strokeStyle = 'rgba(148, 163, 184, 0.22)'; g.lineWidth = dpr;
+            [1 / 3, 2 / 3].forEach(k => { g.beginPath(); g.arc(c, c, R * k, 0, 7); g.stroke(); });
+            g.strokeStyle = 'rgba(148, 163, 184, 0.45)'; g.beginPath(); g.arc(c, c, R, 0, 7); g.stroke();
+            for (let d = 0; d < 360; d += 30) {
+                const a = toScr(d), r0 = R * (d % 90 ? 0.9 : 0.84);
+                g.beginPath(); g.moveTo(c + Math.cos(a) * r0, c + Math.sin(a) * r0); g.lineTo(c + Math.cos(a) * R, c + Math.sin(a) * R); g.stroke();
+            }
+            g.font = `700 ${Math.round(10 * dpr)}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+            [['N', 0], ['E', 90], ['S', 180], ['O', 270]].forEach(([l, d]) => {
+                const a = toScr(d), rr = R * 0.72;
+                g.fillStyle = l === 'N' ? '#fbbf24' : '#cbd5e1'; g.fillText(l, c + Math.cos(a) * rr, c + Math.sin(a) * rr);
+            });
+            // térmicas cercanas: puntos rojos (más grandes = más fuertes)
+            AIR.thermals.forEach(th => {
+                const env = thermalEnv(th); if (env < 0.15) return;
+                const dx = th.x - P.x, dz = th.z - P.z, dist = Math.hypot(dx, dz); if (dist > RADAR.range) return;
+                const a = toScr(bearingOf(dx, dz)), rr = dist / RADAR.range * R;
+                g.fillStyle = `rgba(239, 68, 68, ${0.35 + 0.5 * env})`;
+                g.beginPath(); g.arc(c + Math.cos(a) * rr, c + Math.sin(a) * rr, (1.6 + th.w0 * 0.7) * dpr, 0, 7); g.fill();
+            });
+            // viento: entra por el borde desde donde sopla y apunta hacia donde va
+            const agl = P.y - Math.max(SEA_LEVEL, noise.get(P.x, P.z));
+            const U = isParagliding ? windAt(agl) : pg.windStrength * AIR.gust;
+            const from = (bearingOf(pg.windDir.x, pg.windDir.z) + 180) % 360;
+            const a = toScr(from), L = R * (0.35 + Math.min(0.55, U / 14 * 0.55));
+            const x0 = c + Math.cos(a) * R * 0.95, y0 = c + Math.sin(a) * R * 0.95, x1 = x0 - Math.cos(a) * L * 1.6, y1 = y0 - Math.sin(a) * L * 1.6;
+            g.strokeStyle = '#7dd3fc'; g.fillStyle = '#7dd3fc'; g.lineWidth = (1.4 + Math.min(2, U / 6)) * dpr; g.lineCap = 'round';
+            g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+            const ha = Math.atan2(y1 - y0, x1 - x0), hs = 7 * dpr;
+            g.beginPath(); g.moveTo(x1, y1); g.lineTo(x1 - Math.cos(ha - 0.45) * hs, y1 - Math.sin(ha - 0.45) * hs);
+            g.lineTo(x1 - Math.cos(ha + 0.45) * hs, y1 - Math.sin(ha + 0.45) * hs); g.closePath(); g.fill();
+            // tú, en el centro, mirando hacia arriba
+            g.fillStyle = '#f8fafc'; g.beginPath(); g.moveTo(c, c - 6 * dpr); g.lineTo(c + 4 * dpr, c + 4 * dpr); g.lineTo(c, c + 2 * dpr); g.lineTo(c - 4 * dpr, c + 4 * dpr); g.closePath(); g.fill();
+            const kmh = U * 3.6, gust = kmh / Math.max(0.5, AIR.gust) * 1.24;
+            const rel = ((from - hdg + 540) % 360) - 180, cara = Math.abs(rel) < 45 ? 'de frente' : Math.abs(rel) > 135 ? 'de cola' : rel > 0 ? 'cruzado der.' : 'cruzado izq.';
+            document.getElementById('radar-txt').innerHTML =
+                `viento del <b>${rumbo(from)}</b> ${kmh.toFixed(0)} km/h<span class="rt2"> · rachas ${gust.toFixed(0)}</span><br><span class="rt2">rumbo ${hdg.toFixed(0).padStart(3, '0')}° ${rumbo(hdg)} · </span>${cara}`;
+        }
+
         let frameCounter = 0;
         function animate() {
             requestAnimationFrame(animate);
@@ -4901,6 +5120,7 @@ void main(){
             currentMoonColor.lerp(baseMoonColor, 0.08);
             moonMesh.material.color.copy(currentMoonColor);
             moonMesh.material.emissive.copy(currentMoonColor).multiplyScalar(0.45 + moonBeatGlow * 0.55);
+            nucFrame(dt);
 
             // Nubes: se desplazan por el espacio (no solo en X) y respiran con el beat.
             globalBeatPulse = THREE.MathUtils.lerp(globalBeatPulse, 0, dt * 2.2);
