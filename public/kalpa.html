@@ -554,6 +554,12 @@
             radioUrl: 'https://stream.zeno.fm/lsthmognp16uv', 
 
             init() {
+                // ── PORTAL · radio continua ── la radio de Kalpa es la misma que viaja entre mundos
+                if (window.Portal && Portal.radio) Portal.radio.registrar({
+                    encender: url => this.playStream(url),
+                    apagar: () => { this.stop(); const st = document.getElementById('audio-status'); if (st) st.innerText = 'Radio apagada'; },
+                    sonando: () => (this.audioEl && !this.audioEl.paused) ? this.audioEl.src : ''
+                });
                 const fileInput = document.getElementById('file-input');
                 const radioBtn = document.getElementById('btn-radio');
                 const visualizerCanvas = document.getElementById('visualizer-canvas');
@@ -569,7 +575,7 @@
                 fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
                 
                 // Radio Tagua Tagua Listener
-                radioBtn.addEventListener('click', () => this.playStream(this.radioUrl));
+                radioBtn.addEventListener('click', () => this.playStream(window.Portal && Portal.radio ? Portal.radio.emisora() : this.radioUrl));
 
                 // Click en contenedor para Play/Pause
                 container.addEventListener('click', (e) => {
@@ -609,7 +615,12 @@
                     // --- SISTEMA 3D: Gain Node Principal ---
                     // IMPORTANTE: Conectar el gain al destino desde el inicio para que siempre suene
                     this.gainNode = this.context.createGain();
-                    this.gainNode.connect(this.context.destination);
+                    // El control de volumen apuntaba a un masterGain que nunca existía
+                    this.masterGain = this.context.createGain();
+                    const volIn = document.getElementById('input-volume');
+                    this.masterGain.gain.value = volIn ? parseFloat(volIn.value) || 1 : 1;
+                    this.gainNode.connect(this.masterGain);
+                    this.masterGain.connect(this.context.destination);
                     
                     // Y conectar el analizador al gain (la cadena de efectos)
                     this.analyser.connect(this.gainNode);
@@ -728,6 +739,9 @@
                     
                     // Asignación directa para evitar glitches al volver
                     // Usamos setValueAtTime para asegurar respuesta inmediata
+                    // La radio en vivo es la clara que envuelve el viaje: no se apaga con la distancia.
+                    // La atenuación espacial queda solo para archivos cargados.
+                    if (this.audioEl) vol = 1.0;
                     // ── PORTAL ── fadeMul baja a 0 al cruzar un portal (fundido de salida)
                     if (typeof this.fadeMul === 'number') vol *= this.fadeMul;
                     // ── FIN PORTAL ──

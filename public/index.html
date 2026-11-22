@@ -2872,7 +2872,8 @@
             let trackToPlay;
 
             if (trackId === 'radio') {
-                trackToPlay = { name: "Radio Tagua Tagua (Stream)", url: TAGUA_TAGUA_STREAM_URL, isStream: true };
+                // ── PORTAL · radio continua ── si la radio viene sonando de otro mundo, sigue esa emisora
+                trackToPlay = { name: "Radio Tagua Tagua (Stream)", url: radioViajera || TAGUA_TAGUA_STREAM_URL, isStream: true };
             } else {
                 trackToPlay = playlist.find(t => t.id === trackId);
             }
@@ -2887,6 +2888,18 @@
             document.getElementById('current-track-name').textContent = trackToPlay.name;
             renderPlaylist();
         }
+
+        let radioViajera = null;
+        if (window.Portal && Portal.radio) Portal.radio.registrar({
+            encender: url => {
+                if (currentTrackId === 'radio' && !playlistAudio.paused) return;
+                radioViajera = url;
+                if (currentTrackId === 'radio') currentTrackId = null;   // fuerza a sintonizar de nuevo
+                togglePlay('radio');
+            },
+            apagar: () => { if (currentTrackId === 'radio') stopPlaylist(); },
+            sonando: () => (currentTrackId === 'radio' && !playlistAudio.paused) ? playlistAudio.src : ''
+        });
 
         function playNextTrack() {
             if (currentTrackId === 'radio' || playlist.length === 0) return;

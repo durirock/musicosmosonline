@@ -94,6 +94,14 @@
         backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:transform .25s,box-shadow .25s;
         -webkit-tap-highlight-color:transparent;padding:0}
     .pt-btn:hover{transform:scale(1.12);box-shadow:0 0 22px -4px rgba(255,210,120,.9)}
+    .pt-btn.radio{font-size:17px;color:rgba(190,255,235,.55);border-color:rgba(120,255,210,.25);box-shadow:none}
+    .pt-btn.radio.on{color:#9fffe0;border-color:rgba(120,255,210,.6);animation:ptOnda 2.4s ease-in-out infinite}
+    .pt-btn.radio.espera{color:#fff;border-color:#fff;animation:ptLlama 1.1s ease-in-out infinite}
+    .pt-radio-txt{position:fixed;left:58px;top:calc(50% - 64px);height:36px;display:flex;align-items:center;z-index:2147482990;
+        pointer-events:none;padding:0 14px;border-radius:999px;background:rgba(5,10,18,.6);color:#c8fff0;
+        font:10px 'Courier New',monospace;letter-spacing:2px;text-transform:uppercase;white-space:nowrap;opacity:0;
+        transform:translateX(-6px);transition:opacity .5s,transform .5s;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+    .pt-radio-txt.on{opacity:1;transform:none}
     .pt-btn.grieta{color:#c9a3ff;border-color:rgba(150,90,255,.55);box-shadow:0 0 16px -6px #7b3fe4;font-size:13px}
     .pt-astro{position:fixed;inset:0;z-index:2147482995;display:none;align-items:center;justify-content:center;
         background:radial-gradient(circle at 50% 50%,rgba(10,8,24,.55),rgba(0,0,0,.82));backdrop-filter:blur(7px);
@@ -127,9 +135,12 @@
         transition:opacity .6s ease;box-shadow:0 0 22px -8px var(--c,#fff);white-space:nowrap}
     .pt-pista.on{opacity:1}
     @keyframes ptGiro{to{transform:rotate(360deg)}}
+    @keyframes ptOnda{0%,100%{box-shadow:0 0 10px -4px rgba(120,255,210,.6)}50%{box-shadow:0 0 22px -2px rgba(120,255,210,.9)}}
+    @keyframes ptLlama{0%,100%{opacity:.55}50%{opacity:1}}
     @keyframes ptAparece{from{opacity:0}to{opacity:1}}
     @keyframes ptLatido{0%,100%{box-shadow:0 0 40px 6px rgba(255,190,80,.35)}50%{box-shadow:0 0 70px 16px rgba(255,190,80,.55)}}
-    @media (pointer:coarse){.pt-btn{width:42px;height:42px}}`;
+    @media (pointer:coarse){.pt-btn{width:42px;height:42px}.pt-btn.radio{top:calc(50% - 72px)!important}
+        .pt-radio-txt{left:62px;top:calc(50% - 72px);height:42px}}`;
     const estilo = document.createElement('style');
     estilo.textContent = css;
     (document.head || document.documentElement).appendChild(estilo);
@@ -297,6 +308,7 @@
         const k = asegurarCapas();
         colores(c1, c2);
         audio({ ganancia: 0 }, DUR / 1000);
+        radio.alSalir(DUR / 1000);
         raiz.classList.remove('pt-llega', 'pt-revela');
         raiz.classList.add('pt-sale');                      // la escena se difumina, se enciende y se acerca
         polvo(c1, c2, 'adentro', DUR);
@@ -345,6 +357,7 @@
     const viaLlegada = maleta.via || '';
     const colLlegada = viaLlegada === 'grieta' ? GRIETA : (MUNDOS[AQUI] || { color: '#ffffff', c2: '#ffffff' });
     if (llegaPorPortal) {
+        ajusteAudio = { ganancia: 0, corte: null };        // el sonido nace en silencio y sube con la escena
         const k = asegurarCapas();
         raiz.classList.add('pt-llega');                    // el mundo nace desenfocado y oscuro
         colores(colLlegada.color, colLlegada.c2 || colLlegada.color);
@@ -356,6 +369,7 @@
         if (document.prerendering) return;                  // se revela al activarse
         revelado = true;
         const k = asegurarCapas();
+        audio({ ganancia: 1 }, 3.2);
         requestAnimationFrame(() => requestAnimationFrame(() => {
             raiz.classList.add('pt-revela');
             raiz.classList.remove('pt-llega');
@@ -385,6 +399,7 @@
         if (!estaListo) {
             estaListo = true;
             try { new BroadcastChannel('cosmos-portal').postMessage({ tipo: 'listo', mundo: AQUI }); } catch (_) {}
+            setTimeout(() => radio.llegar(), 1200);        // margen para que el mundo registre su radio
         }
         revelar();
     }
@@ -400,6 +415,7 @@
         if (!e.persisted) return;
         saliendo = false;
         audio({ ganancia: 1, corte: null }, 0.3);
+        radio.volver();
         raiz.classList.remove('pt-sale', 'pt-llega');
         if (capas) ['sombra', 'vortice', 'vortice2', 'nucleo', 'polvo', 'luz'].forEach(n => { capas[n].style.opacity = 0; });
     });
@@ -908,9 +924,188 @@
         precargar(url(grietaHacia, { via: 'grieta' }));
     }
 
+    // ══ Radio continua · la clara que envuelve a los mundos ═══════════════════
+    // Una página que se va se lleva su sonido: ningún navegador deja audio vivo sin
+    // página. Lo que sí viaja es la intención. Esta capa recuerda si la radio estaba
+    // encendida y en qué emisora; el mundo nuevo vuelve a sintonizar solo y el sonido
+    // reaparece con el fundido de llegada.
+    //   · Mundos con radio propia la conectan con Portal.radio.registrar({
+    //       encender(url), apagar(), sonando() → url si suena, '' si no }).
+    //   · Mundos sin radio reciben la clara: un <audio> ambiental, sin espacialidad.
+    //   · El botón ♪ (bajo el astrolabio) enciende y apaga en cualquier mundo.
+    const EMISORAS = [
+        { id: 'lsthmognp16uv', nombre: 'Radio Tagua Tagua', url: 'https://stream.zeno.fm/lsthmognp16uv' },
+        { id: 'd5rixk44lfyvv', nombre: 'Tagua Tagua · Musicosmos', url: 'https://stream-165.zeno.fm/d5rixk44lfyvv' }
+    ];
+    const radio = (function () {
+        const K_ACTIVA = 'cosmos-radio-activa', K_EMISORA = 'cosmos-radio-emisora';
+        const sinRadio = enMarco || ds.radio === 'no';
+        const leer = (s, k) => { try { return window[s].getItem(k); } catch (_) { return null; } };
+        const guardar = (s, k, v) => { try { window[s].setItem(k, v); } catch (_) {} };
+        const idDe = u => { const m = /zeno\.fm\/([a-z0-9]+)/i.exec(u || ''); return m ? m[1] : (u || ''); };
+        const nombreDe = u => (EMISORAS.find(e => e.id === idDe(u)) || EMISORAS[0]).nombre;
+        const emisora = () => leer('localStorage', K_EMISORA) || EMISORAS[0].url;
+        const activa = () => leer('sessionStorage', K_ACTIVA) === '1';
+
+        let proveedor = null;        // la radio propia del mundo
+        let ambiente = null;         // la clara, cuando el mundo no tiene radio
+        let resuelto = false;        // ya se decidió qué hacer al llegar
+        let bloqueado = false;       // el navegador pidió un gesto antes de sonar
+        let sintonizando = 0;        // mientras sintoniza no se anota nada (la intención no se pierde)
+        let btn = null, rotulo = null, tRotulo = null;
+
+        function suenaAhora() {
+            if (proveedor) { try { return proveedor.sonando() || ''; } catch (_) { return ''; } }
+            return ambiente && !ambiente.paused ? ambiente.src : '';
+        }
+        function anotar() {
+            if (sinRadio || !resuelto || bloqueado || sintonizando || saliendo || document.prerendering) return;
+            const u = suenaAhora();
+            guardar('sessionStorage', K_ACTIVA, u ? '1' : '0');
+            if (u) guardar('localStorage', K_EMISORA, u);
+            pintar();
+        }
+
+        // ── la clara: audio ambiental para mundos sin radio propia ──
+        function fundir(el, hacia, segundos, fin) {
+            const v0 = el.volume, t0 = performance.now();
+            clearInterval(el.__fundido);
+            el.__fundido = setInterval(() => {
+                const k = Math.min(1, (performance.now() - t0) / (segundos * 1000));
+                try { el.volume = Math.max(0, Math.min(1, v0 + (hacia - v0) * suave(k))); } catch (_) {}
+                if (k >= 1) { clearInterval(el.__fundido); if (fin) fin(); }
+            }, 40);
+        }
+        function encenderAmbiente(u) {
+            if (!ambiente) {
+                ambiente = new Audio();
+                ambiente.preload = 'none';
+                ambiente.addEventListener('playing', pintar);
+                ambiente.addEventListener('pause', pintar);
+            }
+            if (idDe(ambiente.src) !== idDe(u)) ambiente.src = u;
+            ambiente.volume = 0;
+            return ambiente.play().then(() => { fundir(ambiente, 1, 2.6); return true; });
+        }
+        function apagarAmbiente() {
+            if (!ambiente || ambiente.paused) return;
+            const a = ambiente;
+            fundir(a, 0, 0.6, () => { a.pause(); a.removeAttribute('src'); a.load(); pintar(); });
+        }
+
+        // ── encender / apagar, sea cual sea la fuente ──
+        function arrancar(u) {
+            u = u || emisora();
+            const turno = ++sintonizando;
+            const fin = ok => { if (turno !== sintonizando) return; sintonizando = 0; if (ok) anotar(); else esperarGesto(); };
+            if (proveedor) {
+                try { proveedor.encender(u); } catch (e) { console.warn('[Portal] radio:', e); }
+                setTimeout(() => fin(!!suenaAhora()), 3500);
+            } else {
+                encenderAmbiente(u).then(() => fin(true), () => fin(false));
+            }
+            avisar('♪ ' + nombreDe(u) + ' · en vivo');
+        }
+        function apagar() {
+            if (proveedor) { try { proveedor.apagar(); } catch (_) {} }
+            apagarAmbiente();
+            bloqueado = false; sintonizando = 0;
+            window.removeEventListener('pointerdown', reanudar, true);
+            window.removeEventListener('keydown', reanudar, true);
+            guardar('sessionStorage', K_ACTIVA, '0');
+            pintar();
+        }
+        function alternar() {
+            if (bloqueado) { reanudar(); return; }
+            if (sintonizando) return;
+            if (suenaAhora()) apagar(); else { resuelto = true; arrancar(); }
+        }
+
+        // El navegador a veces exige un toque antes de dejar sonar una página nueva.
+        function esperarGesto() {
+            if (bloqueado) return;
+            bloqueado = true;
+            pintar();
+            avisar('♪ toca la pantalla para retomar la radio', true);
+            window.addEventListener('pointerdown', reanudar, true);
+            window.addEventListener('keydown', reanudar, true);
+        }
+        function reanudar() {
+            if (!bloqueado) return;
+            bloqueado = false;
+            window.removeEventListener('pointerdown', reanudar, true);
+            window.removeEventListener('keydown', reanudar, true);
+            contextos.forEach(c => { try { if (c.state === 'suspended') c.resume(); } catch (_) {} });
+            arrancar();
+        }
+
+        // Al llegar: si la radio venía encendida, vuelve a sintonizar sola.
+        function llegar() {
+            if (sinRadio || resuelto) return;
+            if (document.prerendering) {
+                document.addEventListener('prerenderingchange', () => setTimeout(llegar, 600), { once: true });
+                return;
+            }
+            resuelto = true;
+            if (activa()) arrancar();
+            pintar();
+        }
+
+        function registrar(p) {
+            if (sinRadio || !p || typeof p.encender !== 'function') return;
+            proveedor = p;
+            // Si la clara ya sonaba, la radio propia del mundo la releva.
+            if (ambiente && !ambiente.paused) { const u = ambiente.src; apagarAmbiente(); setTimeout(() => arrancar(u), 650); }
+            pintar();
+        }
+
+        // Fundido de salida para la clara (las radios con Web Audio ya bajan con el maestro).
+        function alSalir(segundos) { if (ambiente && !ambiente.paused) fundir(ambiente, 0, segundos); }
+        function volver() { if (ambiente && !ambiente.paused) fundir(ambiente, 1, 0.8); }
+
+        // ── botón ♪ y rótulo ──
+        function pintar() {
+            if (!btn) return;
+            const on = !!suenaAhora();
+            btn.classList.toggle('on', on && !bloqueado);
+            btn.classList.toggle('espera', bloqueado);
+            btn.title = bloqueado ? 'Toca para retomar la radio' : on ? nombreDe(suenaAhora()) + ' · en vivo (apagar)' : 'Encender ' + nombreDe(emisora());
+        }
+        function avisar(texto, fijo) {
+            if (!rotulo) return;
+            rotulo.textContent = texto;
+            rotulo.classList.add('on');
+            clearTimeout(tRotulo);
+            if (!fijo) tRotulo = setTimeout(() => rotulo.classList.remove('on'), 3200);
+        }
+        function ponerBoton() {
+            if (sinRadio) return;
+            btn = nodo('button', 'pt-btn radio');
+            btn.textContent = '♪';
+            btn.style.left = '12px'; btn.style.top = 'calc(50% - 64px)';
+            btn.addEventListener('click', e => { e.stopPropagation(); alternar(); });
+            rotulo = nodo('div', 'pt-radio-txt');
+            const ocultar = () => { if (!bloqueado) rotulo.classList.remove('on'); };
+            btn.addEventListener('pointerenter', () => { if (!bloqueado) avisar(btn.title); });
+            btn.addEventListener('pointerleave', ocultar);
+            pintar();
+        }
+        if (!sinRadio) {
+            if (document.body) ponerBoton(); else document.addEventListener('DOMContentLoaded', ponerBoton);
+            setInterval(anotar, 900);
+            // Si el mundo nunca avisa que está listo, igual se intenta sintonizar.
+            setTimeout(() => { if (!document.prerendering) llegar(); }, 9000);
+        }
+
+        return {
+            EMISORAS, registrar, llegar, alSalir, volver, encender: arrancar, apagar, alternar,
+            emisora, get activa() { return activa(); }, get sonando() { return suenaAhora(); }
+        };
+    })();
+
     // ══ API ══════════════════════════════════════════════════════════════════
     window.Portal = {
-        MUNDOS, ORDEN, aqui: AQUI, maleta, url, ir, irUrl, salir, precargar, listo, audio,
+        MUNDOS, ORDEN, aqui: AQUI, maleta, url, ir, irUrl, salir, precargar, listo, audio, radio,
         anillo, sembrar, escenario, abrirGrieta, abrirAstrolabio, cerrarAstrolabio,
         get saliendo() { return saliendo; },
         _portales: portales   // para depurar

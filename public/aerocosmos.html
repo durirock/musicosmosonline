@@ -370,6 +370,7 @@
                 <input type="range" id="spectrum-react" min="0" max="1" step="0.05" value="0.8">
             </div>
             <p class="phase-tag" id="radio-status">Conectando…</p>
+            <button id="btn-disconnect-radio" class="btn-start-music" style="margin-top:10px;opacity:.75">Apagar</button>
         </div>
         <p id="radio-error" style="display:none; font-size:11px; color:#f87171; margin-top:10px; line-height:1.5;"></p>
     </div>
@@ -1297,7 +1298,8 @@
                 radioBtn.classList.toggle('active-btn', !open);
             });
 
-            document.getElementById('btn-connect-radio').addEventListener('click', connectRadio);
+            document.getElementById('btn-connect-radio').addEventListener('click', () => connectRadio());
+            document.getElementById('btn-disconnect-radio').addEventListener('click', () => disconnectRadio());
             document.getElementById('vol-radio').addEventListener('input', e => {
                 if (radioGain) radioGain.gain.setValueAtTime(parseFloat(e.target.value), audioCtx.currentTime);
             });
@@ -2262,7 +2264,7 @@
             treble: ['scratch', 'horns']
         };
 
-        function connectRadio() {
+        function connectRadio(urlViajera) {
             const statusEl = document.getElementById('radio-status');
             const errEl = document.getElementById('radio-error');
             const btn = document.getElementById('btn-connect-radio');
@@ -2275,10 +2277,14 @@
             }
 
             ensureAudioCtx();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            disconnectRadio(true);
 
-            radioAudioEl = new Audio();
+            // ── PORTAL · radio continua ── la emisora que viene sonando desde otro mundo
+            const urlRadio = urlViajera || (window.Portal && Portal.radio ? Portal.radio.emisora() : RADIO_STREAM_URL);
+            const el = radioAudioEl = new Audio();
             radioAudioEl.crossOrigin = 'anonymous';
-            radioAudioEl.src = RADIO_STREAM_URL;
+            radioAudioEl.src = urlRadio;
 
             try {
                 const source = audioCtx.createMediaElementSource(radioAudioEl);
@@ -2308,6 +2314,7 @@
             }
 
             radioAudioEl.addEventListener('error', () => {
+                if (radioAudioEl !== el) return;
                 errEl.textContent = 'La radio no cargó (posible bloqueo CORS o URL caída). Prueba otra URL de stream.';
                 errEl.style.display = 'block';
                 statusEl.textContent = 'Desconectada';
@@ -2317,6 +2324,7 @@
             });
 
             radioAudioEl.play().then(() => {
+                if (radioAudioEl !== el) return;
                 radioConnected = true;
                 statusEl.textContent = 'En vivo — Radio Tagua Tagua';
                 btn.style.display = 'none';
@@ -2326,6 +2334,26 @@
                 errEl.style.display = 'block';
             });
         }
+
+        function disconnectRadio(silencioso) {
+            if (radioAudioEl) {
+                const el = radioAudioEl;
+                radioAudioEl = null;
+                try { el.pause(); el.removeAttribute('src'); el.load(); } catch (_) {}
+            }
+            if (radioGain) { try { radioGain.disconnect(); } catch (_) {} radioGain = null; }
+            radioConnected = false;
+            radioAnalyser = null;
+            radioBand.bass = radioBand.mid = radioBand.treble = 0;
+            if (silencioso) return;
+            document.getElementById('btn-connect-radio').style.display = 'block';
+            document.getElementById('radio-controls').style.display = 'none';
+        }
+        if (window.Portal && Portal.radio) Portal.radio.registrar({
+            encender: url => connectRadio(url),
+            apagar: () => disconnectRadio(),
+            sonando: () => (radioAudioEl && !radioAudioEl.paused) ? radioAudioEl.src : ''
+        });
 
         function updateRadioSpectrum(dt) {
             if (!radioConnected || !radioAnalyser) return;
