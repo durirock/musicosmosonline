@@ -17691,7 +17691,9 @@ MIDI · Akai MPK mini Plus (preset; todo se puede re-aprender)
         function crear() {
             if (typeof scene === 'undefined' || !scene || typeof avatarObject === 'undefined' || !avatarObject || !camera) return setTimeout(crear, 300);
             Portal.escenario({ escena: scene, camara: camera, renderer: renderer,
-                               viajero: () => avatarObject.position, radioGrieta: 7, distanciaGrieta: 16, plano: { y: 0, margen: 4 } });
+                               viajero: () => avatarObject.position, radioGrieta: 7, distanciaGrieta: 16, plano: { y: 0, margen: 4 },
+                               // abrir un portal propio gasta 30 de energía (sin energía, el medidor lo rechaza)
+                               energia: (que, gastar) => !window.Energia || (gastar || Energia.value < 30 ? Energia.spend(30, que) : true) });
             // Llegada en deriva por Kalpa: un lugar al azar, lejos del inicio
             if (Portal.maleta.deriva === '1') {
                 const ang = Math.random() * Math.PI * 2, dist = 3000 + Math.random() * 5000;

@@ -1141,8 +1141,12 @@
         if (!puedeCrearAqui || !iniciado() || !escena3D || !escena3D.camara || saliendo) return;
         cerrarAstrolabio();
         const nombre = deriva ? 'Deriva por Kalpa' : MUNDOS[destino].nombre;
+        // Abrir un portal gasta la energía propia del mundo (si la tiene) y el Mu de KP
+        const energia = typeof escena3D.energia === 'function' ? escena3D.energia : null;
+        if (energia && !energia('abrir un portal', false)) return;          // primero se mira, sin gastar
         const r = await mu.cobrar(PRECIO.crear, 'Abrir portal → ' + nombre);
         if (!r.ok) { avisar('◇ Te falta Mu para abrir un portal · tienes ' + (r.saldo || 0), '#ff8a7a', 4200); return; }
+        if (energia) energia('abrir un portal', true);
         const T = escena3D.THREE || window.THREE, cam = escena3D.camara;
         const estilo = (deriva || destino === 'kalpa') ? 'kalpa' : destino === 'mundointerior' ? 'fractura'
                      : destino === 'sagitario' ? 'agujero' : 'anillo';

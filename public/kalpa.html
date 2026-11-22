@@ -407,7 +407,7 @@
     <div id="debug-info">
         KALPA AUDIO-REACTIVO<br>
         <span style="color:rgba(255,255,255,0.4)">WASD: Mover | Q/E: Pitch 360° | 3: Estereograma | 4: Nivelar Vuelo</span><br>
-        <span style="color:rgba(255,255,255,0.4)">P: Piloto automático | Shift+Enter: Hipersalto / normal | C: Centrar | Enter: Entrar al portal | R: Volver al inicio</span>
+        <span style="color:rgba(255,255,255,0.4)">P: Piloto automático | I: Navegación invertida | Shift+Enter: Hipersalto / normal | C: Centrar | Enter: Entrar al portal | R: Volver al inicio</span>
     </div>
 
     <!-- ── PORTAL ── velo de tránsito y avisos de la antesala -->
@@ -1094,6 +1094,7 @@
                 case 'Digit0': stereoFocus+=10; break;
                 // ── PORTAL ──
                 case 'KeyP': KalpaPortal.alternarPiloto(); break;
+                case 'KeyI': KalpaPortal.invertir(); break;
                 case 'KeyC': KalpaPortal.centrar(); break;
                 case 'Enter': case 'NumpadEnter': if (e.shiftKey) KalpaPortal.alternarVelocidad(); else KalpaPortal.entrar(); break;
                 case 'KeyR': KalpaPortal.volver(); break;
@@ -1157,7 +1158,8 @@
             const deriva = new URLSearchParams(location.search).get('deriva') === '1';
             const AJUSTES = {
                 esperaMinima: breve ? 2.5 : deriva ? 18 + Math.random() * 24 : 4,   // s mínimos de viaje antes de abrir el portal
-                esperaPrecarga: 8,        // s que se le dan al destino si no avisa que está listo
+                esperaPrecarga: 30,       // s que se le dan al destino si no avisa que está listo
+                margenListo: 2,           // s extra tras el aviso: que también la gráfica quede asentada
                 salioDelInicio: 1000,     // distancia a recorrer para que el inicio cuente como "regreso"
                 inicioAdelante: 250,      // banda alrededor del punto de partida donde se ofrece volver
                 inicioAtras: 400,
@@ -1172,7 +1174,7 @@
             let desde = qs.get('desde');
             let hacia = qs.get('hacia');
             if (!MUNDOS[desde] || desde === 'kalpa') desde = 'musicosmos';
-            if (deriva) hacia = desde = 'musicosmos';
+            if (deriva) hacia = desde;                  // la deriva te devuelve a tu propio mundo, en otro lugar
             if (!MUNDOS[hacia] || (hacia === desde && !deriva) || hacia === 'kalpa') hacia = (desde === 'planetafunk') ? 'sagitario' : 'planetafunk';
 
             function urlMundo(id, extra) {
@@ -1234,7 +1236,7 @@
                 const canal = new BroadcastChannel('cosmos-portal');
                 canal.onmessage = (e) => {
                     const d = e.data || {};
-                    if (d.tipo === 'listo' && d.mundo === hacia) senalListo = true;
+                    if (d.tipo === 'listo' && d.mundo === hacia && !senalListo) senalListo = performance.now();
                 };
             } catch (_) {}
 
@@ -1334,6 +1336,12 @@
                 marcarPiloto();
                 avisar(piloto ? 'Piloto automático · activo' : 'Piloto automático · apagado');
             }
+            // Navegación invertida: la misma aceleración, pero hacia atrás (mirando adelante, las paredes se alejan)
+            function invertir() {
+                dirPiloto = -dirPiloto;
+                if (!piloto) { piloto = true; marcarPiloto(); }
+                avisar(dirPiloto < 0 ? 'Navegación invertida · hacia atrás' : 'Navegación · hacia adelante');
+            }
             // Velocidad del piloto: arranca en hipersalto; Shift+Enter alterna con la velocidad normal.
             let hiper = true;
             function alternarVelocidad() {
@@ -1392,9 +1400,10 @@
                 const t = (performance.now() - t0) / 1000;
 
                 // Portal al destino
-                if (!portalAbierto && t >= AJUSTES.esperaMinima && (senalListo || t >= AJUSTES.esperaPrecarga)) {
+                const destinoListo = senalListo && performance.now() - senalListo > AJUSTES.margenListo * 1000;
+                if (!portalAbierto && t >= AJUSTES.esperaMinima && (destinoListo || t >= AJUSTES.esperaPrecarga)) {
                     portalAbierto = true;
-                    if (breve || deriva) setTimeout(entrar, 1400);   // astrolabio o deriva: el túnel se abre solo
+                    if (breve) setTimeout(entrar, 1400);   // viaje breve: el túnel se abre solo; la deriva espera tu Enter
                     avisoDestino.classList.add('visible');
                     despertarAvisos();
                 }
@@ -1483,7 +1492,7 @@
             if ((window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 0) activarTactil();
             else window.addEventListener('touchstart', activarTactil, { once: true, passive: true });
 
-            return { tactil, tick, pilotear, alternarPiloto, alternarVelocidad, centrar, entrar, volver,
+            return { tactil, tick, pilotear, alternarPiloto, alternarVelocidad, invertir, centrar, entrar, volver,
                      _estado: () => ({ desde, hacia, urlDestino, urlOrigen, volverPorHistoria, puedePrecargar,
                                        portalAbierto, volverVisible, haSalido, piloto, dirPiloto,
                                        precargados: [...precargados] }) };
