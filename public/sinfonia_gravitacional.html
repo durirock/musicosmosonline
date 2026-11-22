@@ -3511,7 +3511,7 @@
             const el = new Audio();
             el.preload = 'none';
             if (!plain) el.crossOrigin = 'anonymous';
-            el.src = TAGUA_TAGUA_STREAM_URL;
+            el.src = RADIO.url || (window.Portal && Portal.radio ? Portal.radio.emisora() : TAGUA_TAGUA_STREAM_URL);
             RADIO.el = el; RADIO.plain = !!plain;
             if (!plain) {
                 RADIO.src = audioCtx.createMediaElementSource(el);
@@ -3549,7 +3549,13 @@
                 }
             }).catch(fail);
         }
-        function toggleRadio() { (RADIO.playing || RADIO.el) ? stopRadio() : startRadio(false); }
+        function toggleRadio() { (RADIO.playing || RADIO.el) ? stopRadio() : (RADIO.url = null, startRadio(false)); }
+        // ── PORTAL · radio continua ── la radio del agujero es la misma que viaja entre mundos
+        if (window.Portal && Portal.radio) Portal.radio.registrar({
+            encender: url => { RADIO.url = url; startRadio(false); },
+            apagar: () => stopRadio(),
+            sonando: () => (RADIO.el && !RADIO.el.paused) ? RADIO.el.src : ''
+        });
 
         // ══════════════ OLEAJE: la ola responde como el agua ══════════════
         // Cada golpe empuja la superficie: sube, se hunde un poco bajo el nivel, oscila y se asienta en la
