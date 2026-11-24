@@ -286,10 +286,20 @@
     });
   }
   let entradaExplicita = false;
+  // Gmail base: el de config.js o, si no está, el que este navegador aprendió en la primera entrada con correo completo
+  function correoBase() {
+    const c = (window.KP_CORREO_BASE || '').trim();
+    if (c.includes('@')) return c;
+    try { return localStorage.getItem('kp_correo_base') || ''; } catch (e) { return ''; }
+  }
+  function aprenderBase(correo) {
+    const m = /^([^@+]+)(?:\+[^@]*)?@(.+)$/.exec((correo || '').trim());
+    if (m) { try { localStorage.setItem('kp_correo_base', m[1] + '@' + m[2]); } catch (e) { } }
+  }
   // "Ralok" → gmail+ralok@gmail.com (misma regla de alias que crear_cuentas.py y kpmovil)
   function correoDe(txt) {
     txt = (txt || '').trim();
-    const base = (window.KP_CORREO_BASE || '').trim();
+    const base = correoBase();
     if (txt.includes('@') || !base.includes('@')) return txt;
     const alias = txt.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'aspecto';
     const [local, dominio] = base.split('@');
@@ -306,8 +316,12 @@
   }
   $('#f-entrada').onsubmit = async (ev) => {
     ev.preventDefault(); $('#e-error').textContent = ''; entradaExplicita = true;
-    try { await auth.signInWithEmailAndPassword(correoDe($('#e-correo').value), $('#e-clave').value); }
-    catch (e) { $('#e-error').textContent = (window.KP_CORREO_BASE || '').includes('@') || $('#e-correo').value.includes('@') ? 'Aspecto o contraseña incorrectos.' : 'Para entrar con el nombre del aspecto falta KP_CORREO_BASE en config.js. Mientras tanto usa el correo completo.'; }
+    try {
+      const correo = correoDe($('#e-correo').value);
+      await auth.signInWithEmailAndPassword(correo, $('#e-clave').value);
+      if (correo.includes('@')) aprenderBase(correo);
+    }
+    catch (e) { $('#e-error').textContent = correoBase().includes('@') || $('#e-correo').value.includes('@') ? 'Aspecto o contraseña incorrectos.' : 'La primera vez en este navegador entra con tu correo completo (por ejemplo tucorreo+ralok@gmail.com). Desde ahí basta con el nombre del aspecto.'; }
   };
   function salirDeApp() {
     st.desuscribir.forEach((f) => { try { f(); } catch (e) { } }); st.desuscribir = [];
