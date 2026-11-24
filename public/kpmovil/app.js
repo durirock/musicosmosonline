@@ -140,9 +140,19 @@
   $('#f-entrada').onsubmit = async (ev) => {
     ev.preventDefault();
     $('#e-error').textContent = '';
-    try { await auth.signInWithEmailAndPassword($('#e-correo').value.trim(), $('#e-clave').value); }
-    catch (e) { $('#e-error').textContent = 'Correo o contraseña incorrectos.'; }
+    try { await auth.signInWithEmailAndPassword(correoDe($('#e-correo').value), $('#e-clave').value); }
+    catch (e) { $('#e-error').textContent = 'Aspecto o contraseña incorrectos.'; }
   };
+  // Entrar solo con el nombre del aspecto: "Ralok" → tucorreo+ralok@gmail.com
+  // (misma regla que crear_cuentas.py). Un correo completo se usa tal cual.
+  function correoDe(txt) {
+    txt = (txt || '').trim();
+    const base = (window.KP_CORREO_BASE || '').trim();
+    if (txt.includes('@') || !base.includes('@')) return txt;
+    const alias = txt.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'aspecto';
+    const [local, dominio] = base.split('@');
+    return local.split('+')[0] + '+' + alias + '@' + dominio;
+  }
   function salirDeApp() {
     st.desuscribir.forEach((f) => { try { f(); } catch (e) { } }); st.desuscribir = [];
     yo = null; $('#v-app').classList.remove('activa'); $('#v-entrada').classList.add('activa');
