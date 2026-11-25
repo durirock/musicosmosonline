@@ -34,3 +34,11 @@ Necesita la regla `match /mega/{doc}` de firestore.rules. Para que el PC lo vea,
 
 ## Captura rápida
 `llamar al dentista !A 15m 40pv #semanal #grande` — si falta Pv o duración se abre el formulario (KP exige ambos).
+
+## Banco Tagua Tagua y Botica (Taller)
+- Banco: canje 30 Pv canjeables = 1 Mu (tasa de KP). Baja pv_canjeables, sube pv_canjeados y mu; el nivel no cambia.
+  Libreta en aspectos/{aspecto}/movimientos.
+- Botica: objetos para los mundos (bolsa en aspectos/{aspecto}/inventario) y premios (botica/premios, compartidos;
+  al comprar uno queda como recompensa pendiente, prioridad R). Todo se paga con Mu.
+- Los universos usan ../kp-nube.js cuando KP del PC no está: Pikitipu lee la bolsa y come; portal.js cobra Mu y usa
+  el 🌀 Portal propio. Necesita publicar firestore.rules (inventario, movimientos, botica).

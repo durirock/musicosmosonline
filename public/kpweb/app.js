@@ -35,7 +35,7 @@
     aspectos: {}, tareas: {}, general: [], privEnv: {}, privRec: {}, correosRec: {}, correosEnv: {}, dhana: {},
     sala: 'General', bandeja: 'entrada', verCompletadas: false, desuscribir: [], filtro: 'todas',
     panel: 'ahora', red: 'chat', sugerida: 0,
-    bitP: {}, bitC: {}, bitG: {}, mega: { activa: null, historial: [] }, bit: 'personal', bitModo: 'general', bitBuscar: ''
+    bitP: {}, bitC: {}, bitG: {}, inv: {}, movs: {}, premios: [], bo: 'mundos', mega: { activa: null, historial: [] }, bit: 'personal', bitModo: 'general', bitBuscar: ''
   };
 
   // ══ preferencias locales ═════════════════════════════════════════
@@ -336,7 +336,7 @@
     oir(db.collection('aspectos'), (s) => {
       st.aspectos = {}; s.docs.forEach((d) => { st.aspectos[d.id] = d.data(); });
       document.documentElement.style.setProperty('--asp', colorDe(yo));
-      pintarCabecera(); pintarSer(); pintarSalas(); pintarChat(); pintarAhora(); guardarHuevoLuego();
+      pintarCabecera(); pintarSer(); pintarSalas(); pintarChat(); pintarAhora(); pintarBanco(); pintarBotica(); guardarHuevoLuego();
     });
     oir(refYo().collection('tareas'), (s) => {
       st.tareas = {}; s.docs.forEach((d) => { const t = d.data(); if (!t._borrada) st.tareas[d.id] = Object.assign({ id: d.id }, t); });
@@ -356,6 +356,9 @@
       pintarMega(); if (timer) pintarTimer();
     });
     oir(db.collection('gran_bitacora').orderBy('date').limitToLast(500), (s) => { st.bitG = mapa(s); pintarBitacora(); });
+    oir(refYo().collection('inventario'), (s) => { st.inv = mapa(s); pintarBotica(); });
+    oir(refYo().collection('movimientos').orderBy('fecha').limitToLast(120), (s) => { st.movs = mapa(s); pintarBanco(); });
+    oir(db.collection('botica').doc('premios'), (d) => { st.premios = (d.exists && d.data().lista) || []; pintarBotica(); });
     oir(db.collection('dhana').where('aspecto', '==', yo), (s) => { st.dhana = mapa(s); pintarZazen(); pintarCabecera(); pintarSer(); guardarHuevoLuego(); });
     irA(st.panel || 'ahora');
     cargarSesiones();
@@ -375,7 +378,7 @@
   // ══ navegación ═══════════════════════════════════════════════════
   function irA(panel) {
     st.panel = panel;
-    $$('.navegacion button').forEach((x) => x.classList.toggle('activa', x.dataset.panel === panel || (panel === 'campo' && x.dataset.panel === 'campo')));
+    $$('.navegacion button').forEach((x) => x.classList.toggle('activa', x.dataset.panel === ({ botica: 'taller', banco: 'taller' }[panel] || panel)));
     $$('.panel').forEach((p) => p.classList.toggle('activa', p.id === 'p-' + panel));
     document.body.classList.toggle('dual', (panel === 'ahora' || panel === 'campo') && innerWidth >= 980);
     if (panel === 'red' && st.red === 'chat') { marcarLeido(st.sala); pintarChat(true); }
@@ -895,12 +898,10 @@
     // v8.27: "listo" a los pocos segundos = probablemente se hizo en la vida
     const sosp = listoSospechoso(tm.id);
     if (sosp != null) {
-      const r = await preguntaFlex('¿Dónde lo hiciste?', `Apretaste listo a los ${Math.floor(sosp)} s. ¿Dónde hiciste este pendiente?`,
-        [{ t: '🌿 En mi vida, fuera de KP', v: 'vida' }, { t: '⚡ Aquí, y fue rapidísimo', v: 'aqui' }, { t: '↩ Volver al timer', v: 'volver', pri: 1 }]);
+      const r = await preguntaFlex('Cerrada muy rápido', `Apretaste listo a los ${Math.floor(sosp)} s. ¿La hiciste antes o recién?`, [{ t: '🌿 La hice antes', v: 'antes' }, { t: '⚡ Recién, muy rápido', v: 'recien', pri: 1 }]);
       if (!timer || timer.id !== tm.id) return;
-      if (r === 'volver' || r === undefined) return;
-      if (r === 'aqui') { cerrarTimer(true); preguntarCompletada(tm.id, 0); return; }     // sin bono temprano
-      cerrarTimer(true); cerrarEnVida(tm.id, sosp); return;
+      if (r === undefined) return;                       // cerró la pregunta: el timer sigue
+      cerrarTimer(true); cierreRapido(tm.id, sosp, r); return;
     }
     const fraccion = tm.total ? restaSeg() / tm.total : 0;
     cerrarTimer(true);
@@ -913,19 +914,21 @@
     const total = (parseFloat(t.time) || 0) * 60;
     return trans < Math.max(CIERRE_DETECTADO_SEG, CIERRE_DETECTADO_FRACCION * total) ? trans : null;
   }
+  // Cierre detectado como rápido: una sola pregunta y se cierra (kp828: "antes" = en la vida, sin multiplicador;
+  // "recién" = aquí, sin bono por adelantarse). No se pregunta "¿Completaste?": apretar listo ya lo dice.
+  function cierreRapido(id, sosp, r) {
+    const t = tareaPorId(id); if (!t || t.completed) { Flotante.cerrar(); return; }
+    if (r === 'antes') completar(t, 0, 'vida', { detectado: true, cuando: 'antes', segundos: Math.floor(sosp) });
+    else if (r === 'recien') completar(t, 0, 'timer');
+    else Flotante.cerrar();
+  }
   async function preguntarDonde(id, sosp) {
-    const r = await preguntaFlex('¿Dónde lo hiciste?', `Apretaste listo a los ${Math.floor(sosp)} s. ¿Dónde hiciste este pendiente?`,
-      [{ t: '🌿 En mi vida, fuera de KP', v: 'vida' }, { t: '⚡ Aquí, y fue rapidísimo', v: 'aqui', pri: 1 }]);
-    if (r === 'vida') cerrarEnVida(id, sosp); else if (r === 'aqui') preguntarCompletada(id, 0); else Flotante.cerrar();
+    const r = await preguntaFlex('Cerrada muy rápido', `Apretaste listo a los ${Math.floor(sosp)} s. ¿La hiciste antes o recién?`, [{ t: '🌿 La hice antes', v: 'antes' }, { t: '⚡ Recién, muy rápido', v: 'recien', pri: 1 }]);
+    cierreRapido(id, sosp, r);
   }
   async function cerrarTareaDesdeListo(id, T, usado) {
     const sosp = listoSospechoso(id);
-    if (sosp != null) {
-      const r = await preguntaFlex('¿Dónde lo hiciste?', `Apretaste listo a los ${Math.floor(sosp)} s. ¿Dónde hiciste este pendiente?`,
-        [{ t: '🌿 En mi vida, fuera de KP', v: 'vida' }, { t: '⚡ Aquí, y fue rapidísimo', v: 'aqui', pri: 1 }]);
-      if (r === 'vida') { cerrarEnVida(id, sosp); return; }
-      preguntarCompletada(id, 0); return;
-    }
+    if (sosp != null) { preguntarDonde(id, sosp); return; }
     preguntarCompletada(id, Math.max(0, (T - usado) / T));
   }
 
@@ -1507,6 +1510,176 @@
     if (refrescar) { $('#hoja').innerHTML = html; montar($('#hoja')); }
     else abrirHoja(html, montar, () => { delete $('#hoja').dataset.mega; });
   }
+
+
+  // ══ ECONOMÍA: Banco Tagua Tagua y Botica (reglas de kp828) ══════════════════
+  // · Canje: 30 Pv canjeables = 1 Mu (conversion_rate de KP). Baja pv_canjeables y sube pv_canjeados; el nivel no cambia.
+  // · Premios: se compran con Mu y quedan como recompensa pendiente (prioridad R), igual que purchase_reward de KP.
+  // · Objetos para los mundos: se compran con Mu y van a la bolsa (aspectos/{yo}/inventario). Los universos los
+  //   consumen con kp-nube.js (Pikitipu los come, Musicosmos abre portales, Mundo Interior guarda Kairós).
+  const TASA_PV_MU = 30;
+  const MUNDOS_BOTICA = {
+    pikitipu: { nombre: '🌿 Pikitipu', desc: 'Comida y regalos. Se los das desde la bolsa 🎒 de Pikitipu.', url: '../pikitipu2.html' },
+    musicosmos: { nombre: '🌀 Musicosmos', desc: 'Para viajar entre universos sin gastar Mu en el momento.', url: '../index.html' },
+    mundointerior: { nombre: '⏳ Mundo Interior', desc: 'Cápsulas y semillas para tu mundo interior.', url: '../mundointerior_completo.html' }
+  };
+  const CATALOGO = [
+    { id: 'frutilla', mundo: 'pikitipu', emoji: '🍓', nombre: 'Frutilla del bosque', precio: 2, efectos: { e: 8, h: 4 }, desc: 'Un bocado dulce que le da energía.' },
+    { id: 'miel_ulmo', mundo: 'pikitipu', emoji: '🍯', nombre: 'Miel de ulmo', precio: 4, efectos: { e: 12, l: 6 }, desc: 'Energía y cariño en una cucharada.' },
+    { id: 'changle', mundo: 'pikitipu', emoji: '🍄', nombre: 'Changle encantado', precio: 6, efectos: { e: 6, h: 10, b: 4 }, desc: 'Hongo del bosque húmedo: lo pone feliz.' },
+    { id: 'ovillo', mundo: 'pikitipu', emoji: '🧶', nombre: 'Ovillo para jugar', precio: 5, efectos: { h: 14, b: 6 }, desc: 'Un rato de juego que fortalece el vínculo.' },
+    { id: 'copihues', mundo: 'pikitipu', emoji: '💐', nombre: 'Ramo de copihues', precio: 8, efectos: { l: 14, b: 10 }, desc: 'Un regalo que recuerda.' },
+    { id: 'brasa', mundo: 'pikitipu', emoji: '🔥', nombre: 'Brasa de dragón', precio: 10, efectos: { d: 20, e: 6 }, desc: 'Para cuando es Hakuryū: aviva su fuego.' },
+    { id: 'portal_propio', mundo: 'musicosmos', emoji: '🌀', nombre: 'Portal propio', precio: 2, efectos: {}, desc: 'Abre un portal frente a ti sin pagar en el momento.' },
+    { id: 'kairos', mundo: 'mundointerior', emoji: '⏳', nombre: 'Kairós', precio: 5, efectos: {}, desc: 'Cápsula de tiempo para un mensaje a tu yo futuro.' },
+    { id: 'semilla_estelar', mundo: 'mundointerior', emoji: '🌱', nombre: 'Semilla estelar', precio: 3, efectos: {}, desc: 'Se planta en tu mundo interior y crece con tus cierres.' }
+  ];
+  const ICO_EF = { e: '💫', h: '💚', b: '💜', l: '💛', d: '🔥' };
+
+  function fechaCorta(iso) { const d = new Date(iso); return isNaN(d) ? '' : `${dos(d.getDate())}-${dos(d.getMonth() + 1)} ${dos(d.getHours())}:${dos(d.getMinutes())}`; }
+  function registrarMov(tx, mov) { tx.set(refYo().collection('movimientos').doc(), Object.assign({ fecha: new Date().toISOString(), _mod: ahoraMs() }, mov)); }
+
+  // ── Banco ──
+  function pintarBanco() {
+    if (!yo) return;
+    const a = miAspecto(), pvc = a.pv_canjeables || 0;
+    $('#bc-pvc').textContent = pvc.toLocaleString('es-CL');
+    $('#bc-mu-saldo').textContent = (a.mu || 0).toLocaleString('es-CL') + ' Mu';
+    const n = Math.max(0, parseInt($('#bc-cant').value, 10) || 0), costo = n * TASA_PV_MU;
+    $('#bc-costo').textContent = n ? `= ${costo.toLocaleString('es-CL')} Pv canjeables` + (costo > pvc ? ' · no alcanza' : '') : '';
+    $('#bc-canjear').disabled = !n || costo > pvc;
+    const movs = Object.values(st.movs).sort((x, y) => String(y.fecha).localeCompare(String(x.fecha)));
+    $('#bc-movs').innerHTML = movs.map((m) => {
+      const t = m.tipo === 'canje' ? ['🔁 Canje', `${(-m.pv || 0).toLocaleString('es-CL')} Pv → Mu`]
+        : m.tipo === 'compra' ? [`${m.emoji || '🛍'} ${m.nombre || 'Compra'}`, 'Botica']
+          : m.tipo === 'premio' ? [`🎁 ${m.nombre || 'Premio'}`, 'Premio']
+            : m.tipo === 'uso' ? [`${m.emoji || '✦'} ${m.nombre || 'Objeto'}`, 'usado' + (m.destino ? ' en ' + m.destino : '')]
+              : [`◆ ${m.motivo || 'Gasto'}`, m.mundo || 'universo'];
+      const val = m.mu ? `<span class="${m.mu > 0 ? 'mas' : 'menos'}">${m.mu > 0 ? '+' : ''}${m.mu} Mu</span>` : '<span class="sub">—</span>';
+      return `<li><span>${esc(t[0])}<small>${esc(t[1])} · ${esc(fechaCorta(m.fecha))}</small></span>${val}</li>`;
+    }).join('') || '<li class="sub">Todavía no hay movimientos.</li>';
+  }
+  $('#bc-cant').oninput = pintarBanco;
+  $('#bc-rapidos').onclick = (ev) => {
+    const b = ev.target.closest('[data-n]'); if (!b) return;
+    const max = Math.floor((miAspecto().pv_canjeables || 0) / TASA_PV_MU);
+    $('#bc-cant').value = b.dataset.n === 'max' ? Math.max(0, max) : b.dataset.n; pintarBanco();
+  };
+  $('#bc-canjear').onclick = async () => {
+    const n = parseInt($('#bc-cant').value, 10);
+    if (!(n > 0)) { avisar('La cantidad de Mu debe ser mayor que 0.'); return; }
+    const costo = n * TASA_PV_MU;
+    $('#bc-canjear').disabled = true;
+    try {
+      const r = await db.runTransaction(async (tx) => {
+        const d = await tx.get(refYo()), a = d.exists ? d.data() : {};
+        const pvc = a.pv_canjeables || 0;
+        if (pvc < costo) return { ok: false, pvc };
+        tx.set(refYo(), { pv_canjeables: pvc - costo, pv_canjeados: (a.pv_canjeados || 0) + costo, mu: (a.mu || 0) + n, _mod: ahoraMs() }, { merge: true });
+        registrarMov(tx, { tipo: 'canje', pv: -costo, mu: n });
+        return { ok: true };
+      });
+      if (!r.ok) avisar(`Para ${n} Mu necesitas ${costo} Pv canjeables y tienes ${r.pvc}. Te alcanza para ${Math.floor(r.pvc / TASA_PV_MU)} Mu.`, 5000);
+      else { tic(); avisar(`Canjeaste ${costo.toLocaleString('es-CL')} Pv por ${n} Mu. ¡A comprar!`, 3500); $('#bc-cant').value = 1; }
+    } catch (e) { avisar('No se pudo canjear: ' + e.message, 5000); }
+    pintarBanco();
+  };
+
+  // ── Botica ──
+  $$('#bo-pestanas [data-bo]').forEach((b) => b.onclick = () => {
+    st.bo = b.dataset.bo; $$('#bo-pestanas [data-bo]').forEach((x) => x.classList.toggle('activa', x === b));
+    ['mundos', 'premios', 'bolsa'].forEach((k) => $('#bo-' + k).classList.toggle('oculto', k !== st.bo));
+  });
+  function pintarBotica() {
+    if (!yo) return;
+    const mu = miAspecto().mu || 0;
+    $('#bo-mu').textContent = mu.toLocaleString('es-CL') + ' Mu';
+    $('#bo-mundos').innerHTML = Object.entries(MUNDOS_BOTICA).map(([k, m]) => `<section class="mundo-sec"><h3>${esc(m.nombre)}</h3><p class="sub">${esc(m.desc)}</p>
+      <div class="objetos">${CATALOGO.filter((o) => o.mundo === k).map((o) => {
+        const tengo = (st.inv[o.id] && st.inv[o.id].cantidad) || 0;
+        const ef = Object.entries(o.efectos || {}).map(([e, v]) => `<span>${ICO_EF[e] || ''}+${v}</span>`).join('');
+        return `<div class="objeto"><span class="emo">${o.emoji}</span><b>${esc(o.nombre)}</b><p>${esc(o.desc)}</p>
+          ${ef ? `<div class="ef">${ef}</div>` : ''}${tengo ? `<span class="tengo">en tu bolsa: ${tengo}</span>` : ''}
+          <button data-comprar="${o.id}" class="${mu >= o.precio ? 'primario' : ''}" ${mu >= o.precio ? '' : 'disabled'}>${o.precio} Mu</button></div>`;
+      }).join('')}</div></section>`).join('') +
+      `<p class="sub">¿Te falta Mu? <button class="enlace" data-ir="banco">Canjea Pv en el Banco →</button></p>`;
+    const premios = (st.premios || []).slice().sort((a, b) => (b.cost || 0) - (a.cost || 0));
+    $('#bo-lista-premios').innerHTML = premios.map((p, i) => `<li class="tarea premio-it"><div class="info"><b>${esc(p.name)}</b><small>${p.cost} Mu${p.duration ? ' · ' + p.duration + ' min' : ''}</small></div>
+      <button data-premio="${i}" class="${mu >= (p.cost || 0) ? 'primario' : ''}" ${mu >= (p.cost || 0) ? '' : 'disabled'}>Comprar</button>
+      <button data-borrar-premio="${i}" class="icono" aria-label="Eliminar premio">×</button></li>`).join('') || '<li class="sub">Sin premios todavía. Agrega los tuyos abajo.</li>';
+    st._premiosOrden = premios;
+    const bolsa = Object.entries(st.inv).map(([id, v]) => Object.assign({ id }, v)).filter((i) => (i.cantidad || 0) > 0);
+    $('#bo-lista-bolsa').innerHTML = bolsa.map((i) => { const m = MUNDOS_BOTICA[i.mundo] || {};
+      return `<li class="tarea premio-it"><span class="emo" style="font-size:28px">${i.emoji || '✦'}</span><div class="info"><b>${esc(i.nombre)} ×${i.cantidad}</b><small>${esc(m.nombre || '')}</small></div>
+        ${m.url ? `<a class="enlace" href="${m.url}" target="_blank" rel="noopener">Abrir mundo →</a>` : ''}</li>`; }).join('') || '<li class="sub">Tu bolsa está vacía. Compra algo en «Para los mundos».</li>';
+    if (st.panel === 'banco') pintarBanco();
+  }
+  $('#p-botica').addEventListener('click', async (ev) => {
+    const ir = ev.target.closest('[data-ir]'); if (ir && ir.closest('#bo-mundos')) { irA(ir.dataset.ir); return; }
+    const bc = ev.target.closest('[data-comprar]'); if (bc) { comprarObjeto(CATALOGO.find((o) => o.id === bc.dataset.comprar)); return; }
+    const bp = ev.target.closest('[data-premio]'); if (bp) { comprarPremio(st._premiosOrden[+bp.dataset.premio]); return; }
+    const bb = ev.target.closest('[data-borrar-premio]');
+    if (bb) {
+      const p = st._premiosOrden[+bb.dataset.borrarPremio];
+      if (!(await opcionesHoja('Eliminar premio', `¿Eliminar «${p.name}» de la Botica?`, [{ t: 'Eliminar', v: 1 }, { t: 'Cancelar', v: 0, pri: 1 }]))) return;
+      const lista = (st.premios || []).filter((x) => !(x.name === p.name && x.cost === p.cost && (x.duration || 0) === (p.duration || 0)));
+      await db.collection('botica').doc('premios').set({ lista, _mod: ahoraMs() });
+    }
+  });
+  async function cobrarMu(precio, alCobrar) {          // transacción: descuenta Mu solo si alcanza
+    return db.runTransaction(async (tx) => {
+      const d = await tx.get(refYo()), mu = (d.exists && d.data().mu) || 0;
+      if (mu < precio) return { ok: false, mu };
+      tx.set(refYo(), { mu: mu - precio, _mod: ahoraMs() }, { merge: true });
+      await alCobrar(tx);
+      return { ok: true, mu: mu - precio };
+    });
+  }
+  async function comprarObjeto(o) {
+    if (!o) return;
+    try {
+      const refItem = refYo().collection('inventario').doc(o.id);
+      const r = await cobrarMu(o.precio, async (tx) => {
+        const d = await tx.get(refItem);
+        tx.set(refItem, { emoji: o.emoji, nombre: o.nombre, efectos: o.efectos || {}, mundo: o.mundo, cantidad: ((d.exists && d.data().cantidad) || 0) + 1, _mod: ahoraMs() }, { merge: true });
+        registrarMov(tx, { tipo: 'compra', mu: -o.precio, item: o.id, nombre: o.nombre, emoji: o.emoji, mundo: o.mundo });
+      });
+      if (!r.ok) { avisar(`Te faltan ${o.precio - r.mu} Mu. Canjea Pv en el Banco.`, 4000); return; }
+      tic(); avisar(`${o.emoji} ${o.nombre} a tu bolsa · quedan ${r.mu} Mu`, 3000);
+      db.collection('pulsos').add({ type: 'COMPRA', event_id: uuid().replace(/-/g, ''), user: yo, user_color: colorDe(yo),
+        item: { id: o.id, emoji: o.emoji, nombre: o.nombre, efectos: o.efectos || {} }, timestamp: new Date().toISOString(), origen: 'celular', _mod: ahoraMs() }).catch(() => { });
+    } catch (e) { avisar('No se pudo comprar: ' + e.message, 5000); }
+  }
+  async function comprarPremio(p) {
+    if (!p) return;
+    try {
+      const r = await cobrarMu(p.cost || 0, async (tx) => { registrarMov(tx, { tipo: 'premio', mu: -(p.cost || 0), nombre: p.name }); });
+      if (!r.ok) { avisar(`Te faltan ${(p.cost || 0) - r.mu} Mu. Canjea Pv en el Banco.`, 4000); return; }
+      await crearTarea({ name: `Recompensa: ${p.name}`, xp: 0, time: p.duration || 0, priority: 'R', is_reward: true, large: false, weekly_goal: false });
+      tic(); avisar(`🎁 «${p.name}» quedó en tus pendientes · quedan ${r.mu} Mu`, 3500);
+    } catch (e) { avisar('No se pudo comprar: ' + e.message, 5000); }
+  }
+  $('#f-premio').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const name = $('#pr-nombre').value.trim(), cost = parseInt($('#pr-costo').value, 10), duration = Math.max(0, parseInt($('#pr-min').value, 10) || 0);
+    if (!name || !(cost > 0)) { avisar('Ponle nombre y un costo en Mu mayor que 0.'); return; }
+    await db.collection('botica').doc('premios').set({ lista: (st.premios || []).concat([{ name, cost, duration }]), _mod: ahoraMs() });
+    $('#pr-nombre').value = ''; $('#pr-costo').value = ''; $('#pr-min').value = 0; tic(); avisar('Premio agregado a la Botica');
+  };
+  $('#pr-archivo').onchange = async (ev) => {
+    const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+    try {
+      const nuevos = JSON.parse(await f.text()).filter((x) => x && x.name && +x.cost > 0).map((x) => ({ name: String(x.name), cost: +x.cost, duration: +x.duration || 0 }));
+      const clave = (x) => x.name + '|' + x.cost + '|' + (x.duration || 0);
+      const ya = new Set((st.premios || []).map(clave));
+      const suma = nuevos.filter((x) => !ya.has(clave(x)));
+      await db.collection('botica').doc('premios').set({ lista: (st.premios || []).concat(suma), _mod: ahoraMs() });
+      avisar(`Premios: ${suma.length} nuevos${nuevos.length - suma.length ? ` · ${nuevos.length - suma.length} ya estaban` : ''}`, 4000);
+    } catch (e) { avisar('No pude leer ese archivo: ' + e.message, 5000); }
+  };
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('#p-taller [data-ir], #p-banco [data-ir], #p-botica .volver'); if (b) { tic(); irA(b.dataset.ir); }
+  });
 
   // ══ zazen ════════════════════════════════════════════════════════
   let zazen = null;

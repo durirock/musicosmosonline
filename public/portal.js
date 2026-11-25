@@ -1071,18 +1071,44 @@
                 return { status: r.status, j };
             } finally { clearTimeout(t); }
         }
+        // Sin KP del PC, el Mu viene de la nube (kpweb, misma sesión) vía kp-nube.js
+        const nube = { activa: false };
+        function cargarNube() {
+            if (window.KPNube) return Promise.resolve(window.KPNube);
+            if (nube.carga) return nube.carga;
+            nube.carga = new Promise((ok) => {
+                const s = document.createElement('script');
+                s.src = (script && script.src ? new URL('kp-nube.js', script.src).href : 'kp-nube.js');
+                s.onload = () => ok(window.KPNube || null); s.onerror = () => ok(null);
+                document.head.appendChild(s);
+            });
+            return nube.carga;
+        }
+        async function consultarNube() {
+            const K = await cargarNube(); if (!K) return false;
+            const ses = await K.sesion(); if (!ses) return false;
+            const m = await K.mu(); if (typeof m !== 'number') return false;
+            nube.activa = true; estado.conectado = true; estado.saldo = m; estado.aspecto = ses.aspecto; return true;
+        }
         async function consultar() {
             if (enMarco) return;
             try {
                 const r = await pedir('/api/mu');
                 estado.conectado = r.status === 200 && typeof r.j.mu === 'number';
-                if (estado.conectado) { estado.saldo = r.j.mu; estado.aspecto = r.j.aspecto; }
+                if (estado.conectado) { estado.saldo = r.j.mu; estado.aspecto = r.j.aspecto; nube.activa = false; }
             } catch (_) { estado.conectado = false; }
+            if (!estado.conectado) { try { await consultarNube(); } catch (_) { } }
         }
         // → { ok, libre, saldo }
         async function cobrar(cantidad, motivo) {
             if (!estado.conectado) await consultar();
             if (!estado.conectado) return { ok: true, libre: true };
+            if (nube.activa) {
+                const r = await window.KPNube.gastar(cantidad, motivo, AQUI);
+                if (!r) return { ok: true, libre: true };
+                estado.saldo = r.saldo;
+                return r.ok ? { ok: true, saldo: r.saldo, cantidad } : { ok: false, saldo: r.saldo, falta: r.falta };
+            }
             try {
                 const r = await pedir('/api/gastar', { cantidad, motivo: String(motivo || '').slice(0, 80), mundo: AQUI });
                 if (r.status === 200 && r.j.ok) { estado.saldo = r.j.mu; return { ok: true, saldo: r.j.mu, cantidad }; }
@@ -1095,7 +1121,15 @@
             else setTimeout(consultar, 1500);
             setInterval(() => { if (!document.hidden) consultar(); }, 60000);
         }
-        return { cobrar, consultar, get conectado() { return estado.conectado; }, get saldo() { return estado.saldo; } };
+        // Objeto comprado en la Botica (p. ej. 🌀 Portal propio): si hay uno en la bolsa, se usa en vez de pagar Mu
+        async function usarObjeto(id, destino) {
+            try {
+                const K = await cargarNube(); if (!K) return false;
+                const r = await K.consumir(id, destino || AQUI);
+                return !!(r && r.ok);
+            } catch (_) { return false; }
+        }
+        return { cobrar, consultar, usarObjeto, get conectado() { return estado.conectado; }, get saldo() { return estado.saldo; } };
     })();
 
     let avisoNodo = null, tAviso = null;
@@ -1192,8 +1226,10 @@
         // Abrir un portal gasta la energía propia del mundo (si la tiene) y el Mu de KP
         const energia = typeof escena3D.energia === 'function' ? escena3D.energia : null;
         if (energia && !energia('abrir un portal', false)) return;          // primero se mira, sin gastar
-        const r = await mu.cobrar(PRECIO.crear, 'Abrir portal → ' + nombre);
+        const propio = await mu.usarObjeto('portal_propio', AQUI);            // 🌀 comprado en la Botica = ya pagado
+        const r = propio ? { ok: true, libre: true, propio: true } : await mu.cobrar(PRECIO.crear, 'Abrir portal → ' + nombre);
         if (!r.ok) { avisar('◇ Te falta Mu para abrir un portal · tienes ' + (r.saldo || 0), '#ff8a7a', 4200); return; }
+        if (propio) avisar('🌀 Usaste un Portal propio de tu bolsa', MUNDOS[destino] ? MUNDOS[destino].color : '#ffd27a', 2600);
         if (energia) energia('abrir un portal', true);
         const T = escena3D.THREE || window.THREE, cam = escena3D.camara;
         const estilo = (deriva || destino === 'kalpa') ? 'kalpa' : destino === 'mundointerior' ? 'fractura'

@@ -20,6 +20,16 @@ service cloud.firestore {
         // objetivo semanal: marcarla completada también en los demás aspectos
         allow update: if dentro() && soloCambia(['completed', 'color', 'date_completed', '_mod']);
       }
+      match /inventario/{id} {                // bolsa de la Botica: solo su aspecto
+        allow read, write: if dentro() && yo() == nombre;
+      }
+      match /movimientos/{id} {               // libreta del Banco: solo su aspecto, no se edita
+        allow read, create: if dentro() && yo() == nombre;
+      }
+    }
+
+    match /botica/{doc} {                     // premios de la Botica: compartidos entre aspectos
+      allow read, write: if dentro();
     }
 
     match /chat_general/{id} {
