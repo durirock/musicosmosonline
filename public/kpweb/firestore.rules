@@ -71,5 +71,21 @@ service cloud.firestore {
       allow create: if dentro() && (request.resource.data.autor == yo() || request.resource.data.importado == true);
       allow delete: if dentro() && resource.data.autor == yo();
     }
+
+    // ── El Hermilaño · Semillero (escribir siembra Mu) ──
+    // Los Mu y Pv de la escritura van a aspectos/{aspecto} (regla de arriba) y kp_nube.py los suma en el PC.
+    match /escritores/{nombre} {              // días escritos y totales de cada aspecto (racha entre PC y celular)
+      allow read, write: if dentro() && yo() == nombre;
+    }
+    match /escritura/{id} {                   // bitácora de sesiones de escritura
+      allow read: if dentro() && resource.data.aspecto == yo();
+      allow create, update: if dentro() && request.resource.data.aspecto == yo();
+    }
+    match /fondo/{doc} {                      // Bosque Común (Pulmón Verde): todos lo ven, solo puede crecer
+      allow read: if dentro();
+      allow create: if dentro();
+      allow update: if dentro() && soloCambia(['semillas', 'palabras', '_mod'])
+                    && request.resource.data.semillas >= resource.data.get('semillas', 0);
+    }
   }
 }

@@ -5,10 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#131110">
-    <title>El Hermitaño v3 — Edición Web Corregida</title>
+    <title>El Hermitaño v4 — Semillero</title>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Firebase de Killer Pendiente (mismo origen que kpweb: la sesión se comparte) -->
+    <script src="kpweb/vendor/firebase-app-compat.js"></script>
+    <script src="kpweb/vendor/firebase-auth-compat.js"></script>
+    <script src="kpweb/vendor/firebase-firestore-compat.js"></script>
+    <script src="kpweb/config.js"></script>
 
     <style>
         :root {
@@ -231,6 +236,7 @@
         #editor p { margin-bottom: 12px; text-indent: var(--indent); }
 
         #statusbar {
+            gap: 10px;
             height: 24px;
             background-color: var(--status-bg);
             border-top: 1px solid var(--border);
@@ -359,6 +365,63 @@
         body.flow-mode #editor-container { padding: 0; }
         body.flow-mode #paper-wrapper { box-shadow: none; border-radius: 0; }
         body.flow-mode #editor { max-width: 650px; margin: 0 auto; padding-top: 40px; }
+
+        /* ═══ SEMILLERO ═══ */
+        #lbl-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #lbl-words { flex: 0 0 auto; }
+        #cabecera { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+        #cabecera #chapter-header-title { flex: 1; margin-bottom: 0; min-width: 0; }
+        #voz-badge { display: none; font-size: 13px; white-space: nowrap; cursor: pointer; }
+        #voz-badge.visible { display: inline; }
+        #voz-badge small { color: var(--text-dim); font-style: italic; font-size: 11px; margin-right: 4px; }
+        #voz-badge b { color: var(--voz, var(--accent)); }
+        #semillero {
+            flex: 0 0 auto; position: relative; background: transparent; border: none; cursor: pointer;
+            font-family: 'Georgia', serif; font-size: 11px; color: var(--text-dim); padding: 0 4px;
+            height: 22px; display: flex; align-items: center; gap: 8px; white-space: nowrap;
+        }
+        #semillero .etapa { color: var(--sem-col, var(--text-dim)); font-weight: bold; }
+        #semillero .mu { color: var(--text); transition: color .3s; }
+        #semillero .mu.destello { color: var(--accent); }
+        #semillero .barra { position: absolute; left: 4px; right: 4px; bottom: 1px; height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; }
+        #semillero .barra i { display: block; height: 100%; width: 0; background: var(--sem-col, var(--accent)); transition: width .8s; }
+        .tree-item .btn-estado { font-size: 13px; color: var(--text-dim); background: transparent; border: none; cursor: pointer; padding: 2px 4px; }
+        .tree-item.active .btn-estado { color: #FFF; }
+        #sem-zen {
+            display: none; position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+            font-size: 12px; color: var(--text-dim); opacity: .55; z-index: 250; white-space: nowrap; cursor: pointer;
+        }
+        body.flow-mode #sem-zen { display: block; }
+        #sem-zen.oro, #semillero.oro .etapa { color: #D4A93C; }
+        #brotes { position: fixed; right: 18px; bottom: 40px; z-index: 400; pointer-events: none; }
+        .brote {
+            pointer-events: auto; cursor: pointer; max-width: 340px; background: var(--paper); color: var(--text);
+            border: 2px solid var(--brote, var(--accent)); border-radius: 8px; padding: 12px 16px 10px;
+            box-shadow: 0 8px 28px rgba(0,0,0,.18); opacity: 0; transform: translateY(10px);
+            transition: opacity .35s ease, transform .35s ease;
+        }
+        .brote.visible { opacity: .97; transform: translateY(0); }
+        .brote b { display: block; font-size: 15px; margin-bottom: 3px; }
+        .brote p { font-size: 13px; font-style: italic; color: var(--text-dim); line-height: 1.45; }
+        .brote .premio { margin-top: 6px; font-size: 13px; font-weight: bold; color: var(--brote, var(--accent)); }
+        #panel-semillero { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 500; display: none; align-items: center; justify-content: center; padding: 16px; }
+        #panel-semillero.abierto { display: flex; }
+        #panel-semillero .hoja {
+            background: var(--paper); color: var(--text); border-radius: 12px; max-width: 560px; width: 100%;
+            max-height: 92vh; overflow-y: auto; padding: 22px 24px 18px; box-shadow: 0 18px 50px rgba(0,0,0,.35); text-align: center;
+        }
+        #panel-semillero h2 { font-size: 22px; color: var(--voz, var(--accent)); }
+        #panel-semillero .sub { font-size: 13px; font-style: italic; color: var(--text-dim); margin-top: 2px; }
+        #panel-semillero canvas { width: 100%; height: 270px; display: block; margin: 10px 0 6px; }
+        #panel-semillero .datos { text-align: left; font-size: 13.5px; line-height: 1.75; }
+        #panel-semillero .leyenda { text-align: left; font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-top: 10px; }
+        #panel-semillero button { margin-top: 14px; background: var(--accent); color: #FFF; border: none; border-radius: 6px; padding: 9px 22px; font-family: 'Georgia', serif; font-size: 14px; cursor: pointer; }
+        @media (max-width: 768px) and (orientation: portrait) {
+            #brotes { left: 12px; right: 12px; bottom: 34px; }
+            .brote { max-width: none; }
+            #semillero .nombre { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) { .brote, #semillero .barra i, #semillero .mu { transition: none; } }
     </style>
 </head>
 <body>
@@ -415,7 +478,11 @@
         <div id="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
         <div id="editor-container">
-            <div id="chapter-header-title">Elige o crea un tomo o capítulo a la izquierda...</div>
+            <div id="cabecera">
+                <div id="chapter-header-title">Elige o crea un tomo o capítulo a la izquierda...</div>
+                <!-- desde qué aspecto se escribe: nunca entra al texto ni a lo que se exporta -->
+                <div id="voz-badge" onclick="abrirPanelSemillero()" title="Ver el Semillero"><small>escribe</small><b></b></div>
+            </div>
             <div id="paper-wrapper">
                 <div id="editor" contenteditable="true" oninput="onEditorInput()"></div>
             </div>
@@ -424,7 +491,25 @@
 
     <div id="statusbar">
         <span id="lbl-status">Listo.</span>
+        <button id="semillero" onclick="abrirPanelSemillero()" title="Semillero: lo que tu escritura siembra">
+            <span class="etapa">·</span><span class="nombre">Semilla x1</span><span class="mu">0,00 Mu</span><span class="barra"><i></i></span>
+        </button>
         <span id="lbl-words">0 palabras</span>
+    </div>
+    <div id="sem-zen" onclick="abrirPanelSemillero()"></div>
+    <div id="brotes"></div>
+    <div id="panel-semillero" onclick="if(event.target===this) cerrarPanelSemillero()">
+        <div class="hoja">
+            <h2 id="ps-titulo">Semillero</h2>
+            <div class="sub" id="ps-sub"></div>
+            <canvas id="ps-arbol"></canvas>
+            <div class="sub" id="ps-pie"></div>
+            <div class="datos" id="ps-datos"></div>
+            <div class="leyenda">Cómo crece: Semilla x1 · Brote x2 (10 min) · Raíz x3 (25) · Árbol x4 (45) · Bosque x5 (75).
+                Una pausa de 2 min no cuesta nada; después el flujo baja despacio. Cada día seguido con 200+ palabras: +10 % (hasta +50 %).
+                Gotas doradas: x2 durante dos minutos. Solo siembran palabras nuevas: pegar no siembra, dictar sí.</div>
+            <button onclick="cerrarPanelSemillero()">Seguir escribiendo</button>
+        </div>
     </div>
 
     <button id="btn-salir-zen" onclick="document.body.classList.remove('flow-mode')" title="Salir de Modo Zen">✕</button>
@@ -543,14 +628,15 @@
         function createTreeElement(item, isChild, parentId = null) {
             const div = document.createElement('div');
             div.className = `tree-item ${item.type === 'volume' ? 'volume' : 'chapter'} ${currentActiveId === item.id ? 'active' : ''}`;
-            div.innerHTML = `<span class="drag-handle" aria-hidden="true">⠿</span>${item.type === 'volume' ? '📖' : '📄'} ${item.name} <div class="item-actions"><button class="btn-del" onclick="deleteItem(event, '${item.id}', '${parentId}')">✕</button></div>`;
+            const estado = item.type === 'chapter' ? `<button class="btn-estado" title="${item.status === 'done' ? 'Completo (tocar para volver a borrador)' : 'Marcar capítulo completo'}" onclick="toggleCompleto(event, '${item.id}')">${item.status === 'done' ? '●' : '○'}</button>` : '';
+            div.innerHTML = `<span class="drag-handle" aria-hidden="true">⠿</span>${item.type === 'volume' ? '📖' : '📄'} ${item.name} <div class="item-actions">${estado}<button class="btn-del" onclick="deleteItem(event, '${item.id}', '${parentId}')">✕</button></div>`;
             div.setAttribute('draggable', 'true');
             div.setAttribute('data-id', item.id);
             if(parentId) div.setAttribute('data-parent-id', parentId);
 
             // Clic normal para editar
             div.addEventListener('click', (e) => {
-                if(e.target.classList.contains('btn-del')) return;
+                if(e.target.classList.contains('btn-del') || e.target.classList.contains('btn-estado')) return;
                 selectItem(item.id);
             });
 
@@ -677,6 +763,7 @@
                 document.getElementById('chapter-header-title').innerText = item.name;
                 document.getElementById('editor').innerHTML = item.content || '<p><br></p>';
                 const count = contarPalabras(document.getElementById('editor').innerText);
+                if (window.semAlto && semAlto[id] == null) semAlto[id] = count;
                 document.getElementById('lbl-words').innerText = `${count} palabras`;
             }
             renderTree();
@@ -779,6 +866,7 @@
             } else {
                 editor.innerHTML += ` ${text} `;
             }
+            if (window.SEM) SEM.actividad();   // dictar también es escribir
             onEditorInput();
         }
 
@@ -793,7 +881,8 @@
                 id: crypto.randomUUID(),
                 title: "Nuevo Libro",
                 author: "Andrés Prado",
-                items: []
+                items: [],
+                hitos_libro: []
             };
             currentActiveId = null;
             fileHandle = null; // ya no hay archivo físico vinculado
@@ -851,6 +940,7 @@
                 const data = JSON.parse(text);
                 if (!data || !Array.isArray(data.items)) throw new Error('Formato inválido: falta "items".');
                 project = data;
+                prepararHitosLibro();
                 currentActiveId = null;
                 document.getElementById('editor').innerHTML = '';
                 document.getElementById('chapter-header-title').innerText = 'Elige o crea un tomo o capítulo a la izquierda...';
@@ -906,6 +996,7 @@
         function cargarLocal() {
             const saved = localStorage.getItem('hermilano_project');
             if (saved) { try { project = JSON.parse(saved); } catch(e){} }
+            prepararHitosLibro();
             document.body.setAttribute('data-theme', localStorage.getItem('hermilano_theme') || 'dia');
             renderTree();
         }
@@ -1026,6 +1117,553 @@
                 updateStatus("EPUB descargado — adjúntalo manualmente.");
             }
         }
+    </script>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════════════
+    //  SEMILLERO — escribir alimenta el universo Chamalnquimyst
+    // ═══════════════════════════════════════════════════════════════════
+    // Mismas reglas que la versión PC (hermitano_v3.py, clase Semillero):
+    //  · Solo siembran palabras NUEVAS (por encima de lo máximo que tuvo el capítulo
+    //    en esta sesión). Pegar no siembra; dictar sí.
+    //  · Flujo: Semilla x1 → Brote x2 (10 min) → Raíz x3 (25) → Árbol x4 (45) → Bosque x5 (75).
+    //    2 min de pausa no cuestan; después el flujo baja despacio (el doble de la pausa extra).
+    //  · Constancia: cada día seguido con 200+ palabras, +10 % (tope +50 %). Un día de descanso
+    //    no corta la racha; dos seguidos, sí.
+    //  · Gota dorada: cada 250–700 palabras, al azar, x2 durante dos minutos.
+    //  · Hitos (Pv + Mu de regalo): umbral, páginas de luz, las 750 del día, etapas, capítulo
+    //    completo, tamaños del libro, rachas de 3/7/21/40 días. Un respiro a los 90 min.
+    //  · Los Mu del aspecto van a su cuenta (Firebase → KP en el PC, con kp_nube.py) y el universo
+    //    suma un diezmo verde (10 %) al Bosque Común (fondo/pulmon_verde).
+    //  · Abierto desde KP web (?desde=kp) escribe el aspecto de la sesión. Abierto solo: modo Dios,
+    //    sin usuario, y todo lo sembrado va al Bosque Común.
+    const VOZ_DIOS = 'Dios', ORO = '#D4A93C';
+    const SEM_ETAPAS = [   // [seg. de flujo, multiplicador, nombre, glifo, Pv al llegar]
+        [0, 1, 'Semilla', '·', 0], [600, 2, 'Brote', '✧', 5], [1500, 3, 'Raíz', '✦', 10],
+        [2700, 4, 'Árbol', '✶', 15], [4500, 5, 'Bosque', '✷', 25]
+    ];
+    const S_MU_POR_PALABRA = 1 / 150, S_PRESENCIA = 45, S_GRACIA = 120, S_DIEZMO = 0.10;
+    const S_META_DIA = 750, S_RACHA_MIN = 200, S_PAGINA = 500, S_GOTA = [250, 700, 120], S_CUIDADO = 90 * 60;
+    const S_LIBRO = [[5000, 40, 5], [10000, 70, 10], [25000, 120, 20], [50000, 200, 35], [100000, 350, 60], [200000, 600, 100]];
+    const S_RACHAS = { 3: 15, 7: 40, 21: 100, 40: 200 };
+    const S_FRASES = {
+        umbral: ['La hoja ya no está en blanco.', 'Cruzaste el umbral. Lo demás es caminar.', 'La primera semilla siempre es la más valiente.'],
+        pagina: ['Otra página de luz para el bosque.', 'Quinientas semillas más en la tierra común.', 'El libro respira un poco más hondo.'],
+        meta: ['Las 750 del día. El cuerpo escribió y la mente lo siguió.', 'Lo de hoy ya está sembrado. Lo que venga es regalo.'],
+        'Brote': ['Brotó el flujo. Cada palabra vale doble.'],
+        'Raíz': ['Echaste raíz. Aquí el tiempo cambia de forma.'],
+        'Árbol': ['Ya eres árbol. El viento pasa y tú sigues.'],
+        'Bosque': ['Bosque. Ya no escribes solo: el bosque escribe contigo.'],
+        gota: ['Cayó una gota dorada: x2 durante dos minutos.', 'Gota dorada. El cielo también lee.'],
+        capitulo: ['Una gestalt cerrada. Siente el espacio que deja.', 'Capítulo completo. El árbol sumó un anillo.'],
+        libro: ['El libro creció un anillo entero.', 'Lo que era semilla ya da sombra.'],
+        racha: ['Así crecen los bosques: de a poco y sin parar.', 'La constancia es la forma más callada del poder personal.'],
+        cuidado: ['Llevas hora y media en el bosque. El agua, la espalda y los ojos también escriben. Estira, respira: el árbol no se cae.']
+    };
+
+    const semAhora = () => Date.now() / 1000;
+    const semAzar = (lista) => lista[Math.floor(Math.random() * lista.length)] || '';
+    const semEntre = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+    function semNum(x, dec = 0) { return Number(x || 0).toLocaleString('es-CL', { minimumFractionDigits: dec, maximumFractionDigits: dec }); }
+    function semMultTxt(m) { return Math.abs(m - Math.round(m)) > 1e-9 ? m.toFixed(1).replace('.', ',').replace(/,0$/, '') : String(Math.round(m)); }
+    function fechaISO(d) { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+    const hoyISO = () => fechaISO(new Date());
+    function semHitosIniciales(total) { return S_LIBRO.filter(([u]) => total >= u).map(([u]) => u); }
+    function semSemillaDe(txt) {           // FNV-1a 32 bits (igual que en el PC)
+        let h = 0x811C9DC5; txt = String(txt);
+        for (let i = 0; i < txt.length; i++) { h ^= txt.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+        return h >>> 0;
+    }
+    function semMulberry32(a) {            // mismo generador que el PC: el mismo libro dibuja el mismo árbol
+        return function () {
+            a |= 0; a = a + 0x6D2B79F5 | 0;
+            let t = Math.imul(a ^ a >>> 15, 1 | a);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+    }
+    function semArbol(semilla, total) {
+        const rnd = semMulberry32(semilla);
+        const prof = Math.max(2, Math.min(9, 2 + Math.floor(Math.log2(1 + total / 400))));
+        const ramas = [], hojas = [];
+        (function rama(x, y, ang, largo, d) {
+            const x2 = x + Math.cos(ang) * largo, y2 = y - Math.sin(ang) * largo;
+            ramas.push([x, y, x2, y2, d]);
+            if (d >= prof) { hojas.push([x2, y2]); return; }
+            const n = (d < 4 && rnd() < 0.3) ? 3 : 2;
+            for (let k = 0; k < n; k++) {
+                const da = (rnd() - 0.5) * 0.5 + (k - (n - 1) / 2) * 0.55;
+                rama(x2, y2, ang + da, largo * (0.68 + rnd() * 0.12), d + 1);
+            }
+        })(0, 0, Math.PI / 2, 1, 1);
+        return { ramas, hojas, prof };
+    }
+
+    class Semillero {
+        constructor(voz, estado) {
+            this.voz = voz || VOZ_DIOS; this.esDios = this.voz === VOZ_DIOS;
+            const e = (estado && typeof estado === 'object') ? estado : {};
+            e.voces = e.voces || {}; e.pendiente = e.pendiente || {};
+            e.fondo = e.fondo || 0; e.fondo_palabras = e.fondo_palabras || 0; e.pulsos = e.pulsos || [];
+            this.estado = e;
+            this.mi = e.voces[this.voz] = Object.assign({ dias: {}, metas: [], rachas: {}, palabras: 0, mu: 0 }, e.voces[this.voz] || {});
+            this.pend = e.pendiente[this.voz] = Object.assign({ mu: 0, pv: 0, dias: {}, palabras: 0 }, e.pendiente[this.voz] || {});
+            this.remotoDias = {};
+            const t = semAhora();
+            this.flujo = 0; this._ultTick = t; this._ultAct = null; this.etapaI = 0; this.etapaMax = 0;
+            this.sesId = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).replace(/-/g, '');
+            this.sesInicio = new Date().toISOString().slice(0, 19);
+            this.sesPalabras = 0; this.sesMu = 0; this.sesPv = 0; this.maxMult = 1;
+            this.gotaHasta = 0; this.proxGota = semEntre(S_GOTA[0], S_GOTA[1]); this.proxPagina = S_PAGINA;
+            this.umbralOk = false; this.cuidadoOk = false; this.hitosSesion = []; this.eventos = [];
+        }
+        actividad() {
+            const t = semAhora();
+            if (this._ultAct !== null) {
+                const pausa = t - this._ultAct;
+                if (pausa > S_GRACIA) { this.flujo = Math.max(0, this.flujo - (pausa - S_GRACIA) * 2); this._recalcular(); }
+            }
+            this._ultAct = t;
+        }
+        presente() { return this._ultAct !== null && semAhora() - this._ultAct <= S_PRESENCIA; }
+        tick() {
+            const t = semAhora(), dt = Math.min(5, Math.max(0, t - this._ultTick)); this._ultTick = t;
+            if (this.presente()) {
+                this.flujo += dt; this._recalcular();
+                if (!this.cuidadoOk && this.flujo >= S_CUIDADO) { this.cuidadoOk = true; this._evento('cuidado', 'Un respiro', semAzar(S_FRASES.cuidado)); }
+            }
+        }
+        _recalcular() {
+            let i = 0; SEM_ETAPAS.forEach((e, k) => { if (this.flujo >= e[0]) i = k; });
+            this.etapaI = i;
+            if (i > this.etapaMax) {
+                for (let k = this.etapaMax + 1; k <= i; k++) {
+                    const [, m, nombre, glifo, pv] = SEM_ETAPAS[k];
+                    this._hito('etapa', `${glifo} ${nombre} · x${m}`, pv, 0, semAzar(S_FRASES[nombre]));
+                }
+                this.etapaMax = i;
+            }
+        }
+        etapa() { return SEM_ETAPAS[this.etapaI]; }
+        progresoEtapa() {
+            if (this.etapaI >= SEM_ETAPAS.length - 1) return 1;
+            const a = SEM_ETAPAS[this.etapaI][0], b = SEM_ETAPAS[this.etapaI + 1][0];
+            return Math.max(0, Math.min(1, (this.flujo - a) / (b - a)));
+        }
+        gotaActiva() { return semAhora() < this.gotaHasta; }
+        gotaResta() { return Math.max(0, Math.floor(this.gotaHasta - semAhora())); }
+        dias() {
+            const d = Object.assign({}, this.remotoDias);
+            for (const [k, v] of Object.entries(this.mi.dias)) d[k] = Math.max(d[k] || 0, v);
+            return d;
+        }
+        palabrasHoy() { return this.dias()[hoyISO()] || 0; }
+        racha() {
+            const dias = this.dias(), d = new Date(); d.setHours(12, 0, 0, 0);
+            if ((dias[fechaISO(d)] || 0) < S_RACHA_MIN) d.setDate(d.getDate() - 1);
+            let n = 0, huecos = 0;
+            for (let i = 0; i < 4000; i++) {
+                if ((dias[fechaISO(d)] || 0) >= S_RACHA_MIN) { n++; huecos = 0; }
+                else if (++huecos >= 2) break;
+                d.setDate(d.getDate() - 1);
+            }
+            return n;
+        }
+        bonoRacha() { return Math.min(0.5, 0.1 * Math.max(0, this.racha() - 1)); }
+        mult() { let m = SEM_ETAPAS[this.etapaI][1]; if (this.gotaActiva()) m *= 2; return m * (1 + this.bonoRacha()); }
+        sembrar(n, capitulo) {
+            if (n <= 0) return 0;
+            const hoy = hoyISO(), antes = this.palabrasHoy(), m = this.mult();
+            this.maxMult = Math.max(this.maxMult, m);
+            const mu = n * S_MU_POR_PALABRA * m;
+            this._abonar(mu);
+            this.sesPalabras += n; this.sesMu += mu;
+            this.mi.dias[hoy] = (this.mi.dias[hoy] || 0) + n; this.mi.palabras += n;
+            this.pend.dias[hoy] = (this.pend.dias[hoy] || 0) + n; this.pend.palabras += n;
+            this.estado.fondo_palabras = (this.estado.fondo_palabras || 0) + n;
+            if (capitulo) { capitulo.voces = capitulo.voces || {}; capitulo.voces[this.voz] = (capitulo.voces[this.voz] || 0) + n; }
+            if (!this.umbralOk && this.sesPalabras >= 50) { this.umbralOk = true; this._hito('umbral', 'Umbral cruzado', 3, 1, semAzar(S_FRASES.umbral)); }
+            while (this.sesPalabras >= this.proxPagina) {
+                const k = this.proxPagina / S_PAGINA; this.proxPagina += S_PAGINA;
+                this._hito('pagina', `Página de luz ${k}`, 10, 2, semAzar(S_FRASES.pagina));
+            }
+            const despues = antes + n;
+            if (antes < S_RACHA_MIN && despues >= S_RACHA_MIN) {
+                const r = this.racha();
+                if (S_RACHAS[r] && this.mi.rachas[hoy] !== r) {
+                    this.mi.rachas[hoy] = r;
+                    this._hito('racha', `${r} días seguidos escribiendo`, S_RACHAS[r], Math.floor(r / 3), semAzar(S_FRASES.racha), true);
+                }
+            }
+            if (antes < S_META_DIA && despues >= S_META_DIA && !this.mi.metas.includes(hoy)) {
+                this.mi.metas = this.mi.metas.concat([hoy]).slice(-400);
+                this._hito('meta', 'Las 750 del día', 20, 3, semAzar(S_FRASES.meta));
+            }
+            if (this.sesPalabras >= this.proxGota) {
+                this.proxGota = this.sesPalabras + semEntre(S_GOTA[0], S_GOTA[1]);
+                this.gotaHasta = semAhora() + S_GOTA[2];
+                this._evento('gota', 'Gota dorada · x2', semAzar(S_FRASES.gota), 0, 0, true);
+            }
+            return mu;
+        }
+        capituloCompleto(item) {
+            if (!item || item.hito_completo) return;
+            item.hito_completo = true;
+            this._hito('capitulo', `Capítulo completo · ${item.name || ''}`, 30, 5, semAzar(S_FRASES.capitulo));
+        }
+        revisarLibro(total, hechos) {
+            for (const [u, pv, mu] of S_LIBRO) {
+                if (total >= u && !hechos.includes(u)) {
+                    hechos.push(u);
+                    this._hito('libro', `El libro llegó a ${semNum(u)} palabras`, pv, mu, semAzar(S_FRASES.libro), true);
+                }
+            }
+        }
+        _abonar(mu) {
+            this.mi.mu = (this.mi.mu || 0) + mu;
+            if (this.esDios) this.estado.fondo += mu;
+            else { this.pend.mu += mu; this.estado.fondo += mu * S_DIEZMO; }
+        }
+        _evento(tipo, titulo, texto = '', mu = 0, pv = 0, oro = false) { this.eventos.push({ tipo, titulo, texto, mu, pv, oro }); }
+        _hito(tipo, titulo, pv = 0, mu = 0, texto = '', oro = false) {
+            if (this.esDios) pv = 0;               // Dios no acumula voluntad: la regala
+            if (mu) { this._abonar(mu); this.sesMu += mu; }
+            this.pend.pv += pv; this.sesPv += pv; this.hitosSesion.push(titulo);
+            this._evento(tipo, titulo, texto, mu, pv, oro);
+            if (!this.esDios) this.estado.pulsos = this.estado.pulsos.concat([{
+                type: 'ESCRITURA_HITO', hito: tipo, titulo, pv, mu, palabras_sesion: this.sesPalabras,
+                etapa: SEM_ETAPAS[this.etapaI][2], timestamp: new Date().toISOString().slice(0, 19)
+            }]).slice(-30);
+        }
+        resumenSesion(libro = '') {
+            return { id: this.sesId, inicio: this.sesInicio, fin: new Date().toISOString().slice(0, 19), libro,
+                palabras: this.sesPalabras, mu: Math.round(this.sesMu * 100) / 100, pv: this.sesPv,
+                max_mult: Math.round(this.maxMult * 100) / 100, etapa_max: SEM_ETAPAS[this.etapaMax][2], hitos: this.hitosSesion.slice() };
+        }
+        tomar(libro = '') {
+            const p = this.pend, mu = Math.floor(p.mu);
+            const fondo = this.estado.fondo >= 0.01 ? Math.round(this.estado.fondo * 100) / 100 : 0;
+            const lote = { voz: this.voz, mu, pv: p.pv, dias: Object.assign({}, p.dias), palabras: p.palabras, fondo,
+                fondo_palabras: this.estado.fondo_palabras || 0, pulsos: this.estado.pulsos.slice(), sesion: this.resumenSesion(libro) };
+            p.mu -= mu; p.pv = 0; p.dias = {}; p.palabras = 0;
+            this.estado.fondo -= fondo; this.estado.fondo_palabras = 0; this.estado.pulsos = [];
+            return lote;
+        }
+        devolver(r) {
+            const p = this.pend;
+            p.mu += r.mu || 0; p.pv += r.pv || 0; p.palabras += r.palabras || 0;
+            for (const [d, n] of Object.entries(r.dias || {})) p.dias[d] = (p.dias[d] || 0) + n;
+            this.estado.fondo += r.fondo || 0;
+            this.estado.fondo_palabras = (this.estado.fondo_palabras || 0) + (r.fondo_palabras || 0);
+            this.estado.pulsos = (r.pulsos || []).concat(this.estado.pulsos).slice(-30);
+        }
+    }
+
+    // ── estado de la página ─────────────────────────────────────────────
+    const DESDE_KP = new URLSearchParams(location.search).get('desde') === 'kp';
+    var semAlto = {};               // máximo de palabras de cada capítulo en esta sesión
+    var semPegado = false;
+    var semVozLista = !DESDE_KP;    // desde KP se espera a saber el aspecto antes de sembrar
+    var semEstado = (() => { try { return JSON.parse(localStorage.getItem('hermilano_semillero')) || {}; } catch (e) { return {}; } })();
+    window.SEM = new Semillero(null, semEstado);
+    var semColor = ORO, semFondoTotal = null, semMuNube = null, semDestello = 0;
+    var fb = { db: null, auth: null, FV: null, usuario: null, oyentes: [] };
+
+    function semGuardarLocal() { try { localStorage.setItem('hermilano_semillero', JSON.stringify(SEM.estado)); } catch (e) { } }
+
+    function totalPalabrasLibro() {
+        let t = 0;
+        const rec = (l) => l.forEach((i) => { t += i.word_count || 0; if (i.chapters) rec(i.chapters); });
+        rec(project.items || []);
+        return t;
+    }
+    function prepararHitosLibro() { if (!Array.isArray(project.hitos_libro)) project.hitos_libro = semHitosIniciales(totalPalabrasLibro()); }
+
+    function toggleCompleto(e, id) {
+        e.stopPropagation();
+        const item = findItem(id);
+        if (!item) return;
+        item.status = item.status === 'done' ? 'draft' : 'done';
+        if (item.status === 'done') { SEM.capituloCompleto(item); semAtenderEventos(); }
+        isDirty = true; guardarLocal(); renderTree();
+    }
+
+    // ── la voz: ¿desde qué aspecto se escribe? ──────────────────────────
+    function semColorHash(voz) {          // color estable a partir del nombre (igual que el PC)
+        const h = semSemillaDe(voz), x = (n) => (90 + n % 140).toString(16).padStart(2, '0');
+        return '#' + x(h) + x(h >>> 8) + x(h >>> 16);
+    }
+    function entrarComoVoz(asp) {
+        SEM = window.SEM = new Semillero(asp, semEstado);
+        semColor = semColorHash(asp);
+        document.documentElement.style.setProperty('--voz', semColor);
+        const badge = document.getElementById('voz-badge');
+        badge.querySelector('b').textContent = '◉ ' + asp;
+        badge.classList.add('visible');
+        semVozLista = true;
+        updateStatus(`Escribe ${asp} · lo que siembres alimenta su universo`);
+        if (fb.db) escucharNube();
+    }
+
+    function iniciarNube() {
+        if (!window.firebase || !window.KP_FIREBASE) { semVozLista = true; return; }
+        try {
+            if (!firebase.apps.length) firebase.initializeApp(window.KP_FIREBASE);
+            fb.auth = firebase.auth(); fb.db = firebase.firestore(); fb.FV = firebase.firestore.FieldValue;
+            fb.db.enablePersistence({ synchronizeTabs: true }).catch(() => { });
+        } catch (e) { console.warn('[HERMILAÑO] Firebase:', e.message); semVozLista = true; return; }
+        const plazo = setTimeout(() => {          // sin respuesta: se escribe como Dios
+            if (!semVozLista) { semVozLista = true; semBrote({ tipo: 'aviso', titulo: 'Modo Dios', texto: 'No se encontró la sesión de KP en este navegador. Lo que escribas va al Bosque Común.', mu: 0, pv: 0 }); }
+        }, 8000);
+        fb.auth.onAuthStateChanged(async (u) => {
+            fb.usuario = u || null;
+            if (u && DESDE_KP && SEM.esDios) {
+                try {
+                    const tok = await u.getIdTokenResult();
+                    const asp = tok.claims && tok.claims.aspecto;
+                    if (asp) { clearTimeout(plazo); entrarComoVoz(asp); }
+                } catch (e) { console.warn('[HERMILAÑO]', e.message); }
+            } else if (!u && DESDE_KP && !semVozLista) {
+                clearTimeout(plazo); semVozLista = true;
+                semBrote({ tipo: 'aviso', titulo: 'Modo Dios', texto: 'No hay sesión de KP en este navegador (entra en KP web primero). Por ahora, lo que escribas va al Bosque Común.', mu: 0, pv: 0 });
+            }
+            if (u) { escucharNube(); semSubir(); }
+        });
+    }
+
+    function escucharNube() {
+        fb.oyentes.forEach((f) => { try { f(); } catch (e) { } }); fb.oyentes = [];
+        const oir = (ref, fn) => fb.oyentes.push(ref.onSnapshot(fn, (e) => console.warn('[HERMILAÑO]', e.code || e.message)));
+        oir(fb.db.collection('fondo').doc('pulmon_verde'), (d) => { semFondoTotal = d.exists ? (d.data().semillas || 0) : 0; });
+        if (!SEM.esDios) {
+            oir(fb.db.collection('aspectos').doc(SEM.voz), (d) => {
+                const a = d.exists ? d.data() : {};
+                semMuNube = a.mu != null ? a.mu : null;
+                if (a.color && String(a.color).toLowerCase() !== '#000000') {
+                    semColor = a.color;
+                    document.documentElement.style.setProperty('--voz', a.color);
+                }
+            });
+            oir(fb.db.collection('escritores').doc(SEM.voz), (d) => {
+                const dias = (d.exists && d.data().dias) || {};
+                SEM.remotoDias = Object.fromEntries(Object.entries(dias).map(([k, v]) => [k, Number(v) || 0]));
+            });
+        }
+    }
+
+    // ── subir lo sembrado (cada parte por separado: si una regla falta, lo demás igual llega) ──
+    let semSubiendo = false, semProntoT = null;
+    async function semSubir() {
+        if (!fb.db || !fb.usuario || semSubiendo || !semVozLista) return;
+        const L = SEM.tomar(project.title || '');
+        if (!(L.mu || L.pv || L.palabras || L.fondo || L.pulsos.length)) return;
+        semSubiendo = true;
+        const S = SEM, inc = fb.FV.increment, ahora = Date.now(), tareas = [];
+        const avisar = (que) => (e) => console.warn(`[HERMILAÑO] ${que}:`, e.code || e.message);
+        if (L.voz !== VOZ_DIOS) {
+            if (L.mu || L.pv) {
+                const d = { _mod: ahora };
+                if (L.mu) d.mu = inc(L.mu);
+                if (L.pv) { d.pv = inc(L.pv); d.pv_canjeables = inc(L.pv); }
+                tareas.push(fb.db.collection('aspectos').doc(L.voz).set(d, { merge: true })
+                    .catch((e) => { avisar('Mu/Pv quedan pendientes')(e); S.devolver({ mu: L.mu, pv: L.pv }); semGuardarLocal(); }));
+            }
+            const dias = {}; Object.entries(L.dias).forEach(([k, n]) => { dias[k] = inc(n); });
+            if (L.palabras) tareas.push(fb.db.collection('escritores').doc(L.voz).set(
+                { nombre: L.voz, palabras: inc(L.palabras), mu: inc(L.mu), dias, _mod: ahora }, { merge: true }).catch(avisar('escritores')));
+            if (L.sesion.palabras) tareas.push(fb.db.collection('escritura').doc(L.sesion.id).set(
+                Object.assign({}, L.sesion, { aspecto: L.voz, origen: 'hermilano-web', _mod: ahora }), { merge: true }).catch(avisar('escritura')));
+            L.pulsos.forEach((p) => tareas.push(fb.db.collection('pulsos').doc().set(Object.assign({}, p, {
+                user: L.voz, user_color: semColor, event_id: (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).replace(/-/g, ''),
+                libro: project.title || '', origen: 'hermilano-web', _mod: ahora })).catch(avisar('pulso'))));
+        }
+        if (L.fondo > 0 || L.fondo_palabras) {
+            tareas.push(fb.db.collection('fondo').doc('pulmon_verde').set(
+                { semillas: inc(L.fondo), palabras: inc(L.fondo_palabras), _mod: ahora }, { merge: true })
+                .catch((e) => { avisar('Bosque Común pendiente')(e); S.devolver({ fondo: L.fondo, fondo_palabras: L.fondo_palabras }); semGuardarLocal(); }));
+        }
+        semGuardarLocal();
+        // Con la persistencia de Firestore, sin señal las escrituras quedan en cola y se envían solas al volver
+        await Promise.race([Promise.all(tareas), new Promise((r) => setTimeout(r, 15000))]);
+        semSubiendo = false;
+    }
+    function semSubirPronto() { if (semProntoT) return; semProntoT = setTimeout(() => { semProntoT = null; semSubir(); }, 5000); }
+
+    // ── el pulso de cada segundo ────────────────────────────────────────
+    function semPaso() {
+        SEM.tick();
+        const editor = document.getElementById('editor');
+        const item = currentActiveId ? findItem(currentActiveId) : null;
+        if (item && item.type === 'chapter') {
+            const wc = contarPalabras(editor.innerText);
+            const alto = semAlto[item.id];
+            if (alto == null) semAlto[item.id] = wc;
+            else if (wc > alto && (semVozLista || semPegado)) {
+                const delta = wc - alto; semAlto[item.id] = wc;
+                const reciente = SEM._ultAct !== null && semAhora() - SEM._ultAct <= 3;
+                // pegar o un salto enorme sin teclear no siembran
+                if (!semPegado && delta <= 400 && (delta <= 60 || reciente)) {
+                    SEM.sembrar(delta, item);
+                    semDestello = semAhora() + 0.5;
+                    SEM.revisarLibro(totalPalabrasLibro(), project.hitos_libro || (project.hitos_libro = []));
+                    isDirty = true;
+                }
+            }
+        }
+        semPegado = false;
+        semAtenderEventos();
+        pintarSemillero();
+        if (document.getElementById('panel-semillero').classList.contains('abierto')) pintarPanelDatos();
+    }
+
+    function semAtenderEventos() {
+        let hito = false;
+        while (SEM.eventos.length) {
+            const ev = SEM.eventos.shift();
+            semBrote(ev);
+            if (ev.tipo !== 'gota' && ev.tipo !== 'cuidado') hito = true;
+        }
+        if (hito) semSubirPronto();
+    }
+
+    function pintarSemillero() {
+        const [, , nombre, glifo] = SEM.etapa();
+        const oro = SEM.gotaActiva();
+        const col = oro ? ORO : (SEM.etapaI ? 'var(--accent)' : 'var(--text-dim)');
+        const b = document.getElementById('semillero');
+        b.style.setProperty('--sem-col', col);
+        b.classList.toggle('oro', oro);
+        b.querySelector('.etapa').textContent = glifo;
+        b.querySelector('.nombre').textContent = `${nombre} x${semMultTxt(SEM.mult())}`;
+        const mu = b.querySelector('.mu');
+        mu.textContent = `${semNum(SEM.sesMu, 2)} Mu${SEM.esDios ? ' · al Bosque' : ''}`;
+        mu.classList.toggle('destello', semAhora() < semDestello);
+        b.querySelector('.barra i').style.width = (SEM.progresoEtapa() * 100).toFixed(1) + '%';
+        b.title = oro ? `Gota dorada: x2 por ${SEM.gotaResta()} s más` : 'Semillero: lo que tu escritura siembra';
+        const z = document.getElementById('sem-zen');
+        z.textContent = `${glifo} ${nombre} x${semMultTxt(SEM.mult())}  ·  ${semNum(SEM.sesMu, 2)} Mu${oro ? '  ·  gota dorada ' + SEM.gotaResta() + ' s' : ''}`;
+        z.classList.toggle('oro', oro);
+    }
+
+    // ── brotes: avisos suaves, de a uno, que se van solos ──────────────
+    const semCola = []; let semBroteVivo = null;
+    function semBrote(ev) { semCola.push(ev); semMostrarBrote(); }
+    function semMostrarBrote() {
+        if (semBroteVivo || !semCola.length) return;
+        const ev = semCola.shift();
+        const d = document.createElement('div');
+        d.className = 'brote';
+        d.style.setProperty('--brote', ev.oro ? ORO : (SEM.esDios ? 'var(--accent)' : semColor));
+        const premio = [];
+        if (ev.pv) premio.push(`+${ev.pv} Pv`);
+        if (ev.mu) premio.push(`+${semNum(ev.mu)} Mu${SEM.esDios ? ' al Bosque Común' : ''}`);
+        d.innerHTML = '<b></b>' + (ev.texto ? '<p></p>' : '') + (premio.length ? '<div class="premio"></div>' : '');
+        d.querySelector('b').textContent = ev.titulo;
+        if (ev.texto) d.querySelector('p').textContent = ev.texto;
+        if (premio.length) d.querySelector('.premio').textContent = premio.join('    ');
+        document.getElementById('brotes').appendChild(d);
+        semBroteVivo = d;
+        requestAnimationFrame(() => requestAnimationFrame(() => d.classList.add('visible')));
+        const cerrar = () => {
+            if (semBroteVivo !== d) return;
+            semBroteVivo = null; d.classList.remove('visible');
+            setTimeout(() => { d.remove(); semMostrarBrote(); }, 380);
+        };
+        d.onclick = cerrar;
+        setTimeout(cerrar, ev.tipo === 'cuidado' ? 9000 : 5200);
+    }
+
+    // ── el panel: el árbol de este libro ────────────────────────────────
+    function abrirPanelSemillero() {
+        const p = document.getElementById('panel-semillero');
+        p.classList.add('abierto');
+        document.getElementById('ps-titulo').textContent = SEM.esDios ? 'Modo Dios' : `Escribe ${SEM.voz}`;
+        document.getElementById('ps-titulo').style.color = SEM.esDios ? ORO : semColor;
+        document.getElementById('ps-sub').textContent = SEM.esDios ? 'Todo lo que siembras va al Bosque Común.'
+            : 'Tus Mu alimentan el universo; el universo suma un diezmo al Bosque Común.';
+        dibujarArbol(); pintarPanelDatos();
+    }
+    function cerrarPanelSemillero() { document.getElementById('panel-semillero').classList.remove('abierto'); }
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarPanelSemillero(); });
+
+    function dibujarArbol() {
+        const c = document.getElementById('ps-arbol'), dpr = window.devicePixelRatio || 1;
+        const W = c.clientWidth || 500, H = c.clientHeight || 270;
+        c.width = W * dpr; c.height = H * dpr;
+        const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+        const noche = document.body.getAttribute('data-theme') === 'noche';
+        const total = totalPalabrasLibro(), semilla = semSemillaDe(project.id || project.title);
+        const { ramas, hojas, prof } = semArbol(semilla, total);
+        const xs = ramas.flatMap((r) => [r[0], r[2]]), ys = ramas.flatMap((r) => [r[1], r[3]]);
+        const ancho = (Math.max(...xs) - Math.min(...xs)) || 1, alto = (Math.max(...ys) - Math.min(...ys)) || 1;
+        const k = Math.min((W - 50) / ancho, (H - 30) / alto, 70);
+        const cx = (Math.max(...xs) + Math.min(...xs)) / 2, my = Math.max(...ys);
+        const P = (x, y) => [W / 2 + (x - cx) * k, H - 14 + (y - my) * k];
+        g.strokeStyle = getComputedStyle(document.body).getPropertyValue('--border'); g.lineWidth = 1;
+        g.beginPath(); g.moveTo(30, H - 14); g.lineTo(W - 30, H - 14); g.stroke();
+        g.lineCap = 'round'; g.strokeStyle = noche ? '#8A7258' : '#6B5440';
+        for (const [x1, y1, x2, y2, d] of ramas) {
+            const [a, b] = P(x1, y1), [e, f] = P(x2, y2);
+            g.lineWidth = Math.max(1, Math.round((prof - d + 1) * 1.4));
+            g.beginPath(); g.moveTo(a, b); g.lineTo(e, f); g.stroke();
+        }
+        const orden = hojas.map((_, i) => i), rnd = semMulberry32((semilla ^ 0x9E3779B9) >>> 0);
+        for (let i = orden.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [orden[i], orden[j]] = [orden[j], orden[i]]; }
+        const encendidas = new Set(orden.slice(0, Math.min(hojas.length, Math.floor(SEM.sesPalabras / 25))));
+        const colores = ['#B9A77F', '#8DB580', '#C9854C', '#5A9A6A', '#3E7D57'];
+        const vivo = SEM.gotaActiva() ? ORO : colores[SEM.etapaI], apagado = noche ? '#3F5238' : '#A9B89A';
+        hojas.forEach(([x, y], i) => {
+            const [a, b] = P(x, y), on = encendidas.has(i);
+            if (on) { g.shadowColor = vivo; g.shadowBlur = 8; }
+            g.fillStyle = on ? vivo : apagado;
+            g.beginPath(); g.arc(a, b, on ? 4 : 3, 0, Math.PI * 2); g.fill();
+            g.shadowBlur = 0;
+        });
+        document.getElementById('ps-pie').textContent =
+            `El árbol de «${project.title || 'este libro'}» · ${semNum(total)} palabras · ${encendidas.size} hojas encendidas hoy`;
+    }
+
+    function pintarPanelDatos() {
+        const [, , nombre, glifo] = SEM.etapa(), hoy = SEM.palabrasHoy(), r = SEM.racha(), bono = SEM.bonoRacha();
+        const L = [
+            `<b>Esta sesión:</b> ${semNum(SEM.sesPalabras)} palabras · ${semNum(SEM.sesMu, 2)} Mu${SEM.esDios ? '' : ` · +${SEM.sesPv} Pv`} · etapa máxima ${SEM_ETAPAS[SEM.etapaMax][2]}`,
+            `<b>Ahora:</b> ${glifo} ${nombre} · x${semMultTxt(SEM.mult())}${SEM.gotaActiva() ? ` · gota dorada ${SEM.gotaResta()} s` : ''}`,
+            `<b>Hoy:</b> ${semNum(hoy)} palabras · ${hoy >= S_META_DIA ? 'las 750 del día ✓' : `faltan ${semNum(S_META_DIA - hoy)} para las 750`}`,
+            `<b>Constancia:</b> ${r} día${r === 1 ? '' : 's'} seguido${r === 1 ? '' : 's'}${bono ? ` (+${Math.round(bono * 100)} %)` : ''}`,
+            `<b>Escrito por ${esc(SEM.voz)}:</b> ${semNum(SEM.mi.palabras)} palabras · ${semNum(SEM.mi.mu, 1)} Mu sembrados`
+        ];
+        if (!SEM.esDios && semMuNube != null) L.push(`<b>Mu de ${esc(SEM.voz)} en el universo:</b> ${semNum(semMuNube)}`);
+        if (semFondoTotal != null) L.push(`<b>Bosque Común (Pulmón Verde):</b> ${semNum(semFondoTotal, 1)} semillas`);
+        const item = currentActiveId ? findItem(currentActiveId) : null;
+        if (item && item.voces) {
+            const v = item.voces, tot = Object.values(v).reduce((a, b) => a + b, 0) || 1;
+            L.push('<b>Voces de este capítulo:</b> ' + Object.entries(v).sort((a, b) => b[1] - a[1])
+                .map(([k, n]) => `${esc(k)} ${Math.round(100 * n / tot)} %`).join(' · '));
+        }
+        const falta = [];
+        if (Math.floor(SEM.pend.mu)) falta.push(`${Math.floor(SEM.pend.mu)} Mu`);
+        if (SEM.pend.pv) falta.push(`${SEM.pend.pv} Pv`);
+        L.push(`<b>Nube:</b> ${fb.usuario ? 'conectada' + (falta.length ? ' · por subir ' + falta.join(', ') : ' · al día')
+            : (fb.db ? 'sin sesión de KP · queda guardado en este navegador' : 'sin conexión · queda guardado en este navegador')}`);
+        document.getElementById('ps-datos').innerHTML = L.join('<br>');
+    }
+    function esc(t) { return String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    // ── arranque ────────────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+        const editor = document.getElementById('editor');
+        editor.addEventListener('keydown', () => SEM.actividad());
+        editor.addEventListener('paste', () => { semPegado = true; });
+        editor.addEventListener('drop', () => { semPegado = true; });
+        if (!DESDE_KP) setTimeout(() => updateStatus('Modo Dios · lo que escribas se siembra en el Bosque Común'), 1500);
+        iniciarNube();
+        pintarSemillero();
+        setInterval(semPaso, 1000);
+        setInterval(() => { semSubir(); semGuardarLocal(); }, 60000);
+        setInterval(semGuardarLocal, 10000);
+        setInterval(() => { if (document.getElementById('panel-semillero').classList.contains('abierto')) dibujarArbol(); }, 5000);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { semGuardarLocal(); semSubir(); } });
+    });
     </script>
 </body>
 </html>
