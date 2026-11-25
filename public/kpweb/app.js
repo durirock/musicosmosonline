@@ -895,12 +895,10 @@
     // v8.27: "listo" a los pocos segundos = probablemente se hizo en la vida
     const sosp = listoSospechoso(tm.id);
     if (sosp != null) {
-      const r = await preguntaFlex('¿Dónde lo hiciste?', `Apretaste listo a los ${Math.floor(sosp)} s. ¿Dónde hiciste este pendiente?`,
-        [{ t: '🌿 En mi vida, fuera de KP', v: 'vida' }, { t: '⚡ Aquí, y fue rapidísimo', v: 'aqui' }, { t: '↩ Volver al timer', v: 'volver', pri: 1 }]);
+      const r = await preguntaFlex('Cerrada muy rápido', `Apretaste listo a los ${Math.floor(sosp)} s. ¿La hiciste antes o recién?`, [{ t: '🌿 La hice antes', v: 'antes' }, { t: '⚡ Recién, muy rápido', v: 'recien', pri: 1 }]);
       if (!timer || timer.id !== tm.id) return;
-      if (r === 'volver' || r === undefined) return;
-      if (r === 'aqui') { cerrarTimer(true); preguntarCompletada(tm.id, 0); return; }     // sin bono temprano
-      cerrarTimer(true); cerrarEnVida(tm.id, sosp); return;
+      if (r === undefined) return;                       // cerró la pregunta: el timer sigue
+      cerrarTimer(true); cierreRapido(tm.id, sosp, r); return;
     }
     const fraccion = tm.total ? restaSeg() / tm.total : 0;
     cerrarTimer(true);
@@ -913,19 +911,21 @@
     const total = (parseFloat(t.time) || 0) * 60;
     return trans < Math.max(CIERRE_DETECTADO_SEG, CIERRE_DETECTADO_FRACCION * total) ? trans : null;
   }
+  // Cierre detectado como rápido: una sola pregunta y se cierra (kp828: "antes" = en la vida, sin multiplicador;
+  // "recién" = aquí, sin bono por adelantarse). No se pregunta "¿Completaste?": apretar listo ya lo dice.
+  function cierreRapido(id, sosp, r) {
+    const t = tareaPorId(id); if (!t || t.completed) { Flotante.cerrar(); return; }
+    if (r === 'antes') completar(t, 0, 'vida', { detectado: true, cuando: 'antes', segundos: Math.floor(sosp) });
+    else if (r === 'recien') completar(t, 0, 'timer');
+    else Flotante.cerrar();
+  }
   async function preguntarDonde(id, sosp) {
-    const r = await preguntaFlex('¿Dónde lo hiciste?', `Apretaste listo a los ${Math.floor(sosp)} s. ¿Dónde hiciste este pendiente?`,
-      [{ t: '🌿 En mi vida, fuera de KP', v: 'vida' }, { t: '⚡ Aquí, y fue rapidísimo', v: 'aqui', pri: 1 }]);
-    if (r === 'vida') cerrarEnVida(id, sosp); else if (r === 'aqui') preguntarCompletada(id, 0); else Flotante.cerrar();
+    const r = await preguntaFlex('Cerrada muy rápido', `Apretaste listo a los ${Math.floor(sosp)} s. ¿La hiciste antes o recién?`, [{ t: '🌿 La hice antes', v: 'antes' }, { t: '⚡ Recién, muy rápido', v: 'recien', pri: 1 }]);
+    cierreRapido(id, sosp, r);
   }
   async function cerrarTareaDesdeListo(id, T, usado) {
     const sosp = listoSospechoso(id);
-    if (sosp != null) {
-      const r = await preguntaFlex('¿Dónde lo hiciste?', `Apretaste listo a los ${Math.floor(sosp)} s. ¿Dónde hiciste este pendiente?`,
-        [{ t: '🌿 En mi vida, fuera de KP', v: 'vida' }, { t: '⚡ Aquí, y fue rapidísimo', v: 'aqui', pri: 1 }]);
-      if (r === 'vida') { cerrarEnVida(id, sosp); return; }
-      preguntarCompletada(id, 0); return;
-    }
+    if (sosp != null) { preguntarDonde(id, sosp); return; }
     preguntarCompletada(id, Math.max(0, (T - usado) / T));
   }
 
