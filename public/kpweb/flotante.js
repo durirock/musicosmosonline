@@ -48,6 +48,7 @@
   let ultimo = null;          // último estado pintado
   let alAccion = () => { };
   let pregunta = null;        // {resolver}
+  let aviso = '', avisoHasta = 0;   // mensaje breve sobre el video (celular)
 
   const dos = (n) => String(n).padStart(2, '0');
   const mmss = (s) => `${dos(Math.floor(s / 60))}:${dos(s % 60)}`;
@@ -153,8 +154,16 @@
     c.fillText(String(e.aspecto || 'KILLER PENDIENTE').toUpperCase(), 330, 84);
     c.fillStyle = '#e6efe9'; c.font = '600 34px system-ui, -apple-system, Roboto, sans-serif';
     lineas(c, e.final ? '¡Tiempo! Vuelve a KP' : e.nombre, 330, 140, 285, 42, 4);
-    c.fillStyle = '#5b6d65'; c.font = '500 18px system-ui, -apple-system, Roboto, sans-serif';
-    c.fillText(e.tipo === 'recompensa' ? 'recompensa' : 'killer pendiente', 330, 330);
+    const msg = e.aviso || (Date.now() < avisoHasta ? aviso : '');
+    if (msg) {
+      c.fillStyle = col; c.font = '700 22px system-ui, -apple-system, Roboto, sans-serif';
+      c.fillText(msg, 330, 330);
+    } else if (e.tipo === 'recompensa') {
+      c.fillStyle = '#5b6d65'; c.font = '500 18px system-ui, -apple-system, Roboto, sans-serif'; c.fillText('recompensa', 330, 330);
+    } else {
+      c.fillStyle = '#8fa39a'; c.font = '600 19px system-ui, -apple-system, Roboto, sans-serif';
+      c.fillText('⏭ listo     ⏮ me distraje', 330, 330);
+    }
   }
 
   async function abrirVideo() {
@@ -225,6 +234,12 @@
     });
   }
 
+  function mensaje(txt, ms = 2500) {
+    aviso = txt; avisoHasta = Date.now() + ms;
+    if (ultimo) pintar(ultimo);
+    if (modo === 'doc' && docWin && el.nom) { el.nom.textContent = txt; }
+  }
+
   function celebrar(html, ms = 2600) {
     if (modo !== 'doc' || !docWin) { cerrar(); return; }
     el.ok.innerHTML = html; docWin.document.body.classList.add('celebra');
@@ -232,7 +247,7 @@
   }
 
   window.Flotante = {
-    soporte, esMovil, preparar, abrir, cerrar, pintar, preguntar, celebrar,
+    soporte, esMovil, preparar, abrir, cerrar, pintar, preguntar, celebrar, mensaje,
     lienzo: () => canvas, abierto: () => !!modo, interactivo: () => modo === 'doc' && !!docWin,
     alAccion: (fn) => { alAccion = fn; }
   };
