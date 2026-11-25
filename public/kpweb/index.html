@@ -56,6 +56,11 @@
   <main id="principal">
     <!-- AHORA -->
     <div id="p-ahora" class="panel activa">
+      <button id="mega-franja" class="mega-franja oculto" aria-label="Mega Task: atacar al jefe">
+        <span class="mega-tit">👑 MEGA TASK · <span id="mega-nombre"></span></span>
+        <span id="mega-sub" class="mega-sub"></span>
+        <span class="mega-barra"><i id="mega-vida"></i></span>
+      </button>
       <p id="a-frase" class="frase"></p>
 
       <article id="a-carta" class="carta">
@@ -64,7 +69,7 @@
         <div id="a-datos" class="carta-datos"></div>
         <div class="presion"><div id="a-presion"></div></div>
         <div class="carta-botones">
-          <button id="a-desenvainar" class="primario grande">⚔ Desenvainar</button>
+          <button id="a-desenvainar" class="primario grande">⚔ Iniciar</button>
           <div class="fila">
             <button id="a-dos">Solo 2 minutos</button>
             <button id="a-otra">Otra</button>
@@ -151,6 +156,8 @@
         <button data-bit="gran">Gran Bitácora</button>
       </div>
       <p id="bit-desc" class="sub"></p>
+      <label class="bit-importar"><input id="bit-archivo" type="file" accept=".cegg,.json,application/json,text/plain" multiple hidden>
+        <span>⇪ Traer desde KP del PC</span><small>.cegg, history.json, cosmic_history.json o gran_history.json</small></label>
       <div id="bit-modo" class="filtros oculto">
         <button data-modo="general" class="activa">Nota</button><button data-modo="dream">Sueño</button>
       </div>
@@ -165,6 +172,19 @@
       <input id="bit-buscar" class="bit-buscar" placeholder="Buscar en la bitácora" aria-label="Buscar">
       <ul id="bit-lista" class="bit-lista"></ul>
     </div>
+    <!-- TALLER (herramientas) -->
+    <div id="p-taller" class="panel">
+      <p class="sub">Herramientas del ecosistema. Se abren en otra pestaña, así el timer sigue corriendo aquí.</p>
+      <div class="herramientas">
+        <a class="herr" href="../pikitipu2.html" target="_blank" rel="noopener">
+          <b>🌿 Pikitipu</b><span>Tu criatura. Usa su botón de ventana flotante para tenerla encima mientras trabajas y acariciarla.</span></a>
+        <a class="herr" href="../hermitano.html" target="_blank" rel="noopener">
+          <b>📜 El Hermitaño</b><span>Editor de libros por tomos y capítulos, versión web.</span></a>
+        <div class="herr pronto"><b>🏪 La Botica</b><span>Comprar con Mu y Pv canjeables objetos para Pikitipu y los universos. Hoy vive en KP del PC (kp_botica.py); viene a la web.</span></div>
+        <div class="herr pronto"><b>🏦 Banco Tagua Tagua</b><span>Los Mu y tus fondos simulados. Hoy es Python (bancotagua.py); viene a la web.</span></div>
+      </div>
+    </div>
+
     <!-- RED -->
     <div id="p-red" class="panel">
       <div class="pestanas" id="red-pestanas">
@@ -195,6 +215,7 @@
     <button data-panel="campo"><b>☷</b>Campo</button>
     <button data-panel="ser"><b>☀</b>Ser</button>
     <button data-panel="bitacora"><b>✎</b>Bitácora</button>
+    <button data-panel="taller"><b>⊞</b>Taller</button>
     <button data-panel="red"><b>❝</b>Chat<i id="n-red" class="aviso oculto"></i></button>
   </nav>
 </section>

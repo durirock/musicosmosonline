@@ -35,7 +35,7 @@
     aspectos: {}, tareas: {}, general: [], privEnv: {}, privRec: {}, correosRec: {}, correosEnv: {}, dhana: {},
     sala: 'General', bandeja: 'entrada', verCompletadas: false, desuscribir: [], filtro: 'todas',
     panel: 'ahora', red: 'chat', sugerida: 0,
-    bitP: {}, bitC: {}, bitG: {}, bit: 'personal', bitModo: 'general', bitBuscar: ''
+    bitP: {}, bitC: {}, bitG: {}, mega: { activa: null, historial: [] }, bit: 'personal', bitModo: 'general', bitBuscar: ''
   };
 
   // ══ preferencias locales ═════════════════════════════════════════
@@ -286,10 +286,20 @@
     });
   }
   let entradaExplicita = false;
+  // Gmail base: el de config.js o, si no está, el que este navegador aprendió en la primera entrada con correo completo
+  function correoBase() {
+    const c = (window.KP_CORREO_BASE || '').trim();
+    if (c.includes('@')) return c;
+    try { return localStorage.getItem('kp_correo_base') || ''; } catch (e) { return ''; }
+  }
+  function aprenderBase(correo) {
+    const m = /^([^@+]+)(?:\+[^@]*)?@(.+)$/.exec((correo || '').trim());
+    if (m) { try { localStorage.setItem('kp_correo_base', m[1] + '@' + m[2]); } catch (e) { } }
+  }
   // "Ralok" → gmail+ralok@gmail.com (misma regla de alias que crear_cuentas.py y kpmovil)
   function correoDe(txt) {
     txt = (txt || '').trim();
-    const base = (window.KP_CORREO_BASE || '').trim();
+    const base = correoBase();
     if (txt.includes('@') || !base.includes('@')) return txt;
     const alias = txt.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '') || 'aspecto';
     const [local, dominio] = base.split('@');
@@ -306,8 +316,12 @@
   }
   $('#f-entrada').onsubmit = async (ev) => {
     ev.preventDefault(); $('#e-error').textContent = ''; entradaExplicita = true;
-    try { await auth.signInWithEmailAndPassword(correoDe($('#e-correo').value), $('#e-clave').value); }
-    catch (e) { $('#e-error').textContent = (window.KP_CORREO_BASE || '').includes('@') || $('#e-correo').value.includes('@') ? 'Aspecto o contraseña incorrectos.' : 'Para entrar con el nombre del aspecto falta KP_CORREO_BASE en config.js. Mientras tanto usa el correo completo.'; }
+    try {
+      const correo = correoDe($('#e-correo').value);
+      await auth.signInWithEmailAndPassword(correo, $('#e-clave').value);
+      if (correo.includes('@')) aprenderBase(correo);
+    }
+    catch (e) { $('#e-error').textContent = correoBase().includes('@') || $('#e-correo').value.includes('@') ? 'Aspecto o contraseña incorrectos.' : 'La primera vez en este navegador entra con tu correo completo (por ejemplo tucorreo+ralok@gmail.com). Desde ahí basta con el nombre del aspecto.'; }
   };
   function salirDeApp() {
     st.desuscribir.forEach((f) => { try { f(); } catch (e) { } }); st.desuscribir = [];
@@ -335,7 +349,12 @@
     oir(db.collection('correos').where('recipient', '==', yo), (s) => { st.correosRec = mapa(s); pintarCorreos(); });
     oir(db.collection('correos').where('sender', '==', yo), (s) => { st.correosEnv = mapa(s); pintarCorreos(); });
     oir(db.collection('bitacora').where('username', '==', yo), (s) => { st.bitP = mapa(s); pintarBitacora(); });
-    oir(db.collection('bitacora_cosmica').where('username', '==', yo), (s) => { st.bitC = mapa(s); pintarBitacora(); });
+    oir(db.collection('bitacora_cosmica').orderBy('date').limitToLast(500), (s) => { st.bitC = mapa(s); pintarBitacora(); });
+    oir(refMega(), (d) => {
+      const v = d.exists ? d.data() : null;
+      st.mega = { activa: (v && v.activa) || null, historial: (v && v.historial) || [] };
+      pintarMega(); if (timer) pintarTimer();
+    });
     oir(db.collection('gran_bitacora').orderBy('date').limitToLast(500), (s) => { st.bitG = mapa(s); pintarBitacora(); });
     oir(db.collection('dhana').where('aspecto', '==', yo), (s) => { st.dhana = mapa(s); pintarZazen(); pintarCabecera(); pintarSer(); guardarHuevoLuego(); });
     irA(st.panel || 'ahora');
@@ -500,6 +519,7 @@
         ${t.completed || premio ? '' : '<button id="h-dos">Solo 2 minutos</button>'}
         ${t.large && !t.completed ? '<button id="h-sub">Subtareas</button>' : ''}
         ${t.completed || premio ? '' : '<button id="h-vida">🌿 Lo hice en mi vida</button>'}
+        ${t.completed || premio || t.weekly_goal ? '' : '<button id="h-mega">👑 Convertir en Mega Task</button>'}
         ${t.completed ? '' : '<button id="h-editar">Editar</button>'}
         <button id="h-borrar" class="peligro">Eliminar</button>
       </div>`, (h) => {
@@ -510,6 +530,7 @@
       on('#h-sub', () => hojaSubtareas(t.id));
       on('#h-vida', () => { cerrarHoja(); cerrarEnVida(t.id, null); });
       on('#h-editar', () => formTarea(t));
+      on('#h-mega', () => { cerrarHoja(); declararMega(t); });
       on('#h-borrar', async () => {
         if (!(await opcionesHoja('Eliminar', `¿Eliminar «${t.name}»?`, [{ t: 'Eliminar', v: 1 }, { t: 'Cancelar', v: 0 }]))) return;
         await refTarea(t.id).set({ _borrada: true, _mod: ahoraMs() });
@@ -577,7 +598,7 @@
         else if (ev.target.dataset.i != null) {
           subs[+ev.target.dataset.i].completed = ev.target.checked; guardar(subs);
           if (ev.target.checked) { tic(); }
-          if (subs.length && subs.every((s) => s.completed)) { avisar('¡Todas las subtareas han sido completadas!'); campanas(); }
+          if (subs.length && subs.every((s) => s.completed)) avisar('¡Todas las subtareas han sido completadas!');
         }
       };
     });
@@ -686,7 +707,6 @@
   function abrirTimer(tm) {
     timer = tm; guardarTimer();
     pedirPermisos();
-    campanas();
     mostrarFoco(); arrancarReloj();
     if (pref.flotar && Flotante.soporte()) abrirFlotante(true);
   }
@@ -706,6 +726,11 @@
       navigator.mediaSession.metadata = new MediaMetadata({ title: timer ? timer.nombre : 'Killer Pendiente', artist: yo || 'Killer Pendiente', album: 'Killer Pendiente' });
       navigator.mediaSession.setActionHandler('enterpictureinpicture', () => abrirFlotante(false));
     } catch (e) { }
+    // En Android la ventana flotante es un video: sus únicos botones son los de multimedia.
+    // ⏭ (siguiente) = listo · ⏮ (anterior) = me distraje
+    try { navigator.mediaSession.setActionHandler('nexttrack', () => pulsarListo()); } catch (e) { }
+    try { navigator.mediaSession.setActionHandler('previoustrack', () => anotarDistraccion('rapido')); } catch (e) { }
+    try { navigator.mediaSession.setActionHandler('play', () => { }); navigator.mediaSession.setActionHandler('pause', () => { }); } catch (e) { }
   }
 
   function restaSeg() { return timer ? Math.max(0, Math.ceil((timer.fin - ahoraMs()) / 1000)) : 0; }
@@ -785,10 +810,18 @@
     const tm = timer; timer = null; guardarTimer();
     ocultarTodoTimer();
     if (!mantenerFlotante) Flotante.cerrar();
-    try { navigator.mediaSession.setActionHandler('enterpictureinpicture', null); } catch (e) { }
+    ['enterpictureinpicture', 'nexttrack', 'previoustrack', 'play', 'pause'].forEach((a) => { try { navigator.mediaSession.setActionHandler(a, null); } catch (e) { } });
     return tm;
   }
 
+  async function notificarTexto(titulo, cuerpo) {
+    try {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) reg.showNotification(titulo, { body: cuerpo, tag: 'kp-timer', requireInteraction: true, icon: 'icono-192.png', badge: 'icono-192.png' });
+      else new Notification(titulo, { body: cuerpo, tag: 'kp-timer' });
+    } catch (e) { }
+  }
   async function notificarFin() {
     if (document.visibilityState === 'visible' && !Flotante.abierto()) return;
     const titulo = '¡Tiempo!', cuerpo = (timer && timer.nombre) ? `${timer.nombre} · vuelve a Killer Pendiente` : 'Vuelve a Killer Pendiente';
@@ -818,7 +851,7 @@
   }
 
   async function finUmbral(tm) {
-    const t = st.tareas[tm.id];
+    const t = tareaPorId(tm.id);
     const T = Math.max(1, (t && t.time) || 25) * 60, ses = sesiones[tm.id];
     const usado = ses ? Math.round((ahoraMs() - ses.inicio) / 1000) : SEG_CALENTAMIENTO;
     const queda = Math.max(60, T - usado);
@@ -827,7 +860,7 @@
     if (!timer || timer.id !== tm.id) return;
     if (v === 'seguir') {
       timer = { id: tm.id, total: queda, fin: ahoraMs() + queda * 1000, tipo: 'tarea', nombre: tm.nombre };
-      guardarTimer(); campanas(); mostrarFoco(); arrancarReloj();
+      guardarTimer(); mostrarFoco(); arrancarReloj();
     } else if (v === 'listo') {
       cerrarTimer(true); cerrarTareaDesdeListo(tm.id, T, usado);
     } else { cerrarTimer(); avisar('Queda en el campo. Sin castigo: vuelve cuando quieras.'); }
@@ -838,7 +871,22 @@
     if (!timer) return;
     const tm = timer;
     if (tm.tipo === 'recompensa') { cerrarTimer(); avisar('Recompensa disfrutada 🎁'); return; }
-    const t = st.tareas[tm.id];
+    const t = tareaPorId(tm.id);
+    if (document.visibilityState !== 'visible' && !Flotante.interactivo()) {
+      const sosp = listoSospechoso(tm.id);      // se congela el momento del ⏭, no el de volver a la app
+      let fr;
+      if (tm.tipo === 'dos') {
+        const T = Math.max(1, (t && t.time) || 25) * 60, ses = sesiones[tm.id];
+        const usado = ses ? Math.round((ahoraMs() - ses.inicio) / 1000) : SEG_CALENTAMIENTO - restaSeg();
+        fr = Math.max(0, (T - usado) / T);
+      } else fr = tm.total ? restaSeg() / tm.total : 0;
+      const pregunta = sosp != null ? () => preguntarDonde(tm.id, sosp) : () => preguntarCompletada(tm.id, fr);
+      cerrarTimer(true);
+      Flotante.pintar(Object.assign(estadoFlotante(), { nombre: tm.nombre, resta: 0, total: 1, aviso: '✓ Listo · abre KP' }));
+      notificarTexto('✓ Listo', `Abre Killer Pendiente para cerrar «${tm.nombre}»`);
+      pendienteAlVolver = pregunta;
+      return;
+    }
     if (tm.tipo === 'dos') {              // durante el umbral: la fracción se mide contra el tiempo real de la tarea
       const T = Math.max(1, (t && t.time) || 25) * 60, ses = sesiones[tm.id];
       const usado = ses ? Math.round((ahoraMs() - ses.inicio) / 1000) : SEG_CALENTAMIENTO - restaSeg();
@@ -859,11 +907,16 @@
     preguntarCompletada(tm.id, fraccion);
   }
   function listoSospechoso(id) {
-    const ses = sesiones[id], t = st.tareas[id];
+    const ses = sesiones[id], t = tareaPorId(id);
     if (!ses || !t) return null;
     const trans = (ahoraMs() - ses.inicio) / 1000;
     const total = (parseFloat(t.time) || 0) * 60;
     return trans < Math.max(CIERRE_DETECTADO_SEG, CIERRE_DETECTADO_FRACCION * total) ? trans : null;
+  }
+  async function preguntarDonde(id, sosp) {
+    const r = await preguntaFlex('¿Dónde lo hiciste?', `Apretaste listo a los ${Math.floor(sosp)} s. ¿Dónde hiciste este pendiente?`,
+      [{ t: '🌿 En mi vida, fuera de KP', v: 'vida' }, { t: '⚡ Aquí, y fue rapidísimo', v: 'aqui', pri: 1 }]);
+    if (r === 'vida') cerrarEnVida(id, sosp); else if (r === 'aqui') preguntarCompletada(id, 0); else Flotante.cerrar();
   }
   async function cerrarTareaDesdeListo(id, T, usado) {
     const sosp = listoSospechoso(id);
@@ -880,14 +933,21 @@
   function anotarDistraccion(desdeFlotante) {
     if (!timer || timer.tipo === 'recompensa') return;
     const id = timer.id;
+    const rapido = desdeFlotante === 'rapido' || (document.visibilityState !== 'visible' && !Flotante.interactivo());
     const registrar = async (txt) => {
-      const t = st.tareas[id];
+      const t = tareaPorId(id);
       if (sesiones[id]) { sesiones[id].distracciones = (sesiones[id].distracciones || 0) + 1; guardarSesiones(); }
       if (t) {
         const lista = (t.distractions || []).concat([{ text: txt, timestamp: fechaISO(), task_name: t.name }]);
-        await refTarea(id).set({ distractions: lista, _mod: ahoraMs() }, { merge: true });
+        await guardarCampos(id, { distractions: lista });
       }
     };
+    if (rapido) {                         // desde el ⏮ del PiP del celular: se anota sin texto y sigue el timer
+      registrar('(anotada desde la ventana flotante)');
+      Flotante.mensaje('Anotado · vuelve a la hoja', 2500);
+      if (navigator.vibrate) navigator.vibrate(40);
+      return;
+    }
     if (desdeFlotante && Flotante.interactivo()) {
       registrar('(anotada desde la ventana flotante)');
       Flotante.preguntar('Anotado', azar(ALIENTO), [{ t: 'Volver al combate', v: 1, pri: 1 }]);
@@ -902,8 +962,8 @@
 
   // ── ¿Completaste la tarea? (igual que KP) ──
   async function preguntarCompletada(id, fraccion) {
-    for (let i = 0; i < 20 && !st.tareas[id]; i++) await new Promise((r) => setTimeout(r, 250));
-    const t = st.tareas[id]; if (!t) { Flotante.cerrar(); return; }
+    for (let i = 0; i < 20 && !tareaPorId(id); i++) await new Promise((r) => setTimeout(r, 250));
+    const t = tareaPorId(id); if (!t) { Flotante.cerrar(); return; }
     const t0 = ahoraMs();
     const si = await preguntaFlex('Tarea Completa', '¿Completaste la tarea?', [{ t: 'Sí', v: true, pri: 1 }, { t: 'No', v: false }]);
     const segPregunta = Math.round((ahoraMs() - t0) / 100) / 10;
@@ -911,20 +971,20 @@
     if (si) { completar(t, fraccion, 'timer'); return; }
     const delays = (t.delays || 0) + 1;
     const dt = (t.delay_times || []).slice();
-    await refTarea(id).set({ delays, delay_times: dt, _mod: ahoraMs() }, { merge: true });
+    await guardarCampos(id, { delays, delay_times: dt });
     const extra = await pedirMinutos('Tiempo Adicional', '¿Cuánto tiempo adicional necesitas? (en minutos)');
     const segTotal = Math.round((ahoraMs() - t0) / 100) / 10;
     const reg = (t.tiempo_sin_accion_seg || []).concat([{ pregunta_seg: segPregunta, total_seg: segTotal, respondio_tiempo: extra != null, fecha: new Date().toISOString().slice(0, 19) }]);
-    const cambios = { tiempo_sin_accion_seg: reg, _mod: ahoraMs() };
+    const cambios = { tiempo_sin_accion_seg: reg };
     if (extra) cambios.delay_times = dt.concat([extra]);
-    await refTarea(id).set(cambios, { merge: true });
+    await guardarCampos(id, cambios);
     if (extra) { abrirTimer({ id, total: extra * 60, fin: ahoraMs() + extra * 60000, tipo: 'tarea', nombre: t.name }); }
     else { Flotante.cerrar(); avisar('Queda en el campo. Vuelve cuando quieras.'); }
   }
 
   // ── cierre "en mi vida" ──
   function cerrarEnVida(id, detectadoSeg) {
-    const t = st.tareas[id]; if (!t || t.completed) { Flotante.cerrar(); return; }
+    const t = tareaPorId(id); if (!t || t.completed) { Flotante.cerrar(); return; }
     const grupos = [['¿Cuándo?', 'cuando', ['recién', 'hoy más temprano', 'ayer o antes'], 0],
       ['¿Cuánto te tomó?', 'duracion', ['menos de lo estimado', 'lo estimado', 'más'], 1],
       ['¿Te distrajiste?', 'distracciones', ['0', '1–2', 'varias'], 0]];
@@ -958,6 +1018,7 @@
 
   // ── completar (reglas de kp828.complete_task) ──
   async function completar(t, fraccion, modo, datosVida) {
+    if (t.mega) { vencerMega(modo, datosVida); return; }            // v8.27: es el jefe final
     let xp = t.xp || 0, m = 1;
     if (modo !== 'vida') { m = multiplicadorCalibracion(t, fraccion); if (m !== 1) xp = Math.round(xp * m); }
     const antes = nivel(miAspecto().pv || 0).n;
@@ -987,7 +1048,6 @@
 
   function celebrar(t, xp, m, antes) {
     const extra = m > 1 ? `⚡ Bono x${+m.toFixed(2)} por terminar antes` : m < 1 ? `⏳ x${+m.toFixed(2)} por tiempo extra pedido` : '';
-    campanas(); detonar(t.weekly_goal ? 180 : 110);
     Flotante.celebrar(`<b>+${xp} Pv</b>¡Ese es mi toro! 🐂`);
     const york = Math.random() < 0.12;
     st.sugerida = 0;
@@ -1009,7 +1069,7 @@
     });
     setTimeout(() => {
       const despues = nivel(miAspecto().pv || 0).n;
-      if (despues > antes) { avisar(`¡Felicitaciones! ¡Has subido al nivel ${despues}!`, 4500); detonar(200); campanas(); }
+      if (despues > antes) avisar(`¡Felicitaciones! ¡Has subido al nivel ${despues}!`, 4500);
     }, 1400);
   }
 
@@ -1133,7 +1193,7 @@
   // ══ bitácoras (mismo formato que KP: {username, entry, date "YYYY-mm-dd HH:MM"}; Gran Bitácora + type general|dream) ══
   const BIT = {
     personal: { col: 'bitacora', st: 'bitP', desc: 'Tu bitácora. Solo la ve tu aspecto.' },
-    cosmica: { col: 'bitacora_cosmica', st: 'bitC', desc: 'Bitácora cósmica: lo que se mueve más allá del día. Solo la ve tu aspecto.' },
+    cosmica: { col: 'bitacora_cosmica', st: 'bitC', desc: 'Bitácora cósmica: compartida entre todos los aspectos. Cada uno firma la suya.' },
     gran: { col: 'gran_bitacora', st: 'bitG', desc: 'Gran Bitácora Universal: el registro central que comparten todos los aspectos. Notas y sueños.' }
   };
   function fechaBit(d = new Date()) { return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())} ${dos(d.getHours())}:${dos(d.getMinutes())}`; }
@@ -1151,11 +1211,11 @@
       .filter((e) => !q || String(e.entry || '').toLowerCase().includes(q))
       .sort((a, c) => String(c.date).localeCompare(String(a.date)));
     $('#bit-lista').innerHTML = lista.map((e) => {
-      const mio = st.bit !== 'gran' || e.autor === yo;
-      const autor = st.bit === 'gran' ? (e.autor || e.username || 'Yo') : '';
+      const mio = st.bit === 'personal' || (st.bit === 'cosmica' ? e.username === yo : e.autor === yo);
+      const autor = st.bit === 'gran' ? (e.autor || e.username || 'Yo') : st.bit === 'cosmica' ? (e.username || '') : '';
       const largo = String(e.entry || '').length > 260;
       return `<li data-id="${esc(e._id)}" class="${e.type === 'dream' ? 'sueno' : ''}">
-        <div class="bit-cab"><span>${esc(e.date || '')}</span>${autor ? `<b style="color:${esc(colorDe(e.autor || ''))}">${esc(autor)}</b>` : ''}</div>
+        <div class="bit-cab"><span>${esc(e.date || '')}</span>${autor ? `<b style="color:${esc(colorDe(e.autor || e.username || ''))}">${esc(autor)}</b>` : ''}</div>
         <div class="bit-txt ${largo ? 'corto' : ''}">${esc(e.entry)}</div>
         ${mio ? '<button class="bit-borrar" data-borrar="1" aria-label="Eliminar entrada">×</button>' : ''}</li>`;
     }).join('') || `<li class="sub">${q ? 'Nada coincide con la búsqueda.' : 'Todavía no hay entradas.'}</li>`;
@@ -1186,6 +1246,70 @@
     $('#bit-texto').value = ''; $('#bit-titulo').value = ''; $('#bit-claridad').value = 5; $('#bit-clar-n').textContent = '5';
     tic(); avisar(doc.type === 'dream' ? 'Sueño registrado en la Gran Bitácora' : 'Entrada guardada');
   };
+
+  // ── traer bitácoras desde KP del PC (.cegg o los json de KP). Ids fijos por entrada: importar dos veces no duplica ──
+  function hashTxt(str) {                 // cyrb53
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0');
+  }
+  function leerJSONdeKP(txt) {
+    const a = txt.indexOf('<<<DATA-START>>>'), b = txt.indexOf('<<<DATA-END>>>');
+    return JSON.parse(a >= 0 ? txt.slice(a + 16, b > a ? b : undefined) : txt);
+  }
+  function entradasDeArchivo(nombre, datos) {
+    const out = { personal: [], cosmica: [], gran: [] };
+    const n = nombre.toLowerCase();
+    if (Array.isArray(datos)) {
+      if (n.includes('cosmic')) out.cosmica = datos;
+      else if (n.includes('gran') || datos.some((e) => e && e.type)) out.gran = datos;
+      else out.personal = datos;
+    } else if (datos && typeof datos === 'object') {
+      const pg = datos.perfil_global || {};
+      out.gran = pg.gran_bitacora_universal || datos.gran_bitacora_universal || [];
+      const pu = datos.perfiles_usuarios || {};
+      const mio = pu[yo] || {};
+      out.personal = ((mio.datos_cualitativos || {}).bitacora_personal || []).map((e) => Object.assign({ username: yo }, e));
+      if (Array.isArray(datos.bitacora_cosmica)) out.cosmica = datos.bitacora_cosmica;
+    }
+    out.personal = out.personal.filter((e) => e && e.entry && (e.username || yo) === yo);   // la personal es solo tuya
+    out.cosmica = out.cosmica.filter((e) => e && e.entry);
+    out.gran = out.gran.filter((e) => e && e.entry);
+    return out;
+  }
+  $('#bit-archivo').onchange = async (ev) => {
+    const archivos = [...ev.target.files]; ev.target.value = '';
+    if (!archivos.length) return;
+    const todo = { personal: [], cosmica: [], gran: [] };
+    for (const f of archivos) {
+      try {
+        const e = entradasDeArchivo(f.name, leerJSONdeKP(await f.text()));
+        Object.keys(todo).forEach((k) => todo[k].push(...e[k]));
+      } catch (e) { avisar(`No pude leer ${f.name}: ${e.message}`, 5000); }
+    }
+    const docs = [];
+    todo.personal.forEach((e) => docs.push(['bitacora', 'bitP', { username: yo, entry: String(e.entry), date: e.date || '' }]));
+    todo.cosmica.forEach((e) => docs.push(['bitacora_cosmica', 'bitC', { username: e.username || yo, entry: String(e.entry), date: e.date || '' }]));
+    todo.gran.forEach((e) => docs.push(['gran_bitacora', 'bitG', { username: e.username || 'Yo', entry: String(e.entry), date: e.date || '', type: e.type || 'general' }]));
+    let nuevas = 0, ya = 0, fallas = 0;
+    avisar(`Trayendo ${docs.length} entradas…`, 2500);
+    for (let i = 0; i < docs.length; i += 400) {
+      const lote = db.batch(); let enLote = 0;
+      docs.slice(i, i + 400).forEach(([col, clave, d]) => {
+        const id = 'kp-' + hashTxt(col + '|' + d.username + '|' + d.date + '|' + d.entry);
+        if (st[clave][id]) { ya++; return; }
+        lote.set(db.collection(col).doc(id), Object.assign(d, { importado: true, origen: 'kp-pc', _mod: ahoraMs() }));
+        enLote++;
+      });
+      if (!enLote) continue;
+      try { await lote.commit(); nuevas += enLote; } catch (e) { fallas += enLote; console.warn('[KP] importar', e.message); }
+    }
+    if (fallas && !nuevas) avisar('Firebase no aceptó las entradas: publica las reglas nuevas de firestore.rules y vuelve a intentar.', 7000);
+    else avisar(`Bitácoras: ${nuevas} entradas nuevas${ya ? ` · ${ya} ya estaban` : ''}${fallas ? ` · ${fallas} con error` : ''}`, 5000);
+    tic();
+  };
   $('#bit-lista').onclick = async (ev) => {
     const li = ev.target.closest('li[data-id]'); if (!li) return;
     if (ev.target.dataset.borrar) {
@@ -1195,6 +1319,194 @@
     }
     const t = li.querySelector('.bit-txt.corto'); if (t) t.classList.remove('corto');
   };
+
+
+  // ══ MEGA TASK — el jefe final (kp828 v8.27): una sola, visible para todos los aspectos ══
+  const MEGA_MULTIPLICADORES = [[2, 50], [3, 30], [5, 15], [7, 5]];
+  const MEGA_HP_MAX = 100, MEGA_GOLPE_FASE = 15, MEGA_HP_MIN_VIVO = 10, MEGA_FRACCION_FASE = 0.2;
+  const refMega = () => db.collection('mega').doc('estado');
+  function tareaPorId(id) {
+    const m = st.mega.activa;
+    return st.tareas[id] || (m && m.id === id ? Object.assign({}, m) : null);
+  }
+  async function guardarCampos(id, cambios) {
+    const m = st.mega.activa;
+    if (m && m.id === id) {
+      const nuevo = Object.assign({}, m, cambios); st.mega.activa = nuevo;
+      await refMega().set({ activa: nuevo, _mod: ahoraMs() }, { merge: true });
+    } else await refTarea(id).set(Object.assign({}, cambios, { _mod: ahoraMs() }), { merge: true });
+  }
+  function tirarMultiplicador() {
+    const total = MEGA_MULTIPLICADORES.reduce((a, [, p]) => a + p, 0);
+    let r = Math.random() * total;
+    for (const [m, p] of MEGA_MULTIPLICADORES) { if ((r -= p) < 0) return m; }
+    return 2;
+  }
+  const aspectosReales = () => Object.keys(st.aspectos).filter((u) => u !== 'Dios');
+  async function repartirATodos(cant) {                 // los Pv del jefe van a todos los aspectos por igual
+    if (cant <= 0) return;
+    const lote = db.batch();
+    aspectosReales().forEach((u) => {
+      const cambios = { pv: FV.increment(cant), _mod: ahoraMs() };
+      if (u === yo) cambios.pv_canjeables = FV.increment(cant);
+      lote.set(db.collection('aspectos').doc(u), cambios, { merge: true });
+    });
+    await lote.commit();
+  }
+  const faseActual = (m) => { const f = (m.fases || []).find((x) => !x.hecha); return f ? f.nombre : null; };
+  function pintarMega() {
+    const m = st.mega.activa, fr = $('#mega-franja');
+    if (!fr) return;
+    fr.classList.toggle('oculto', !m);
+    if (!m) return;
+    const hp = +m.hp || 0, max = +m.hp_max || MEGA_HP_MAX;
+    $('#mega-nombre').textContent = m.name || '';
+    $('#mega-sub').textContent = `Próxima fase: ${faseActual(m) || 'agrega una fase'}  ·  ${diasDesde(m.mega_desde)} d como jefe  ·  toca para atacar`;
+    $('#mega-vida').style.width = Math.max(2, 100 * hp / max) + '%';
+    if (!$('#hoja').classList.contains('oculto') && $('#hoja').dataset.mega) hojaMega(true);
+  }
+  $('#mega-franja').onclick = () => hojaMega();
+
+  async function pedirTexto(titulo, texto, placeholder, tipo = 'text') {
+    return new Promise((res) => {
+      let listo = false;
+      abrirHoja(`<h2>${esc(titulo)}</h2><p class="sub">${esc(texto)}</p><input id="h-txt" type="${tipo}" ${tipo === 'number' ? 'min="1" inputmode="numeric"' : ''} placeholder="${esc(placeholder || '')}">
+        <div class="botones"><button class="primario" id="h-ok">Aceptar</button><button id="h-no">Cancelar</button></div>`, (h) => {
+        setTimeout(() => h.querySelector('#h-txt').focus(), 50);
+        const fin = (v) => { listo = true; cerrarHoja(); res(v); };
+        h.querySelector('#h-ok').onclick = () => fin(h.querySelector('#h-txt').value.trim());
+        h.querySelector('#h-txt').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); fin(h.querySelector('#h-txt').value.trim()); } };
+        h.querySelector('#h-no').onclick = () => fin(null);
+      }, () => { if (!listo) res(null); });
+    });
+  }
+
+  async function declararMega(t) {
+    if (t.completed) return;
+    if (t.weekly_goal) { avisar('Un Objetivo Semanal ya es de todos los aspectos. Quítale la marca semanal primero.', 4500); return; }
+    if (timer && timer.id === t.id) { avisar('Termina primero el timer de este pendiente.'); return; }
+    if (st.mega.activa) {
+      const actual = st.mega.activa.name || '';
+      const ok = await opcionesHoja('Solo puede haber un jefe final', `La Mega Task actual es «${actual}». ¿Destronarla? Vuelve a la lista de su aspecto con sus fases.`,
+        [{ t: 'Destronar y coronar la nueva', v: 1 }, { t: 'Cancelar', v: 0, pri: 1 }]);
+      if (!ok || !(await destronarMega(true))) return;
+    }
+    let xp = t.xp;
+    if (!(Number.isInteger(xp) && xp > 0)) {
+      const v = await pedirTexto('Mega Task', '¿Cuántos Pv vale este jefe? Al vencerlo se multiplican x2, x3, x5 o x7 para todos.', 'Pv', 'number');
+      xp = parseInt(v, 10); if (!(xp > 0)) return;
+    }
+    const fase1 = await pedirTexto('Primera fase', 'El jefe se vence por fases. ¿Cuál es el primer paso mínimo (unos 5 minutos)? Puedes dejarlo vacío y agregarlas después.', 'Ej: escribir 3 líneas pidiendo el informe');
+    const mega = Object.assign({}, t, {
+      xp, time: parseInt(t.time, 10) || 25, mega: true, mega_dueno: yo, mega_desde: fechaKP(),
+      hp: MEGA_HP_MAX, hp_max: MEGA_HP_MAX, completed: false,
+      fases: fase1 ? [{ nombre: fase1, hecha: false }] : []
+    });
+    delete mega._borrada; delete mega._mod;
+    const lote = db.batch();
+    lote.set(refMega(), { activa: mega, historial: st.mega.historial || [], _mod: ahoraMs() });
+    lote.set(refTarea(t.id), { _borrada: true, _mod: ahoraMs() });
+    await lote.commit();
+    st.mega.activa = mega;
+    avisar('👑 Nueva Mega Task: ' + (t.name || ''), 3500);
+    irA('ahora');
+  }
+
+  async function destronarMega(silencioso) {
+    const m = st.mega.activa; if (!m) return true;
+    if (timer && timer.id === m.id) { avisar('Hay un timer corriendo para el jefe: termínalo primero.'); return false; }
+    const dueno = m.mega_dueno || yo;
+    if (dueno !== yo) { avisar(`Solo ${dueno} puede destronarla (vuelve a su lista).`, 4000); return false; }
+    if (!silencioso && !(await opcionesHoja('Destronar', '¿Devolver la Mega Task a una tarea normal? Sus fases quedan guardadas.', [{ t: 'Destronar', v: 1 }, { t: 'Cancelar', v: 0, pri: 1 }]))) return false;
+    const normal = Object.assign({}, m); ['mega', 'hp', 'hp_max'].forEach((k) => delete normal[k]);
+    normal.fases_mega = normal.fases || []; delete normal.fases; normal.completed = false; normal._mod = ahoraMs();
+    const lote = db.batch();
+    lote.set(refTarea(m.id), normal);
+    lote.set(refMega(), { activa: null, _mod: ahoraMs() }, { merge: true });
+    await lote.commit();
+    st.mega.activa = null;
+    if (!silencioso) avisar('La Mega Task volvió a tu lista');
+    return true;
+  }
+
+  async function megaAgregarFase(nombre) {
+    nombre = (nombre || '').trim(); const m = st.mega.activa;
+    if (!nombre || !m) return;
+    await guardarCampos(m.id, { fases: (m.fases || []).concat([{ nombre, hecha: false }]) });
+    tic();
+  }
+
+  async function megaFaseCumplida(idx) {
+    const m = st.mega.activa; if (!m) return;
+    const fases = (m.fases || []).map((f) => Object.assign({}, f));
+    if (!(idx >= 0 && idx < fases.length) || fases[idx].hecha) return;
+    Object.assign(fases[idx], { hecha: true, fecha: fechaKP(), aspecto: yo });
+    const hp = Math.max(MEGA_HP_MIN_VIVO, (+m.hp || MEGA_HP_MAX) - MEGA_GOLPE_FASE);
+    const golpe = Math.max(1, Math.round((+m.xp || 0) * MEGA_FRACCION_FASE));
+    await guardarCampos(m.id, { fases, hp });
+    await repartirATodos(golpe);
+    avisar(`⚔ Golpe al jefe · vida ${hp}/${m.hp_max || MEGA_HP_MAX} · +${golpe} Pv para cada aspecto`, 4500);
+  }
+
+  async function vencerMega(modo, datos) {
+    const m = st.mega.activa; if (!m) return;
+    const ses = sesiones[m.id]; delete sesiones[m.id]; guardarSesiones();
+    const base = +m.xp || 0, mult = tirarMultiplicador(), premio = base * mult;
+    const vencida = Object.assign({}, m, { completed: true, hp: 0, multiplicador: mult, modo_cierre: modo || 'timer',
+      date_completed: fechaKP(), vencido_por: yo });
+    if (ses) vencida.tiempo_medido_min = Math.round((ahoraMs() - ses.inicio) / 6000) / 10;
+    if (datos) vencida.cierre_vida = datos;
+    const historial = (st.mega.historial || []).concat([vencida]).slice(-50);
+    try {
+      await refMega().set({ activa: null, historial, _mod: ahoraMs() });
+      await repartirATodos(premio);
+    } catch (e) { avisar('No se pudo guardar: ' + e.message, 5000); return; }
+    st.mega.activa = null;
+    const n = aspectosReales().length;
+    Flotante.celebrar(`<b>x${mult}</b>👑 ¡Jefe vencido!`, 3200);
+    abrirHoja(`<div class="detona mega-victoria">
+      <p class="toro">👑 ¡JEFE FINAL VENCIDO!</p>
+      <p class="frase-final">«${esc(m.name)}»</p>
+      <p>La suerte tiró</p><div class="mas-pv mult">x${mult}</div>
+      <div class="mas-pv" id="cuenta">+0</div>
+      <p>para cada uno de los ${n} aspectos</p>
+      ${Math.random() < 0.5 ? `<div class="york">▸ TRANSMISIÓN · 2044 · YORK<br>${esc(azar(YORK))}</div>` : ''}
+      </div><div class="botones"><button class="primario" id="c-ok">Volver al campo</button></div>`, (h) => {
+      const el = h.querySelector('#cuenta'), t0 = performance.now(), dur = reducido ? 1 : 1400;
+      const paso = (ts) => { const k = Math.min(1, (ts - t0) / dur); el.textContent = '+' + Math.round(premio * (1 - Math.pow(1 - k, 3))).toLocaleString('es-CL') + ' Pv'; if (k < 1) requestAnimationFrame(paso); };
+      requestAnimationFrame(paso);
+      h.querySelector('#c-ok').onclick = () => { cerrarHoja(); irA('ahora'); };
+    });
+  }
+
+  function hojaMega(refrescar) {
+    const m = st.mega.activa;
+    if (!m) { if (refrescar) cerrarHoja(); return; }
+    const fases = m.fases || [];
+    const html = `<div class="mega-hoja"><h2>👑 ${esc(m.name)}</h2>
+      <p class="sub">Vida ${m.hp}/${m.hp_max || MEGA_HP_MAX} · ${m.xp} Pv base · al vencerlo x2, x3, x5 o x7 para todos · ${diasDesde(m.mega_desde)} d como jefe${m.mega_dueno ? ' · de ' + esc(m.mega_dueno) : ''}</p>
+      <div class="mega-barra"><i style="width:${Math.max(2, 100 * (+m.hp || 0) / (m.hp_max || MEGA_HP_MAX))}%"></i></div>
+      <label>Fases (cada una le quita vida al jefe y da Pv a todos)</label>
+      <ul class="mega-fases">${fases.map((f, i) => `<li class="${f.hecha ? 'hecha' : ''}"><span>${esc(f.nombre)}${f.hecha && f.aspecto ? ` <small>· ${esc(f.aspecto)}</small>` : ''}</span>${f.hecha ? '<b>✓</b>' : `<button data-fase="${i}">⚔ Cumplida</button>`}</li>`).join('') || '<li class="sub">Sin fases todavía. Agrega un primer paso mínimo.</li>'}</ul>
+      <div class="fila"><input id="mf-nueva" placeholder="Nueva fase (unos 5 minutos)"><button id="mf-agregar" style="flex:0 0 auto">➕ Fase</button></div>
+      <div class="botones">
+        <button class="primario" id="m-timer">⏱ Atacar con timer</button>
+        <button id="m-vida">🌿 Lo vencí en mi vida</button>
+        <button id="m-destronar">Destronar</button>
+      </div></div>`;
+    const montar = (h) => {
+      h.dataset.mega = '1';
+      h.querySelectorAll('[data-fase]').forEach((b) => b.onclick = () => megaFaseCumplida(+b.dataset.fase));
+      const agregar = () => { const v = h.querySelector('#mf-nueva').value; megaAgregarFase(v); };
+      h.querySelector('#mf-agregar').onclick = agregar;
+      h.querySelector('#mf-nueva').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } };
+      h.querySelector('#m-timer').onclick = () => { cerrarHoja(); iniciarTarea(tareaPorId(m.id), 'tarea'); };
+      h.querySelector('#m-vida').onclick = () => { cerrarHoja(); cerrarEnVida(m.id, null); };
+      h.querySelector('#m-destronar').onclick = async () => { cerrarHoja(); await destronarMega(false); };
+    };
+    if (refrescar) { $('#hoja').innerHTML = html; montar($('#hoja')); }
+    else abrirHoja(html, montar, () => { delete $('#hoja').dataset.mega; });
+  }
 
   // ══ zazen ════════════════════════════════════════════════════════
   let zazen = null;
