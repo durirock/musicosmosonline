@@ -826,9 +826,12 @@
             recognition.lang = 'es-ES';
 
             recognition.onresult = (event) => {
-                const transcript = event.results[event.resultIndex][0].transcript;
-                inyectarTexto(transcript);
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    if (event.results[i].isFinal !== false) recibirDictado(event.results[i][0].transcript);
+                }
             };
+            // si escribes a mano, la frase dictada queda cerrada (no se vuelve a reemplazar)
+            document.getElementById('editor').addEventListener('keydown', () => { dictadoNodo = null; });
 
             recognition.onerror = (e) => {
                 console.error("Fallo Reconocimiento: ", e.error);
@@ -838,6 +841,44 @@
                 stopVoice();
             };
             recognition.onend = () => { if (isRecording) recognition.start(); };
+        }
+
+        // Chrome en Android (dictado continuo) entrega la misma frase una y otra vez, cada vez más larga
+        // ("no me imagino" → "no me imagino lo" → "no me imagino lo que"…) y a veces repite frases enteras.
+        // En vez de pegar cada entrega, la frase en curso se reemplaza mientras siga creciendo.
+        // En el PC (donde cada entrega es una frase nueva) todo sigue igual.
+        let dictadoNodo = null, dictadoTexto = '', dictadoHora = 0;
+        const normalizarDictado = (t) => t.toLowerCase().replace(/[.,;:¡!¿?]/g, '').replace(/\s+/g, ' ').trim();
+
+        function cursorTrasDictado() {
+            const sel = window.getSelection();
+            if (!sel.rangeCount) return true;
+            const r = sel.getRangeAt(0);
+            if (!document.getElementById('editor').contains(r.startContainer)) return true;
+            if (!r.collapsed) return false;
+            const n = r.startContainer, o = r.startOffset;
+            return (n === dictadoNodo && o >= dictadoNodo.length - 1) || (n.childNodes && n.childNodes[o - 1] === dictadoNodo);
+        }
+
+        function recibirDictado(texto) {
+            const limpio = (texto || '').trim(), nuevo = normalizarDictado(limpio);
+            if (!nuevo) return;
+            const ahora = Date.now();
+            const sigue = dictadoNodo && dictadoNodo.isConnected && ahora - dictadoHora < 10000 && cursorTrasDictado();
+            if (sigue) {
+                if (nuevo === dictadoTexto || dictadoTexto.startsWith(nuevo)) { dictadoHora = ahora; return; }   // repetida
+                if (nuevo.startsWith(dictadoTexto)) {                                                              // la misma, más larga
+                    dictadoNodo.textContent = limpio + ' ';
+                    const sel = window.getSelection(), r = document.createRange();
+                    r.setStartAfter(dictadoNodo); r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
+                    dictadoTexto = nuevo; dictadoHora = ahora;
+                    if (window.SEM) SEM.actividad();
+                    onEditorInput();
+                    return;
+                }
+            }
+            dictadoNodo = inyectarTexto(limpio);
+            dictadoTexto = nuevo; dictadoHora = ahora;
         }
 
         function toggleVoice() { if (isRecording) stopVoice(); else startVoice(); }
@@ -855,10 +896,11 @@
         function inyectarTexto(text) {
             const editor = document.getElementById('editor'); editor.focus();
             const sel = window.getSelection();
+            let node = null;
             if (sel.getRangeAt && sel.rangeCount) {
                 let range = sel.getRangeAt(0);
                 range.deleteContents();
-                let node = document.createTextNode(text + " ");
+                node = document.createTextNode(text + " ");
                 range.insertNode(node);
                 range.setStartAfter(node);
                 range.setEndAfter(node);
@@ -868,6 +910,7 @@
             }
             if (window.SEM) SEM.actividad();   // dictar también es escribir
             onEditorInput();
+            return node;
         }
 
         // ---------- NUEVO LIBRO ----------
