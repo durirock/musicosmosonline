@@ -99,6 +99,11 @@
         .btn:hover { background-color: var(--selection); }
         .btn.active { background-color: var(--accent); color: #FFF; }
         .btn-voice.recording { background-color: #AA2222; color: #FFF; animation: pulse 1.5s infinite; }
+        #sel-idioma {
+            background: transparent; border: 1px solid var(--border); color: var(--text);
+            font-family: 'Georgia', serif; font-size: 13px; border-radius: 4px; padding: 4px 4px; cursor: pointer;
+        }
+        #sel-idioma option { background: var(--paper); color: var(--text); }
 
         @keyframes pulse {
             0% { opacity: 1; }
@@ -420,6 +425,8 @@
             #brotes { left: 12px; right: 12px; bottom: 34px; }
             .brote { max-width: none; }
             #semillero .nombre { display: none; }
+            #btn-voice .txt-dictar { display: none; }
+            #sel-idioma { font-size: 12px; padding: 3px 2px; }
         }
         @media (prefers-reduced-motion: reduce) { .brote, #semillero .barra i, #semillero .mu { transition: none; } }
     </style>
@@ -437,7 +444,12 @@
         <button class="btn align-btn" onclick="execCmd('justifyCenter')" title="Centrar"><svg viewBox="0 0 18 14" width="16" height="14"><rect x="1" y="1" width="16" height="2" fill="currentColor"/><rect x="4" y="6" width="10" height="2" fill="currentColor"/><rect x="2.5" y="11" width="13" height="2" fill="currentColor"/></svg></button>
         <button class="btn align-btn" onclick="execCmd('justifyRight')" title="Alinear a la derecha"><svg viewBox="0 0 18 14" width="16" height="14"><rect x="1" y="1" width="16" height="2" fill="currentColor"/><rect x="7" y="6" width="10" height="2" fill="currentColor"/><rect x="4" y="11" width="13" height="2" fill="currentColor"/></svg></button>
         <div class="sep align-btn"></div>
-        <button class="btn" id="btn-voice" onclick="toggleVoice()">🎤 Dictar</button>
+        <button class="btn" id="btn-voice" onclick="toggleVoice()" title="Dictar">🎤<span class="txt-dictar"> Dictar</span></button>
+        <select id="sel-idioma" onchange="cambiarIdiomaDictado(this.value)" title="Idioma del dictado">
+            <option value="es-CL">Chile</option>
+            <option value="es-ES">España</option>
+            <option value="en-US">English</option>
+        </select>
         <button class="btn" id="btn-menu-mas" onclick="toggleMenuMas(event)" style="margin-left:auto;">⋮ Más</button>
     </div>
 
@@ -823,7 +835,7 @@
             recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = false;
-            recognition.lang = 'es-ES';
+            recognition.lang = idiomaDictado();
 
             recognition.onresult = (event) => {
                 for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -880,6 +892,28 @@
             dictadoNodo = inyectarTexto(limpio);
             dictadoTexto = nuevo; dictadoHora = ahora;
         }
+
+        // Idioma del dictado: español de Chile (por defecto), de España o inglés. Se recuerda en este navegador.
+        const IDIOMAS_DICTADO = { 'es-CL': 'español de Chile', 'es-ES': 'español de España', 'en-US': 'inglés' };
+        function idiomaDictado() {
+            let l = null;
+            try { l = localStorage.getItem('hermilano_idioma'); } catch (e) { }
+            return IDIOMAS_DICTADO[l] ? l : 'es-CL';
+        }
+        function cambiarIdiomaDictado(lang) {
+            if (!IDIOMAS_DICTADO[lang]) return;
+            try { localStorage.setItem('hermilano_idioma', lang); } catch (e) { }
+            dictadoNodo = null;
+            if (recognition) {
+                recognition.lang = lang;
+                if (isRecording) recognition.stop();   // al terminar se reinicia solo, ya en el idioma nuevo
+            }
+            updateStatus(`Dictado en ${IDIOMAS_DICTADO[lang]}.`);
+        }
+        window.addEventListener('DOMContentLoaded', () => {
+            const sel = document.getElementById('sel-idioma');
+            if (sel) sel.value = idiomaDictado();
+        });
 
         function toggleVoice() { if (isRecording) stopVoice(); else startVoice(); }
         function startVoice() {
