@@ -39,7 +39,7 @@
   };
 
   // ══ preferencias locales ═════════════════════════════════════════
-  const PREF0 = { flotar: true, sonido: true, pantalla: true, tema: 'auto' };
+  const PREF0 = { flotar: true, sonido: true, pantalla: true, tema: 'auto', orden: 'priority', ordenDesc: true };
   let pref = Object.assign({}, PREF0);
   try { pref = Object.assign(pref, JSON.parse(localStorage.getItem('kp_prefs') || '{}')); } catch (e) { }
   const guardarPref = () => { try { localStorage.setItem('kp_prefs', JSON.stringify(pref)); } catch (e) { } };
@@ -269,6 +269,8 @@
     if (!cfg.apiKey || String(cfg.apiKey).indexOf('PEGA') === 0) { $('#e-error').textContent = 'Falta configurar Firebase en config.js.'; return; }
     firebase.initializeApp(cfg);
     auth = firebase.auth(); db = firebase.firestore(); FV = firebase.firestore.FieldValue;
+    // En celulares y redes con proxy el canal en vivo a veces se queda mudo: que detecte solo si debe usar long-polling
+    try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) { }
     db.enablePersistence({ synchronizeTabs: true }).catch(() => { });
     // La sesión de Firebase se comparte con kpmovil (mismo dominio). Al abrir la app no se entra sola:
     // se pregunta "Continuar como X" o "Entrar con otro aspecto". Tras escribir correo y clave, se entra directo.
@@ -342,6 +344,7 @@
       st.tareas = {}; s.docs.forEach((d) => { const t = d.data(); if (!t._borrada) st.tareas[d.id] = Object.assign({ id: d.id }, t); });
       pintarCampo(); pintarAhora(); pintarSer(); guardarHuevoLuego(); red();
       if (timer) pintarTimer();
+      ordenesDeInicio();
     });
     oir(db.collection('chat_general').orderBy('timestamp').limitToLast(300), (s) => { st.general = s.docs.map((d) => d.data()); pintarChat(); pintarSalas(); });
     oir(db.collection('chat_privado').where('sender', '==', yo), (s) => { st.privEnv = mapa(s); pintarChat(); });
@@ -466,12 +469,18 @@
   }
 
   // ══ tareas ═══════════════════════════════════════════════════════
+  // Orden igual que KP del PC: Prioridad / Presión / Fecha; un segundo toque invierte.
+  // Semanales y premios van siempre arriba, en su lugar fijo (no compiten por urgencia).
+  const edad = (t) => { const d = leerFecha(t.date_added); return d ? Date.now() - d.getTime() : 0; };
   function ordenarPendientes(lista) {
-    const dias = (t) => diasDesde(t.date_added);
-    const semanales = lista.filter((t) => t.weekly_goal).sort((a, b) => dias(b) - dias(a));
-    const premios = lista.filter((t) => !t.weekly_goal && esPremio(t)).sort((a, b) => dias(b) - dias(a));
-    const resto = lista.filter((t) => !t.weekly_goal && !esPremio(t))
-      .sort((a, b) => ('ABC'.indexOf(a.priority) - 'ABC'.indexOf(b.priority)) || (dias(b) - dias(a)));
+    const desc = pref.ordenDesc !== false, sg = desc ? 1 : -1;
+    const semanales = lista.filter((t) => t.weekly_goal).sort((a, b) => edad(b) - edad(a));
+    const premios = lista.filter((t) => !t.weekly_goal && esPremio(t)).sort((a, b) => edad(b) - edad(a));
+    const resto = lista.filter((t) => !t.weekly_goal && !esPremio(t));
+    const ord = { A: 0, B: 1, C: 2 };
+    if (pref.orden === 'pressure') resto.sort((a, b) => sg * (presion(b) - presion(a)) || (edad(b) - edad(a)));
+    else if (pref.orden === 'date') resto.sort((a, b) => sg * (edad(b) - edad(a)));
+    else resto.sort((a, b) => sg * ((ord[a.priority] ?? 2) - (ord[b.priority] ?? 2)) || sg * (edad(b) - edad(a)));
     return semanales.concat(premios, resto);
   }
   function chipDe(t) {
@@ -479,13 +488,51 @@
     if (esPremio(t)) return '<span class="chip R">Premio</span>';
     return `<span class="chip ${esc(t.priority)}">${esc(t.priority || 'C')}</span>`;
   }
+  // ── Termoclina de presión (como KP del PC) ──
+  // Escala absoluta: hasta PRESION_TECHO el tinte de su prioridad crece; más allá
+  // no se queda clavado: el borde se ensancha y la tarea empieza a respirar.
+  const PRESION_TECHO = 90, RANGO_HONDO = 3000, HONDO_MAX = 0.5;
+  function estrato(t) {
+    if (t.completed) return '';
+    if (t.weekly_goal) return 'pS';
+    if (esPremio(t)) return 'pR';
+    return 'p' + (['A', 'B', 'C'].includes(t.priority) ? t.priority : 'C');
+  }
   function itemTarea(t) {
     const d = diasDesde(t.date_added), p = presion(t);
     const sub = Array.isArray(t.subtasks) && t.subtasks.length ? `<span>${t.subtasks.filter((s) => s.completed).length}/${t.subtasks.length} sub</span>` : '';
-    return `<li class="tarea" data-id="${esc(t.id)}" style="--presion:${t.completed ? '' : colorPresion(p)}">
+    const fijo = t.weekly_goal || esPremio(t);
+    const conPresion = !t.completed && !fijo;
+    const k = conPresion ? Math.min(1, p / PRESION_TECHO) : (t.completed ? 0 : 0.18);
+    const hondo = conPresion && p > PRESION_TECHO ? Math.min(HONDO_MAX, (p - PRESION_TECHO) / RANGO_HONDO) : 0;
+    const barra = Math.max(4, Math.min(100, Math.log1p(p) / Math.log1p(400) * 100));
+    const est = estrato(t);
+    return `<li class="tarea ${est}${hondo > 0.2 ? ' respira' : ''}" data-id="${esc(t.id)}" style="--pk:${k.toFixed(3)};--ph2:${hondo.toFixed(3)}">
       <div class="t1">${chipDe(t)}<span class="nombre">${esc(t.name)}</span></div>
-      <div class="t2">${esPremio(t) ? '' : `<span>${t.completed ? pvDe(t) : (t.xp || 0)} Pv</span>`}<span>${t.time || 0} min</span><span>${d} ${d === 1 ? 'día' : 'días'}</span>${t.delays ? `<span>${t.delays} ext.</span>` : ''}${sub}</div></li>`;
+      <div class="t2">${esPremio(t) ? '' : `<span>${t.completed ? pvDe(t) : (t.xp || 0)} Pv</span>`}<span>${t.time || 0} min</span><span>${d} ${d === 1 ? 'día' : 'días'}</span>${t.delays ? `<span>${t.delays} ext.</span>` : ''}${sub}${conPresion ? `<span class="p-num" title="Presión">◈ ${p}</span>` : ''}</div>
+      ${conPresion ? `<div class="p-barra" aria-hidden="true"><i style="width:${barra.toFixed(1)}%"></i></div>` : ''}</li>`;
   }
+  const DIR_TXT = {
+    priority: ['A → C', 'C → A'],
+    pressure: ['más presión primero', 'menos presión primero'],
+    date: ['antiguas primero', 'nuevas primero'],
+  };
+  function pintarOrden() {
+    const modo = DIR_TXT[pref.orden] ? pref.orden : 'priority', desc = pref.ordenDesc !== false;
+    $$('#orden [data-o]').forEach((b) => {
+      const activo = b.dataset.o === modo;
+      b.classList.toggle('activa', activo);
+      b.setAttribute('aria-pressed', activo ? 'true' : 'false');
+      b.dataset.flecha = activo ? (desc ? '↓' : '↑') : '';
+    });
+    $('#orden-dir').textContent = DIR_TXT[modo][desc ? 0 : 1];
+  }
+  $('#orden').onclick = (ev) => {
+    const b = ev.target.closest('[data-o]'); if (!b) return;
+    if (pref.orden === b.dataset.o) pref.ordenDesc = pref.ordenDesc === false;
+    else { pref.orden = b.dataset.o; pref.ordenDesc = true; }
+    guardarPref(); pintarOrden(); pintarCampo();
+  };
   function pasaFiltro(t) {
     const f = st.filtro;
     if (f === 'todas') return true;
@@ -497,7 +544,18 @@
     const todas = Object.values(st.tareas);
     const pend = ordenarPendientes(todas.filter((t) => !t.completed && pasaFiltro(t)));
     const hechas = todas.filter((t) => t.completed).sort((a, b) => (leerFecha(b.date_completed) || 0) - (leerFecha(a.date_completed) || 0));
-    $('#l-tareas').innerHTML = pend.length ? pend.map(itemTarea).join('') : '<li class="sub">Nada aquí. El campo está despejado.</li>';
+    // en modo Prioridad, un hilo fino separa los estratos A · B · C
+    let previo = null;
+    const html = pend.map((t) => {
+      let cab = '';
+      if (pref.orden !== 'pressure' && pref.orden !== 'date' && !t.weekly_goal && !esPremio(t) && st.filtro === 'todas') {
+        const e = ['A', 'B', 'C'].includes(t.priority) ? t.priority : 'C';
+        if (e !== previo) { const n = pend.filter((x) => !x.weekly_goal && !esPremio(x) && (['A', 'B', 'C'].includes(x.priority) ? x.priority : 'C') === e).length; cab = `<li class="estrato p${e}" aria-hidden="true"><b>${e}</b><i></i><span>${n}</span></li>`; previo = e; }
+      }
+      return cab + itemTarea(t);
+    }).join('');
+    $('#l-tareas').innerHTML = pend.length ? html : '<li class="sub">Nada aquí. El campo está despejado.</li>';
+    pintarOrden();
     $('#b-ver-completadas').textContent = hechas.length ? `${st.verCompletadas ? 'Ocultar' : 'Ver'} completadas (${hechas.length})` : '';
     $('#l-completadas').innerHTML = hechas.slice(0, 100).map(itemTarea).join('');
     $('#l-completadas').classList.toggle('oculto', !st.verCompletadas);
@@ -684,6 +742,75 @@
     tic(); avisar('Sembrada: ' + base.name);
   };
 
+  // ══ CONEXIONES · el eneagrama de los universos ═══════════════════
+  // Cada universo vive en un punto del eneagrama. Se abre en su propia ventana:
+  // Killer Pendiente sigue funcionando detrás (el timer, el chat, todo).
+  const UNIVERSOS_BASE = (window.KP_UNIVERSOS_BASE || '../').replace(/\/?$/, '/');   // los universos viven junto a kpweb (misma sesión)
+  const ENEAGRAMA = {
+    9: { id: 'musicosmos', nombre: 'Musicosmos', archivo: 'index.html', color: '#A87FFF', c2: '#3FD0FF', txt: 'El universo musical. El centro de todo.' },
+    1: null,
+    2: { id: 'kairos', nombre: 'Kairós', archivo: 'tiempo.html', color: '#5AD1FF', c2: '#C8A2FF', txt: 'La cápsula del tiempo: hablarle a tu yo futuro.' },
+    3: { id: 'planetafunk', nombre: 'Planeta Funk', archivo: 'aerocosmos.html', color: '#66FF99', c2: '#FFB347', txt: 'Vuelo libre sobre el núcleo funk.' },
+    4: { id: 'kalpa', nombre: 'Kalpa', archivo: 'kalpa.html', color: '#FF6A5A', c2: '#38E1FF', txt: 'El túnel: dejarse llevar a la deriva.' },
+    5: { id: 'sagitario', nombre: 'Sagitario A*', archivo: 'sinfonia_gravitacional.html', color: '#D9C8FF', c2: '#FF9A3C', txt: 'La sinfonía gravitacional del agujero negro.' },
+    6: { id: 'mundointerior', nombre: 'Mundo Interior', archivo: 'mundointerior_completo.html', color: '#00E5CC', c2: '#7B3FE4', txt: 'Los paneles del mundo interior.' },
+    7: { id: 'pikitipu', nombre: 'Pikitipu', archivo: 'pikitipu2.html', color: '#B8FF5A', c2: '#FF6FD8', txt: '' },
+    8: { id: 'sol', nombre: 'Sol de Voluntad', archivo: 'chamalnquimyst.html', color: '#FFCC55', c2: '#FF7A2A', txt: 'Durakinesis: el sol de la voluntad.' },
+  };
+  const LINEAS_ENEA = [[9, 3], [3, 6], [6, 9], [1, 4], [4, 2], [2, 8], [8, 5], [5, 7], [7, 1]];
+  function puntoEnea(n, r) { const a = (-90 + 40 * (n % 9)) * Math.PI / 180; return [200 + r * Math.cos(a), 200 + r * Math.sin(a)]; }
+  function urlUniverso(u) {
+    const p = new URLSearchParams();
+    if (yo) p.set('aspecto', yo);
+    const a = st.aspectos && st.aspectos[yo]; if (a && a.pv != null) p.set('pv', String(Math.round(a.pv)));
+    return UNIVERSOS_BASE + u.archivo + (p.toString() ? '?' + p : '');
+  }
+  function irAUniverso(u) {
+    window.open(urlUniverso(u), '_blank', 'noopener');
+    avisar('✶ ' + u.nombre + ' se abrió en otra ventana', 3500);
+  }
+  function abrirConexiones() {
+    const R = 150;
+    const lineas = LINEAS_ENEA.map(([a, b]) => { const [x1, y1] = puntoEnea(a, R), [x2, y2] = puntoEnea(b, R);
+      return `<line class="en-linea" data-a="${a}" data-b="${b}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`; }).join('');
+    const grads = [], nodos = [];
+    for (let n = 1; n <= 9; n++) {
+      const u = ENEAGRAMA[n], [x, y] = puntoEnea(n, R), [lx, ly] = puntoEnea(n, R + 30), [nx, ny] = puntoEnea(n, R - 27);
+      const ancla = lx < 185 ? 'end' : lx > 215 ? 'start' : 'middle';
+      if (!u) { nodos.push(`<g class="en-vacio"><circle cx="${x}" cy="${y}" r="7"/><text class="en-num" x="${nx}" y="${ny + 4}">${n}</text></g>`); continue; }
+      grads.push(`<radialGradient id="eg${n}" cx="38%" cy="35%" r="70%"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".35" stop-color="${u.color}"/><stop offset="1" stop-color="${u.c2}"/></radialGradient>`);
+      nodos.push(`<g class="en-nodo" data-n="${n}" tabindex="0" role="button" aria-label="${esc(u.nombre)}" style="--c:${u.color};--d:${(n * 0.61).toFixed(2)}s">
+        <circle class="en-halo" cx="${x}" cy="${y}" r="24" fill="${u.color}"/>
+        <circle class="en-bola" cx="${x}" cy="${y}" r="15" fill="url(#eg${n})"/>
+        <text class="en-num" x="${nx}" y="${ny + 4}">${n}</text>
+        <text class="en-nombre" x="${lx}" y="${ly + 5}" text-anchor="${ancla}">${esc(u.nombre)}</text></g>`);
+    }
+    abrirHoja(`<h2>Conexiones</h2><p class="sub">Elige un universo. Se abre en otra ventana; Killer Pendiente sigue aquí.</p>
+      <svg class="eneagrama" viewBox="-70 -20 540 440" role="group" aria-label="Eneagrama de los universos">
+        <defs>${grads.join('')}</defs>
+        <circle class="en-circulo" cx="200" cy="200" r="${R}"/>${lineas}${nodos.join('')}
+      </svg>
+      <div class="en-elegido" id="en-elegido"><span class="sub">Toca un punto del eneagrama</span></div>`, (h) => {
+      let sel = null;
+      const elegir = (n) => {
+        sel = n; const u = ENEAGRAMA[n];
+        h.querySelectorAll('.en-nodo').forEach((g) => g.classList.toggle('sel', +g.dataset.n === n));
+        h.querySelectorAll('.en-linea').forEach((l) => l.classList.toggle('viva', +l.dataset.a === n || +l.dataset.b === n));
+        h.querySelector('.eneagrama').style.setProperty('--sel', u.color);
+        h.querySelector('#en-elegido').innerHTML = `<div class="en-tit" style="--c:${u.color}"><b>${n}</b>${esc(u.nombre)}</div>${u.txt ? `<p class="sub">${esc(u.txt)}</p>` : ''}
+          <button class="primario" id="en-ir">Entrar a ${esc(u.nombre)} ↗</button>`;
+        h.querySelector('#en-ir').onclick = () => irAUniverso(u);
+      };
+      h.querySelectorAll('.en-nodo').forEach((g) => {
+        const n = +g.dataset.n;
+        g.onclick = () => { if (sel === n) irAUniverso(ENEAGRAMA[n]); else elegir(n); };   // segundo toque: entrar
+        g.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); g.onclick(); } };
+      });
+    });
+  }
+  $('#b-conexiones').onclick = abrirConexiones;
+  $('#b-conexiones-ser').onclick = abrirConexiones;
+
   // ══ TIMER ════════════════════════════════════════════════════════
   // timer = {id, total, fin, tipo:'tarea'|'dos'|'recompensa', nombre, sono}
   // sesiones[id] = {inicio, distracciones}  — una extensión no reinicia la sesión (igual que KP)
@@ -707,6 +834,38 @@
     const seg = tipo === 'dos' ? SEG_CALENTAMIENTO : Math.max(1, (t.time || 25)) * 60;
     abrirTimer({ id: t.id, total: seg, fin: ahoraMs() + seg * 1000, tipo, nombre: t.name });
   }
+  // Orden "inicia …" que llega desde fuera (voz por Google, el puente): la tarea trae iniciar:{ms, origen}.
+  // El primer dispositivo con kpweb abierto la toma, arranca el timer desde el momento en que se dijo y la borra.
+  const VIGENCIA_ORDEN = 30 * 60000;
+  function ordenesDeInicio() {
+    Object.values(st.tareas).forEach((t) => {
+      const o = t.iniciar;
+      if (!o || !o.ms || t.completed) return;
+      const k = 'kp_orden_' + t.id + '_' + o.ms;
+      let vista = false; try { vista = !!localStorage.getItem(k); localStorage.setItem(k, '1'); } catch (e) { }
+      refTarea(t.id).update({ iniciar: FV.delete(), _mod: ahoraMs() }).catch(() => { });
+      if (vista || ahoraMs() - o.ms > VIGENCIA_ORDEN) return;
+      if (timer) { avisar('Llegó «inicia ' + t.name + '», pero ya hay un timer corriendo', 6000); return; }
+      const s0 = sesiones[t.id];
+      if (!s0 || ahoraMs() - s0.inicio > 12 * 3600000) { sesiones[t.id] = { inicio: o.ms, distracciones: 0 }; guardarSesiones(); }
+      const seg = Math.max(1, (t.time || 25)) * 60;
+      let fin = o.ms + seg * 1000;
+      if (fin - ahoraMs() < 60000) fin = ahoraMs() + seg * 1000;   // si llegó muy tarde, parte de cero
+      abrirTimer({ id: t.id, total: seg, fin, tipo: 'tarea', nombre: t.name });
+      avisar('◆ Iniciada por voz: ' + t.name, 5000);
+    });
+  }
+  // Al volver a la app (pantalla encendida, otra pestaña, vuelve la red): despertar el canal en vivo
+  let ultimoDespertar = 0;
+  function despertarRed() {
+    if (!db || !yo || ahoraMs() - ultimoDespertar < 5000) return;
+    ultimoDespertar = ahoraMs();
+    db.disableNetwork().then(() => db.enableNetwork()).catch(() => { });
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') despertarRed(); });
+  window.addEventListener('online', despertarRed);
+  window.addEventListener('focus', despertarRed);
+
   function abrirTimer(tm) {
     timer = tm; guardarTimer();
     pedirPermisos();
@@ -1119,7 +1278,8 @@
     const abajo = alFinal || caja.scrollHeight - caja.scrollTop - caja.clientHeight < 60;
     caja.innerHTML = mensajesSala(st.sala).map((m) => `<div class="msj ${m.sender === yo ? 'mio' : ''}">
       ${m.sender === yo ? '' : `<div class="de" style="color:${esc(colorDe(m.sender))}">${esc(m.sender)}</div>`}
-      <div>${esc(m.message)}</div><div class="hora">${esc(String(m.timestamp).slice(5, 16))}</div></div>`).join('') || '<p class="sub">Sin mensajes todavía.</p>';
+      ${m.imagen && /^data:image\//.test(m.imagen) ? `<img class="foto" src="${esc(m.imagen)}" alt="imagen" loading="lazy">` : ''}
+      ${m.message ? `<div>${esc(m.message)}</div>` : ''}<div class="hora">${esc(String(m.timestamp).slice(5, 16))}</div></div>`).join('') || '<p class="sub">Sin mensajes todavía.</p>';
     if (abajo) caja.scrollTop = caja.scrollHeight;
     if (chatVisible() && noLeidos(st.sala)) marcarLeido(st.sala);
     avisosRed();
@@ -1129,11 +1289,57 @@
     if (!ult || (((miAspecto().leidos) || {})[sala] || '') >= ult) return;
     refYo().set({ leidos: { [sala]: ult } }, { merge: true });
   }
+  // ── imágenes en el chat: botón, Ctrl+V (pantallazo) o arrastrar. Viajan dentro del mensaje
+  //    como JPEG liviano (máx. 1280 px), igual que en KP del PC, para no depender de otro servicio.
+  let adjunto = null;
+  async function comprimirImagen(blob) {
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = mal; i.src = url; });
+      const k = Math.min(1, 1280 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+      let q = 0.85, d = c.toDataURL('image/jpeg', q);
+      while (d.length > 600000 && q > 0.4) { q -= 0.1; d = c.toDataURL('image/jpeg', q); }
+      return d;
+    } finally { URL.revokeObjectURL(url); }
+  }
+  function ponerAdjunto(d) {
+    adjunto = d || null;
+    const a = $('#chat-adjunto');
+    a.innerHTML = d ? `<img src="${d}" alt=""><span>Imagen lista para enviar</span><button type="button" id="chat-quitar">Quitar</button>` : '';
+    a.classList.toggle('oculto', !d);
+    if (d) a.querySelector('#chat-quitar').onclick = () => ponerAdjunto(null);
+  }
+  async function tomarImagen(blob) {
+    if (!blob || !/^image\//.test(blob.type)) return false;
+    try { ponerAdjunto(await comprimirImagen(blob)); $('#chat-texto').focus(); } catch (e) { avisar('No se pudo leer la imagen'); }
+    return true;
+  }
+  $('#chat-img').onclick = () => $('#chat-archivo').click();
+  $('#chat-archivo').onchange = (ev) => { const f = ev.target.files[0]; ev.target.value = ''; tomarImagen(f); };
+  $('#chat-texto').addEventListener('paste', (ev) => {
+    const it = Array.from((ev.clipboardData && ev.clipboardData.items) || []).find((i) => i.type.startsWith('image/'));
+    if (it) { ev.preventDefault(); tomarImagen(it.getAsFile()); }
+  });
+  $('#red-chat').addEventListener('dragover', (ev) => { if (Array.from(ev.dataTransfer.items || []).some((i) => i.type.startsWith('image/'))) ev.preventDefault(); });
+  $('#red-chat').addEventListener('drop', (ev) => {
+    const f = Array.from(ev.dataTransfer.files || []).find((x) => x.type.startsWith('image/'));
+    if (f) { ev.preventDefault(); tomarImagen(f); }
+  });
+  $('#chat-mensajes').addEventListener('click', (ev) => {
+    const img = ev.target.closest('img.foto'); if (!img) return;
+    abrirHoja(`<img class="foto-grande" src="${img.getAttribute('src')}" alt="imagen"><div class="botones"><button id="i-cerrar">Cerrar</button></div>`,
+      (h) => { h.querySelector('#i-cerrar').onclick = cerrarHoja; h.querySelector('.foto-grande').onclick = cerrarHoja; });
+  });
+
   $('#f-chat').onsubmit = async (ev) => {
     ev.preventDefault();
-    const txt = $('#chat-texto').value.trim(); if (!txt) return;
+    const txt = $('#chat-texto').value.trim(); if (!txt && !adjunto) return;
     $('#chat-texto').value = '';
     const m = { sender: yo, timestamp: fechaISO(), message: txt, read: false, _mod: ahoraMs() };
+    if (adjunto) { m.imagen = adjunto; ponerAdjunto(null); }
     if (st.sala === 'General') await db.collection('chat_general').add(m);
     else await db.collection('chat_privado').add(Object.assign(m, { chat_id: [yo, st.sala].sort().join('_'), recipient: st.sala }));
   };
