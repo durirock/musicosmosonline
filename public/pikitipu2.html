@@ -310,6 +310,7 @@ body.shake{animation:sacudir .42s}
 </style>
 
 <!-- ── PORTAL ── -->
+<script src="kp-nube.js"></script>
 <script src="portal.js" data-mundo="pikitipu"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/postprocessing/EffectComposer.js"></script>
@@ -2367,10 +2368,20 @@ function _bonoComida(){
 }
 
 const BOLSA = { items:[], horasSinComer:null, racha:0 };
-async function leerBolsa(){
+// La bolsa viene de KP del PC (/api/inventario); si KP no está abierto, de la nube (Botica de kpweb, kp-nube.js)
+async function _inventarioKP(){
   try{
     const r = await fetch(KP_HTTP + '/api/inventario', { cache:'no-store' });
-    const d = await r.json();
+    const d = await r.json(); BOLSA.nube = false; return d;
+  }catch(e){
+    const d = window.KPNube ? await KPNube.bolsa('pikitipu') : null;
+    if(!d) throw e;
+    BOLSA.nube = true; return d;
+  }
+}
+async function leerBolsa(){
+  try{
+    const d = await _inventarioKP();
     BOLSA.items = d.items || []; BOLSA.horasSinComer = d.horas_sin_comer; BOLSA.racha = d.racha_cuidado || 0;
     if(d.ps) _mostrarPS(d.ps.ps, d.ps.max);
     pintarBolsa(d.aspecto);
@@ -2387,13 +2398,19 @@ function pintarBolsa(aspecto, sinKP){
     cont.appendChild(b);
   });
   const h = BOLSA.horasSinComer;
-  nota.textContent = sinKP ? 'Abre KP para usar tu bolsa.'
+  nota.textContent = sinKP ? 'Abre KP o entra a kpweb para usar tu bolsa.'
     : !aspecto ? 'Entra a KP con un aspecto para ver su bolsa.'
-    : !BOLSA.items.length ? 'Bolsa vacía: compra comida y regalos en la Botica de KP.'
+    : !BOLSA.items.length ? 'Bolsa vacía: compra comida y regalos en la Botica de KP o de kpweb.'
     : `${h===null ? 'Aún no ha comido nada de la Botica.' : 'Última comida hace ' + (h<1 ? Math.round(h*60)+' min' : Math.round(h)+' h') + '.'}`
       + (BOLSA.racha > 1 ? ` · 🌱 ${BOLSA.racha} días seguidos cuidándolo` : '');
 }
 async function darObjeto(id){
+  if(BOLSA.nube && window.KPNube){                       // sin KP del PC: se da desde la bolsa de la nube
+    const r = await KPNube.consumir(id, S.form==='dragon' ? 'hakuryu' : 'pikitipu');
+    if(r && r.ok) _dispatchKP(r.evento);
+    else toast('🎒', (r && r.error) || 'Entra a kpweb para usar tu bolsa', '#ff8da1');
+    leerBolsa(); return;
+  }
   try{
     const r = await fetch(KP_HTTP + '/api/alimentar', { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ item:id, criatura: S.form==='dragon' ? 'hakuryu' : 'pikitipu' }) });

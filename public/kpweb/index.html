@@ -50,6 +50,7 @@
       <div class="cab-nombre"><span id="c-nombre"></span><i id="c-red" class="red" title="en línea"></i></div>
       <div class="cab-cifras"><span id="c-pv">0 Pv</span><span id="c-mu">0 Mu</span><span id="c-dhana">0 $D</span></div>
     </div>
+    <button id="b-conexiones" class="icono" aria-label="Conexiones: ir a un universo" title="Conexiones">✶</button>
     <button id="b-tema" class="icono" aria-label="Cambiar skin">◐</button>
   </header>
 
@@ -99,6 +100,11 @@
         </div>
         <button id="b-nueva" class="primario">+ Tarea</button>
       </div>
+      <div class="orden" id="orden" role="group" aria-label="Ordenar tareas">
+        <span class="orden-tit">Orden</span>
+        <button data-o="priority">Prioridad</button><button data-o="pressure">Presión</button><button data-o="date">Fecha</button>
+        <span class="orden-dir" id="orden-dir"></span>
+      </div>
       <ul id="l-tareas" class="lista"></ul>
       <button id="b-ver-completadas" class="enlace"></button>
       <ul id="l-completadas" class="lista completadas oculto"></ul>
@@ -141,6 +147,7 @@
 
       <div class="bloque botones-ser">
         <p class="sub">El huevo (.cegg) de tu aspecto se guarda solo en la nube con cada cambio.</p>
+        <button id="b-conexiones-ser">✶ Conexiones · universos</button>
         <button id="b-cegg">Descargar mi .cegg</button>
         <button id="b-cambiar">Cambiar de aspecto</button>
         <button id="b-salir" class="peligro">Cerrar sesión</button>
@@ -178,11 +185,57 @@
       <div class="herramientas">
         <a class="herr" href="../pikitipu2.html" target="_blank" rel="noopener">
           <b>🌿 Pikitipu</b><span>Tu criatura. Usa su botón de ventana flotante para tenerla encima mientras trabajas y acariciarla.</span></a>
-        <a class="herr" href="../hermitano.html" target="_blank" rel="noopener">
-          <b>📜 El Hermitaño</b><span>Editor de libros por tomos y capítulos, versión web.</span></a>
-        <div class="herr pronto"><b>🏪 La Botica</b><span>Comprar con Mu y Pv canjeables objetos para Pikitipu y los universos. Hoy vive en KP del PC (kp_botica.py); viene a la web.</span></div>
-        <div class="herr pronto"><b>🏦 Banco Tagua Tagua</b><span>Los Mu y tus fondos simulados. Hoy es Python (bancotagua.py); viene a la web.</span></div>
+        <a class="herr" href="../hermitano.html?desde=kp" target="_blank" rel="noopener">
+          <b>📜 El Hermitaño</b><span>Editor de libros. Lo que escribas siembra Mu para tu aspecto.</span></a>
+        <button class="herr" data-ir="botica"><b>🏪 La Botica</b><span>Objetos para Pikitipu, Musicosmos y Mundo Interior, y tus premios. Todo se paga con Mu.</span></button>
+        <button class="herr" data-ir="banco"><b>🏦 Banco Tagua Tagua</b><span>Canjea Pv por Mu (30 Pv = 1 Mu) y revisa tus movimientos.</span></button>
       </div>
+    </div>
+
+    <!-- BANCO TAGUA TAGUA -->
+    <div id="p-banco" class="panel">
+      <button class="volver enlace" data-ir="taller">← Taller</button>
+      <h2 class="tit-panel">🏦 Banco Tagua Tagua</h2>
+      <div class="saldos">
+        <div class="saldo"><small>Pv canjeables</small><b id="bc-pvc">0</b></div>
+        <div class="saldo mu"><small>Monedas universales</small><b id="bc-mu-saldo">0 Mu</b></div>
+      </div>
+      <div class="bloque">
+        <h3>Canjear Pv por Mu</h3>
+        <p class="sub">Tasa de KP: <b>30 Pv canjeables = 1 Mu</b>. Los Pv canjeables nacen de cada tarea cerrada; tu nivel no baja al canjear.</p>
+        <div class="canje"><input id="bc-cant" type="number" min="1" value="1" inputmode="numeric" aria-label="Mu a recibir"><span>Mu</span><span id="bc-costo" class="sub"></span></div>
+        <div class="opciones" id="bc-rapidos"><button data-n="1">1</button><button data-n="5">5</button><button data-n="10">10</button><button data-n="max">Todo lo posible</button></div>
+        <button id="bc-canjear" class="primario">Canjear</button>
+      </div>
+      <div class="bloque">
+        <h3>Movimientos</h3>
+        <ul id="bc-movs" class="movs"></ul>
+      </div>
+    </div>
+
+    <!-- BOTICA -->
+    <div id="p-botica" class="panel">
+      <button class="volver enlace" data-ir="taller">← Taller</button>
+      <div class="botica-cab"><h2 class="tit-panel">🏪 La Botica del Chamalnquimyst</h2><span id="bo-mu" class="pildora-mu">0 Mu</span></div>
+      <div class="pestanas" id="bo-pestanas">
+        <button data-bo="mundos" class="activa">Para los mundos</button>
+        <button data-bo="premios">Premios</button>
+        <button data-bo="bolsa">Mi bolsa</button>
+      </div>
+      <div id="bo-mundos"></div>
+      <div id="bo-premios" class="oculto">
+        <p class="sub">Recompensas que te das a ti. Al comprarla queda como premio pendiente en el Campo, con su timer si tiene duración.</p>
+        <ul id="bo-lista-premios" class="lista"></ul>
+        <form id="f-premio" class="bloque" autocomplete="off">
+          <h3>Nuevo premio</h3>
+          <label>Premio<input id="pr-nombre" placeholder="Ej: capítulo de serie" required></label>
+          <div class="fila"><label>Costo (Mu)<input id="pr-costo" type="number" min="1" inputmode="numeric" required></label>
+          <label>Duración (min)<input id="pr-min" type="number" min="0" inputmode="numeric" value="0"></label></div>
+          <button class="primario">Agregar premio</button>
+          <label class="bit-importar"><input id="pr-archivo" type="file" accept=".json" hidden><span>⇪ Traer premios del PC</span><small>rewards.json de la carpeta de KP</small></label>
+        </form>
+      </div>
+      <div id="bo-bolsa" class="oculto"><ul id="bo-lista-bolsa" class="lista"></ul></div>
     </div>
 
     <!-- RED -->
@@ -194,8 +247,11 @@
       <div id="red-chat">
         <div id="chat-salas" class="salas"></div>
         <div id="chat-mensajes" class="mensajes"></div>
+        <div id="chat-adjunto" class="adjunto oculto"></div>
         <form id="f-chat" class="escribir">
-          <textarea id="chat-texto" rows="1" placeholder="Escribe…"></textarea>
+          <button type="button" id="chat-img" class="icono" title="Adjuntar imagen (también puedes pegar un pantallazo con Ctrl+V)">◫</button>
+          <input type="file" id="chat-archivo" accept="image/*" hidden>
+          <textarea id="chat-texto" rows="1" placeholder="Escribe… (Ctrl+V pega un pantallazo)"></textarea>
           <button class="primario">Enviar</button>
         </form>
       </div>

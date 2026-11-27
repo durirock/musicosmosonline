@@ -34,3 +34,27 @@ Necesita la regla `match /mega/{doc}` de firestore.rules. Para que el PC lo vea,
 
 ## Captura rápida
 `llamar al dentista !A 15m 40pv #semanal #grande` — si falta Pv o duración se abre el formulario (KP exige ambos).
+
+## El Hermilaño · Semillero (escribir siembra Mu)
+El botón "El Hermitaño" de KP web abre `../hermitano.html?desde=kp`: el editor toma el aspecto de la sesión
+(mismo origen, misma sesión de Firebase) y muestra "escribe ◉ Aspecto" junto al título del capítulo. Esa nota
+nunca entra al texto ni a lo exportado. Abierto solo (sin `?desde=kp`) es modo Dios: sin usuario, y todo lo
+sembrado va al Bosque Común.
+
+Qué escribe en Firestore (lo mismo hace la versión PC, hermitano_v3.py, con firebase_clave.json):
+- `aspectos/{aspecto}`: `mu`, `pv` y `pv_canjeables` con incrementos. kp_nube.py ya los suma a KP en el PC.
+- `escritores/{aspecto}`: palabras por día (la racha se comparte entre PC y celular) y totales.
+- `escritura/{sesión}`: bitácora de sesiones (palabras, Mu, Pv, etapa máxima, hitos).
+- `fondo/pulmon_verde`: el Bosque Común (`semillas`, `palabras`): un 10 % que pone el universo, o todo en modo Dios.
+- `pulsos`: `type: "ESCRITURA_HITO"` en cada hito; KP del PC los reenvía en vivo a los universos.
+
+Hay que publicar las reglas nuevas de `firestore.rules` (escritores, escritura, fondo). Sin ellas los Mu y Pv
+del aspecto igual llegan (esa regla ya existía); lo demás queda guardado en el navegador y se reintenta.
+Reglas del Semillero: ver el comentario "SEMILLERO" en hermitano.html (son las mismas del PC).
+## Banco Tagua Tagua y Botica (Taller)
+- Banco: canje 30 Pv canjeables = 1 Mu (tasa de KP). Baja pv_canjeables, sube pv_canjeados y mu; el nivel no cambia.
+  Libreta en aspectos/{aspecto}/movimientos.
+- Botica: objetos para los mundos (bolsa en aspectos/{aspecto}/inventario) y premios (botica/premios, compartidos;
+  al comprar uno queda como recompensa pendiente, prioridad R). Todo se paga con Mu.
+- Los universos usan ../kp-nube.js cuando KP del PC no está: Pikitipu lee la bolsa y come; portal.js cobra Mu y usa
+  el 🌀 Portal propio. Necesita publicar firestore.rules (inventario, movimientos, botica).
